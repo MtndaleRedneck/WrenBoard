@@ -87,11 +87,13 @@ class VoiceInputSwitchActivity : ComponentActivity() {
 
         val mode = intent.getStringExtra("mode")
         when(mode) {
-            "popup" -> {
+            // WrenBoard: "switch" no longer changes the backend silently. Every backend change shows the
+            // confirmation dialog with the target app name AND package name.
+            "popup", "switch" -> {
                 label.value = try {
                     packageManager.getPackageInfo(targetPackage, 0)?.let {
                         packageManager.getApplicationLabel(it.applicationInfo!!)
-                    }!!.toString()
+                    }!!.toString() + " (" + targetPackage + ")"
                 }catch(e: Exception) {
                     e.printStackTrace()
                     setResult(RESULT_CANCELED)
@@ -100,16 +102,6 @@ class VoiceInputSwitchActivity : ComponentActivity() {
                 }
 
                 updateContent()
-            }
-            "switch" -> {
-                if(targetPackage.startsWith("org.futo.")) {
-                    switch()
-                    setResult(66)
-                    finish()
-                } else {
-                    setResult(RESULT_CANCELED)
-                    finish()
-                }
             }
             "check" -> {
                 val current = getSetting(SYSTEM_VOICE_INPUT_PACKAGE)
