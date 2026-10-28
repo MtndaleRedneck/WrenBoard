@@ -961,7 +961,7 @@ class ImportResourceActivity : ComponentActivity() {
         // Inspect the file off the main thread: detection can scan the whole archive several times.
         lifecycleScope.launch {
             val detected = withContext(Dispatchers.IO) {
-                try { detectItemBeingImported() } catch(e: Exception) {
+                try { detectItemBeingImported() } catch(e: kotlinx.coroutines.CancellationException) { throw e } catch(e: Exception) {
                     Log.w("ImportResourceActivity", "Could not inspect file", e)
                     null
                 }
