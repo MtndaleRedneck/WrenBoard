@@ -213,6 +213,8 @@ object SettingsExporter {
         includeHeavyResources: Boolean
     ) = ZipOutputStream(outputStream).use { zipOut ->
         zipOut.setLevel(1)
+        // Make sure learned words still pending in memory are on disk before the files are copied.
+        org.futo.inputmethod.latin.personalization.PersonalizationHelper.flushAllAndWait()
 
         // Write version and date
         zipOut.putNextEntry(ZipEntry(versionFileName))
@@ -454,6 +456,7 @@ object SettingsExporter {
         val clipboardFile = context.clipboardFile
         val transformersDir = dirs.transformers
         val extFilesDir = dirs.ext
+        if(destructive) org.futo.inputmethod.latin.personalization.PersonalizationHelper.quiesceForRestore()
         if (destructive) {
             // delete old clipboard
             if (clipboardFile.exists()) {

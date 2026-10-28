@@ -67,6 +67,48 @@ public class PersonalizationHelper {
         }
     }
 
+    /** Waits until every task queued so far on the keyboard executor has run (it is single threaded). */
+    private static void awaitKeyboardExecutor() {
+        try {
+            org.futo.inputmethod.latin.utils.ExecutorUtils
+                    .getBackgroundExecutor(org.futo.inputmethod.latin.utils.ExecutorUtils.KEYBOARD)
+                    .submit(new Runnable() { @Override public void run() {} })
+                    .get(10, java.util.concurrent.TimeUnit.SECONDS);
+        } catch (final Exception e) {
+            Log.w(TAG, "Timed out or failed waiting for dictionary tasks", e);
+        }
+    }
+
+    /** Writes pending learned words to their files and waits for it, so an export copies current data. */
+    public static void flushAllAndWait() {
+        synchronized (sLangUserHistoryDictCache) {
+            for (final SoftReference<UserHistoryDictionary> ref : sLangUserHistoryDictCache.values()) {
+                final UserHistoryDictionary dict = ref == null ? null : ref.get();
+                if (dict != null) dict.asyncFlushBinaryDictionary();
+            }
+        }
+        awaitKeyboardExecutor();
+    }
+
+    /**
+     * Before a restore replaces the files: close the live dictionaries WITHOUT flushing and wait until
+     * every queued task has run, so no stale in-memory data is written over the restored files later.
+     */
+    public static void quiesceForRestore() {
+        synchronized (sLangUserHistoryDictCache) {
+            UserHistoryDictionary.forceUncleanClose = true;
+            try {
+                for (final SoftReference<UserHistoryDictionary> ref : sLangUserHistoryDictCache.values()) {
+                    final UserHistoryDictionary dict = ref == null ? null : ref.get();
+                    if (dict != null) dict.close();
+                }
+                awaitKeyboardExecutor();
+            } finally {
+                UserHistoryDictionary.forceUncleanClose = false;
+            }
+        }
+    }
+
     public static void removeAllUserHistoryDictionaries(final Context context) {
         synchronized (sLangUserHistoryDictCache) {
             for (final ConcurrentHashMap.Entry<String, SoftReference<UserHistoryDictionary>> entry
