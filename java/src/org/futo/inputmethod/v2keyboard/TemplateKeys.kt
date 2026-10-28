@@ -106,6 +106,10 @@ val TemplateSymbolsKey = SymbolsKey()
 data class AlphabetKey(val attributes: KeyAttributes = KeyAttributes()) : TemplatedKey {
     override val templateKey: Key = BaseKey(
         spec = "!text/keylabel_to_alpha|!code/key_switch_alpha_symbol",
+        // A press on the letters-page 123 key switches to the symbols page immediately, so the key under the
+        // finger for the long-press timer is this one. It must carry the same clipboard long-press as 123.
+        moreKeys = SymbolsMoreKeys,
+        hint = " ",
         attributes = attributes + FunctionalAttributes
     )
 }
