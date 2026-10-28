@@ -51,52 +51,8 @@ class CrashLoggingApplication : Application() /*, Configuration.Provider*/ {
             }
         }
 
-        if(BuildConfig.DEBUG) return
-
-        val userManager = getSystemService(Context.USER_SERVICE) as UserManager
-        if(userManager.isUserUnlocked) {
-            println("Initializing ACRA, as user is unlocked")
-            initAcra {
-                reportFormat = StringFormat.JSON
-
-                dialog {
-                    text = getString(
-                        //if(BuildConfig.ENABLE_ACRA) {
-                        //    R.string.crashed_text
-                        //} else {
-                        R.string.crashed_text_email
-                        //}
-                    )
-                    title = getString(R.string.crashed_title)
-                    positiveButtonText = getString(R.string.crash_report_accept)
-                    negativeButtonText = getString(R.string.crash_report_reject)
-                    resTheme = android.R.style.Theme_DeviceDefault_Dialog
-                }
-
-
-                //if(BuildConfig.ENABLE_ACRA) {
-                //    httpSender {
-                //        uri = BuildConfig.ACRA_URL
-                //        basicAuthLogin = BuildConfig.ACRA_USER
-                //        basicAuthPassword = BuildConfig.ACRA_PASSWORD
-                //        httpMethod = HttpSender.Method.POST
-                //    }
-                //} else {
-                mailSender {
-                    mailTo = "keyboard@futo.org"
-                    reportAsFile = true
-                    reportFileName = "Crash.txt"
-                    subject = "Keyboard Crash Report"
-                    body =
-                        "I experienced this crash. My version: ${BuildConfig.VERSION_NAME}.\n\n(Enter details here if necessary)"
-                }
-                //}
-            }
-
-            acraInitialized = true
-        } else {
-            println("Skipping ACRA, as user is locked")
-        }
+        // WrenBoard: crash reporting is disabled. ACRA is never initialized, so no report dialog is shown
+        // and nothing (including preferences) is collected or sent anywhere.
     }
 
     companion object {
