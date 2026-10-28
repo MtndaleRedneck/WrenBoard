@@ -103,7 +103,8 @@ adb shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1
 sleep 5
 shot 01_first_run
 check "first-run shows setup wizard" "WrenBoard\|setup\|enable" "$(dump | grep -o 'text="[^"]*"' | tr '\n' '|')"
-adb shell am force-stop "$PKG"
+# No force-stop of the IME package: control runs showed that force-stopping it just before registration precedes a default-IME flip (also for upstream FUTO 0.1.30). A real user never force-stops it.
+adb shell input keyevent KEYCODE_HOME
 IME=""
 for i in $(seq 1 30); do
   IME=$(adb shell ime list -a -s 2>/dev/null | tr -d '\r' | grep "^$PKG/" | head -1)
