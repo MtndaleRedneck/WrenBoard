@@ -808,5 +808,6 @@ check "default IME still WrenBoard at end" "$PKG" "$CUR"
 source tools/ime-learn-restore.sh
 source tools/ime-import-regress.sh
 source tools/ime-export-e2e.sh
+source tools/ime-voice-update.sh
 note "== done =="
 exit 0
