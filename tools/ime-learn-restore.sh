@@ -36,6 +36,8 @@ if adb shell id 2>/dev/null | grep -q "uid=0"; then
   if [ -z "$LEXP" ]; then note "INCONCLUSIVE(harness): no export file produced"; else
     note "export: $LEXP ($(adb shell stat -c %s "$LEXP" | tr -d '\r') bytes); learned entries inside: $(adb shell "unzip -l '$LEXP' 2>/dev/null | grep -c userdict/" | tr -d '\r')"
     adb shell "unzip -l '$LEXP' 2>/dev/null | grep userdict/" | sed 's/^/    /' | tee -a "$R"
+    LCNT=$(adb shell "unzip -l '$LEXP' 2>/dev/null | grep -c userdict/" | tr -d '\r')
+    if [ "${LCNT:-0}" -gt 0 ]; then note "PASS: export contains $LCNT userdict/ entries (typed learned data was exported)"; else note "FAIL: export contains NO userdict/ entries although words were typed (or unzip unavailable on the emulator: check)"; fi
     TU=$(adb shell stat -c %u /data/data/com.wrenboard.imetarget | tr -d '\r')
     adb shell "mkdir -p /data/data/com.wrenboard.imetarget/files && cp '$LEXP' /data/data/com.wrenboard.imetarget/files/exp.backup && chown -R $TU:$TU /data/data/com.wrenboard.imetarget/files"
     # change the learned words on the RUNNING instance: learn another word
