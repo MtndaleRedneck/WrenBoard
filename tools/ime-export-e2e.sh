@@ -10,20 +10,20 @@ APP=com.wrenboard.keyboard; APPDIR=/data/data/$APP; EXT=/sdcard/Android/data/$AP
 UID_K=$(adb shell stat -c %u $APPDIR | tr -d '\r')
 md() { adb shell "md5sum '$1' 2>/dev/null" | awk '{print $1}' | tr -d '\r'; }
 # 1. seed data across the physical locations the exporter reads
-adb shell "mkdir -p $APPDIR/files/themes $APPDIR/files/clipboardfiles $EXT/rime && \
+adb shell "mkdir -p $APPDIR/files/themes $APPDIR/files/clipboardfiles $APPDIR/files/UserHistoryDictionary.en_US.dict $EXT/rime && \
   echo -n SEED-THEME > $APPDIR/files/themes/e2etheme.zip && echo -n SEED-CLIPIMG > $APPDIR/files/clipboardfiles/e2eclip.bin && \
-  echo -n '[]' > $APPDIR/files/clipboard.json && echo -n SEED-LEARNED > $APPDIR/files/UserHistoryDictionary.en_US.dict && \
+  echo -n '[]' > $APPDIR/files/clipboard.json && echo -n SEED-HEADER > $APPDIR/files/UserHistoryDictionary.en_US.dict/UserHistoryDictionary.en_US.dict.header && echo -n SEED-BODY > $APPDIR/files/UserHistoryDictionary.en_US.dict/UserHistoryDictionary.en_US.dict.body && \
   echo -n SEED-EXTDICT > $EXT/e2e_user.dict && echo -n SEED-RIME > $EXT/rime/e2e.txt && \
-  chown -R $UID_K:$UID_K $APPDIR/files/themes $APPDIR/files/clipboardfiles $APPDIR/files/clipboard.json $EXT"
+  chown -R $UID_K:$UID_K $APPDIR/files/themes $APPDIR/files/clipboardfiles $APPDIR/files/clipboard.json $APPDIR/files/UserHistoryDictionary.en_US.dict $EXT"
 declare -A WANT
-for f in files/themes/e2etheme.zip files/clipboardfiles/e2eclip.bin files/clipboard.json files/UserHistoryDictionary.en_US.dict; do WANT[$APPDIR/$f]=$(md $APPDIR/$f); done
+for f in files/themes/e2etheme.zip files/clipboardfiles/e2eclip.bin files/clipboard.json files/UserHistoryDictionary.en_US.dict/UserHistoryDictionary.en_US.dict.header files/UserHistoryDictionary.en_US.dict/UserHistoryDictionary.en_US.dict.body; do WANT[$APPDIR/$f]=$(md $APPDIR/$f); done
 for f in e2e_user.dict rime/e2e.txt; do WANT[$EXT/$f]=$(md $EXT/$f); done
 # 2. export through the app UI
 adb shell rm -f /sdcard/Download/FUTOKeyboardSettings_* /sdcard/Documents/FUTOKeyboardSettings_* 2>/dev/null
 adb shell input keyevent KEYCODE_HOME; sleep 1
 adb shell am start -n "$SETTINGS_ACT" --es navDest exportingcfg >/dev/null 2>&1; sleep 6
 shot e2e_01_picker; xdump e2e_01_picker
-if SV=$(python3 tools/xml_node.py shots/e2e_01_picker.xml 'Save'); then
+if SV=$(python3 tools/xml_node.py shots/e2e_01_picker.xml 'SAVE' || python3 tools/xml_node.py shots/e2e_01_picker.xml 'Save'); then
   read -r SX SY _ <<< "$SV"; adb shell input tap $SX $SY; sleep 14; shot e2e_02_after_save
 else
   note "INCONCLUSIVE(harness): document picker 'Save' button not found (see e2e_01_picker.png)"
