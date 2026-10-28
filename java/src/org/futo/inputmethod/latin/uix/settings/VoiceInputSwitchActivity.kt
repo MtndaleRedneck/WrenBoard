@@ -31,6 +31,7 @@ import org.futo.inputmethod.latin.uix.theme.UixThemeAuto
 
 class VoiceInputSwitchActivity : ComponentActivity() {
     private var targetPackage: String? = null
+    private var callerMode: String? = null
     private val label = mutableStateOf("?")
 
     private fun switch() {
@@ -59,7 +60,7 @@ class VoiceInputSwitchActivity : ComponentActivity() {
 
                                     TextButton(onClick = {
                                         switch()
-                                        setResult(65)
+                                        setResult(if(callerMode == "switch") 66 else 65)
                                         finish()
                                     }) {
                                         Text(stringResource(R.string.voice_input_settings_backend_system_confirm_yes))
@@ -86,6 +87,7 @@ class VoiceInputSwitchActivity : ComponentActivity() {
         }
 
         val mode = intent.getStringExtra("mode")
+        callerMode = mode
         when(mode) {
             // WrenBoard: "switch" no longer changes the backend silently. Every backend change shows the
             // confirmation dialog with the target app name AND package name.
