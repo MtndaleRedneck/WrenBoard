@@ -38,7 +38,18 @@ dim() { # dim <step-label>: log default_input_method ownership
   local cur
   cur=$(adb shell settings get secure default_input_method)
   if echo "$cur" | grep -q "$PKG"; then note "DEFAULT-IME[$1]: ours ($cur)"
-  else note "DEFAULT-IME[$1]: NOT-OURS -> $cur"; fi
+  else
+    note "DEFAULT-IME[$1]: NOT-OURS -> $cur"
+    if [ -z "$FLIP_RECOVERED" ]; then
+      FLIP_RECOVERED=1
+      note "MID-SUITE FLIP detected at step '$1' (see flipwatch.txt for first-change time). Results of the preceding step are INVALID. Recovering (re-set IME + retap field) to continue; this is a WARM-SESSION continuation, not a pass of the cold path."
+      adb logcat -d > shots/logcat_at_midsuite_flip.txt 2>&1
+      adb shell ime set "$IME" >> "$R" 2>&1
+      local b; b=$(edit_bounds); [ -n "$b" ] && tap_bounds "$b"
+      sleep 3
+      if [ -z "$GEOM_AFTER_RECOVERY" ]; then GEOM_AFTER_RECOVERY=1; shot recovered_keyboard; fi
+    fi
+  fi
 }
 focus_log() {
   note "focus: $(adb shell dumpsys window | grep -i 'mCurrentFocus' | head -1 | tr -s ' ')"
@@ -118,6 +129,9 @@ check "IME selected as default" "$PKG" "$CUR"
 adb shell input keyevent KEYCODE_BACK
 dim "post-registration"
 
+( : > shots/flipwatch.txt; while true; do c=$(adb shell settings get secure default_input_method 2>/dev/null); if ! echo "$c" | grep -q "$PKG"; then echo "first non-ours default at runner $(date +%H:%M:%S.%N) device $(adb shell date +%H:%M:%S) -> $c" >> shots/flipwatch.txt; adb logcat -d > shots/logcat_at_flipwatch.txt 2>&1; break; fi; sleep 0.4; done ) &
+FLIPWATCH_PID=$!
+trap "kill $FLIPWATCH_PID 2>/dev/null" EXIT
 note "== PHASE A: focused-field + keyboard-pixel gate =="
 adb install -r "$TARGET_APK" >> "$R" 2>&1 || fail_early "ime-target APK install"
 adb shell am start -n "$TPKG/.TestInput" >/dev/null 2>&1
@@ -201,6 +215,7 @@ for attempt in 1 2 3 4 5; do
   adb shell "nohup getevent -lt > /sdcard/ge.txt 2>&1 &" ; sleep 0.5
   adb shell "input tap $SH; input tap $SH"
   sleep 0.5; adb shell "pkill getevent" >/dev/null 2>&1
+  adb shell cat /sdcard/ge.txt > shots/getevent_attempt$attempt.txt 2>&1
   GAP=$(adb shell cat /sdcard/ge.txt | tr -d '\r' | grep "BTN_TOUCH *DOWN" | sed -n 's/^\[ *\([0-9.]*\)\].*/\1/p' | awk 'NR==1{a=$1}NR==2{printf "%d", ($1-a)*1000}')
   note "double-tap attempt $attempt: measured down-to-down gap ${GAP:-unmeasured} ms (system double-tap window ~300 ms)"
   if [ -n "$GAP" ] && [ "$GAP" -le 250 ]; then DT_OK=1; break; fi
@@ -250,12 +265,12 @@ sleep 0.6
 BEFORE=$(edit_text)
 note "backspace test text: '$BEFORE'"
 BS=$(jq -r '.keys.backspace | "\(.[0]) \(.[1])"' "$GEOM")
-adb logcat -c
+adb shell log -t IMETARGET "BSMARK"
 hold_key $BS 4500
 sleep 1.0
 shot 08b_backspace_midhold
 sleep 4.5
-adb logcat -d -v time -s IMETARGET:I | tr -d '\r' > shots/backspace_series.txt
+adb logcat -d -v time -s IMETARGET:I | tr -d '\r' | sed -n '/BSMARK/,$p' | grep -v BSMARK > shots/backspace_series.txt
 python3 - "$BEFORE" shots/backspace_series.txt >> "$R" <<'PY'
 import sys,re
 before=sys.argv[1]; rows=[]
