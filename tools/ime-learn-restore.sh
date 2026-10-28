@@ -5,22 +5,27 @@ LAPP=com.wrenboard.keyboard; LDIR=/data/data/$LAPP/files/UserHistoryDictionary.e
 # type_word <letters...>; learn by committing with space, three times
 learn_word() { local i; for i in 1 2 3; do type_letters "$@" && tapk space; done; }
 # predict <label> <prefix letters...>: type prefix then tap each suggestion slot; print the first resulting field text containing the target
-predict_slots() { # predict_slots <target> <prefix letters...>
-  local target="$1"; shift; local slot got hit=""
+LPHASE=p0
+predict_slots() { # predict_slots <target> <prefix letters...>; prints "slot:field" on hit, "BLOCKED" if focus/typing could not be verified
+  local target="$1"; shift; local slot got hit="" want; want=$(printf '%s' "$@")
   for slot in 720 240 1200; do
-    precond predict; clear_field; type_letters "$@"; sleep 1.2
+    precond predict || { echo BLOCKED; return; }
+    clear_field; type_letters "$@"; sleep 1.2
+    got=$(edit_text)
+    if [ "$got" != "$want" ]; then note "PREDICT[$LPHASE/$target/$slot]: field is '$got' after typing, expected exactly '$want' - INCONCLUSIVE(harness)"; shot "learn_${LPHASE}_${target}_${slot}_BADFIELD"; echo BLOCKED; return; fi
+    shot "learn_${LPHASE}_${target}_${slot}_typed"
     adb shell input tap $slot 1044; sleep 0.8
     got=$(edit_text)
-    shot "learn_pred_${target}_$slot"
+    shot "learn_${LPHASE}_${target}_${slot}"
     if echo "$got" | grep -qi "$target"; then hit="$slot:$got"; break; fi
   done
   echo "$hit"
 }
-precond learn; clear_field
+precond learn || note "INCONCLUSIVE(harness): learn typing focus not reached"; clear_field
 learn_word z o r b l a x
 sleep 8   # more than the 5 s delayed flush
-H=$(predict_slots zorblax z o r)
-if [ -n "$H" ]; then note "PASS: typed learned word 'zorblax' is offered as a prediction from 'zor' (slot:field = '$H')"; else note "FAIL-or-INCONCLUSIVE: no suggestion slot produced 'zorblax' after typing it 3 times (see shots learn_pred_zorblax_*; check frames to tell app from harness)"; fi
+LPHASE=pre; H=$(predict_slots zorblax z o r)
+if [ "$H" = BLOCKED ]; then note "INCONCLUSIVE(harness): pre-export prediction check blocked (focus/typing not verified)"; elif [ -n "$H" ]; then note "PASS: typed learned word 'zorblax' is offered as a prediction from 'zor' (slot:field = '$H')"; else note "FAIL-or-INCONCLUSIVE: no suggestion slot produced 'zorblax' after typing it 3 times (see shots learn_pred_zorblax_*; check frames to tell app from harness)"; fi
 adb root >/dev/null 2>&1; sleep 4; adb wait-for-device; sleep 2
 if adb shell id 2>/dev/null | grep -q "uid=0"; then
   note "learned dict dir after typing: $(adb shell ls -l $LDIR | tr -d '\r' | tr '\n' ';')"
@@ -46,8 +51,8 @@ if adb shell id 2>/dev/null | grep -q "uid=0"; then
     precond learn2; clear_field
     learn_word q u e n v i l
     sleep 8
-    H2=$(predict_slots quenvil q u e n)
-    note "before restore, 'quenvil' prediction: '${H2:-none}'"
+    LPHASE=prerestore; H2=$(predict_slots quenvil q u e n)
+    note "before restore, 'quenvil' prediction: '${H2:-none}' (BLOCKED = not verified)"
     # restore onto the running instance
     adb root >/dev/null 2>&1; sleep 4; adb wait-for-device; sleep 2
     adb shell am start -W -a android.intent.action.VIEW -d "content://com.wrenboard.imetarget.fix/exp.backup" -t application/octet-stream -n "$LAPP/org.futo.inputmethod.latin.uix.ImportResourceActivity" >/dev/null 2>&1
@@ -56,14 +61,14 @@ if adb shell id 2>/dev/null | grep -q "uid=0"; then
       read -r IX IY _ <<< "$IB"; adb shell input tap $IX $IY; sleep 12; shot learn_04_after_restore
       sleep 8   # > 5 s: a late delayed flush of old memory would have fired by now
       adb unroot >/dev/null 2>&1; sleep 3; adb wait-for-device
-      H3=$(predict_slots zorblax z o r)
-      if [ -n "$H3" ]; then note "PASS: after restore on the running instance 'zorblax' predicts again ('$H3')"; else note "FAIL-or-INCONCLUSIVE: 'zorblax' not offered after restore (frames learn_pred_zorblax_*; compare with the pre-export frame)"; fi
-      H4=$(predict_slots quenvil q u e n)
-      if [ -z "$H4" ]; then note "PASS: 'quenvil' (learned AFTER the export) is gone after restore, as a replace-restore implies"; else note "OBSERVATION: 'quenvil' still predicts after restore ('$H4'); restore is a full replace, so this needs explanation"; fi
+      LPHASE=postrestore; H3=$(predict_slots zorblax z o r)
+      if [ "$H3" = BLOCKED ]; then note "INCONCLUSIVE(harness): post-restore zorblax check blocked (focus/typing not verified)"; elif [ -n "$H3" ]; then note "PASS: after restore on the running instance 'zorblax' predicts again ('$H3')"; else note "FAIL-or-INCONCLUSIVE: 'zorblax' not offered after restore (frames learn_pred_zorblax_*; compare with the pre-export frame)"; fi
+      LPHASE=postrestoreq; H4=$(predict_slots quenvil q u e n)
+      if [ "$H4" = BLOCKED ]; then note "INCONCLUSIVE(harness): post-restore quenvil check blocked - no replace-restore claim"; elif [ -z "$H4" ]; then note "PASS: 'quenvil' (learned AFTER the export) is gone after restore, as a replace-restore implies"; else note "OBSERVATION: 'quenvil' still predicts after restore ('$H4'); restore is a full replace, so this needs explanation"; fi
       # keep typing and wait more sync cycles, then check zorblax persists
       precond learn3; clear_field; type_letters a b c; tapk space; type_letters d e f; tapk space; sleep 8
-      H5=$(predict_slots zorblax z o r)
-      if [ -n "$H5" ]; then note "PASS: restored word still predicts after further typing and another >5 s flush cycle"; else note "FAIL-or-INCONCLUSIVE: restored word lost after more typing/flush (frames learn_pred_zorblax_*)"; fi
+      LPHASE=postflush; H5=$(predict_slots zorblax z o r)
+      if [ "$H5" = BLOCKED ]; then note "INCONCLUSIVE(harness): post-flush zorblax check blocked"; elif [ -n "$H5" ]; then note "PASS: restored word still predicts after further typing and another >5 s flush cycle"; else note "FAIL-or-INCONCLUSIVE: restored word lost after more typing/flush (frames learn_pred_zorblax_*)"; fi
       note "FATAL EXCEPTION count after learn/restore: $(adb logcat -d 2>/dev/null | grep -c 'FATAL EXCEPTION')"
     else note "INCONCLUSIVE(harness or app): no Import button for the learned-words export (learn_03_importer.png)"; fi
   fi

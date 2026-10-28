@@ -92,18 +92,24 @@ clear_field() {
   adb shell am broadcast -a com.wrenboard.imetarget.CLEAR -p com.wrenboard.imetarget >/dev/null 2>&1
   sleep 0.8
 }
-precond() { # precond <label>: target app focused and keyboard shown, else relaunch + refresh geometry
-  local f ish
-  f=$(adb shell dumpsys window | tr -d '\r' | grep mCurrentFocus | head -1)
-  ish=$(adb shell dumpsys input_method | tr -d '\r' | grep -o 'mInputShown=[a-z]*' | head -1)
-  if echo "$f" | grep -q imetarget && [ "$ish" = "mInputShown=true" ]; then return 0; fi
-  note "PRECONDITION[$1]: not ready (focus: ${f:-none}; $ish) - relaunching target and re-tapping field"
-  adb shell input keyevent KEYCODE_HOME; sleep 1
-  adb shell am start -n com.wrenboard.imetarget/.TestInput >/dev/null 2>&1; sleep 2
-  local B; B=$(edit_bounds); [ -n "$B" ] && tap_bounds "$B"; sleep 2
-  shot "precond_$1"
-  geom_rebuild "precond_$1" "precond_$1_overlay" >/dev/null 2>&1 || note "PRECONDITION[$1]: geometry rebuild failed"
-  clear_field
+precond() { # precond <label>: target app focused and keyboard shown, else relaunch + refresh geometry. rc 1 = still not ready after 3 tries
+  local f ish try B
+  for try in 1 2 3; do
+    f=$(adb shell dumpsys window | tr -d '\r' | grep mCurrentFocus | head -1)
+    ish=$(adb shell dumpsys input_method | tr -d '\r' | grep -o 'mInputShown=[a-z]*' | head -1)
+    if echo "$f" | grep -q imetarget && [ "$ish" = "mInputShown=true" ]; then
+      [ "$try" -gt 1 ] && { shot "precond_$1"; geom_rebuild "precond_$1" "precond_$1_overlay" >/dev/null 2>&1 || note "PRECONDITION[$1]: geometry rebuild failed"; clear_field; }
+      return 0
+    fi
+    note "PRECONDITION[$1]: not ready (try $try; focus: ${f:-none}; $ish) - relaunching target (am start -S, clear-top) and re-tapping field"
+    adb shell input keyevent KEYCODE_BACK; sleep 0.5
+    adb shell input keyevent KEYCODE_HOME; sleep 1
+    adb shell am start -S -f 0x14000000 -n com.wrenboard.imetarget/.TestInput >/dev/null 2>&1; sleep 2
+    B=$(edit_bounds); [ -n "$B" ] && tap_bounds "$B"; sleep 2
+  done
+  shot "precond_$1_FAILED"
+  note "PRECONDITION[$1]: INCONCLUSIVE(harness) - target editor focus + keyboard not reached after 3 tries (focus: ${f:-none}; $ish)"
+  return 1
 }
 screen_hash() { adb exec-out screencap -p | md5sum | cut -d' ' -f1; }
 
