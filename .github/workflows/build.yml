@@ -22,11 +22,10 @@ jobs:
         with:
           distribution: temurin
           java-version: "17"
-      - uses: android-actions/setup-android@v3
-      - name: Install NDK
+      - name: Install NDK (runner-provided Android SDK)
         run: |
-          yes | sdkmanager --licenses >/dev/null
-          sdkmanager "ndk;28.2.13676358"
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;28.2.13676358"
       - uses: gradle/actions/setup-gradle@v4
       - name: Signing setup
         run: |
