@@ -1,0 +1,43 @@
+name: build
+on:
+  push:
+  workflow_dispatch:
+    inputs:
+      publish:
+        type: boolean
+        default: false
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    env:
+      KEYSTORE_B64: ${{ secrets.KEYSTORE_B64 }}
+      KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+      VERSION_NAME: 0.1.0-baseline
+      VERSION_CODE: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Init build submodules (voice/swipe weights excluded)
+        run: git submodule update --init java/assets/layouts java/assets/themes java/res-large libs translations
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: android-actions/setup-android@v3
+      - name: Install NDK
+        run: |
+          yes | sdkmanager --licenses >/dev/null
+          sdkmanager "ndk;28.2.13676358"
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Signing setup
+        run: |
+          echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/release.keystore"
+          printf 'storeFile=%s\nkeyAlias=wrenboard\nkeyPassword=%s\nstorePassword=%s\n' "$RUNNER_TEMP/release.keystore" "$KEYSTORE_PASSWORD" "$KEYSTORE_PASSWORD" > keystore.properties
+      - name: Build stable release APK
+        run: ./gradlew --no-daemon assembleStableRelease
+      - name: Cleanup signing material
+        if: always()
+        run: rm -f keystore.properties "$RUNNER_TEMP/release.keystore"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: WrenBoard-baseline-apk
+          path: build/outputs/apk/stable/release/*.apk
