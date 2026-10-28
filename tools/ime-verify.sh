@@ -5,7 +5,6 @@
 set -u
 APK="$1"
 PKG="com.wrenboard.keyboard"
-IME="$PKG/org.futo.inputmethod.latin.LatinIME"
 mkdir -p shots
 R=shots/results.txt
 : > "$R"
@@ -35,10 +34,18 @@ field_text() { dump | tr '>' '>\n' | grep -o 'text="[^"]*"' | sed 's/text="//;s/
 note "== install =="
 adb install -r "$APK" >> "$R" 2>&1 || { note "FAIL: install"; exit 1; }
 adb shell pm grant "$PKG" android.permission.RECORD_AUDIO 2>/dev/null
+# resolve the real IME component from the device (service is .LatinIME under the app package)
+IME=$(adb shell ime list -a -s 2>/dev/null | grep "^$PKG/" | head -1)
+[ -z "$IME" ] && IME="$PKG/$PKG.LatinIME"
+note "resolved IME id: $IME"
+# emulator has a hardware keyboard; force the soft keyboard to show anyway
+adb shell settings put secure show_ime_with_hard_keyboard 1
 adb shell ime enable "$IME" >> "$R" 2>&1
 adb shell ime set "$IME" >> "$R" 2>&1
 CUR=$(adb shell settings get secure default_input_method)
 check "IME selected as default" "$PKG" "$CUR"
+# dismiss any IME picker that popped up
+adb shell input keyevent KEYCODE_BACK
 
 note "== first run / setup screen =="
 adb shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1
@@ -51,6 +58,15 @@ adb shell am force-stop "$PKG"
 note "== open Chrome url bar for typing =="
 adb shell am start -a android.intent.action.VIEW -d "https://example.com" >/dev/null 2>&1
 sleep 6
+# dismiss Chrome first-run welcome if present
+if dump | grep -qi "Use without an account"; then
+  tap_key "Use without an account"
+  sleep 2
+fi
+if dump | grep -qi "Accept &amp; continue\|Accept & continue"; then
+  tap_key "Accept & continue"
+  sleep 2
+fi
 adb shell input keyevent KEYCODE_TAB 2>/dev/null
 # tap the url bar
 dump | tr '>' '>\n' | grep -i 'url_bar\|Search or type' | grep -o 'bounds="\[[0-9]*,[0-9]*\]\[[0-9]*,[0-9]*\]"' | head -1 > /tmp/ub.txt
@@ -60,6 +76,7 @@ if [ -s /tmp/ub.txt ]; then
 fi
 sleep 2
 shot 02_keyboard_visible
+dump > shots/ui_letters.xml 2>/dev/null
 
 note "== lowercase typing =="
 for k in h e l l o; do adb shell input keyevent KEYCODE_${k^^}; sleep 0.15; done
@@ -93,16 +110,18 @@ shot 08_after_word_delete
 note "(word-delete outcome inspected visually + next checks)"
 
 note "== symbols page 1 =="
-tap_key "?123" || adb shell input keyevent KEYCODE_SYM
+tap_key "123" || tap_key "?123" || adb shell input keyevent KEYCODE_SYM
 sleep 1
 shot 09_symbols_page1
+dump > shots/ui_symbols1.xml 2>/dev/null
 S1=$(field_text)
 check "symbols page1 shows @" "@" "$S1"
 
 note "== symbols page 2 =="
-tap_key "{&=" || tap_key "=\\<"
+tap_key "{&="
 sleep 1
 shot 10_symbols_page2
+dump > shots/ui_symbols2.xml 2>/dev/null
 
 note "== back to letters =="
 tap_key "abc"
@@ -110,7 +129,7 @@ sleep 1
 shot 11_back_to_letters
 
 note "== clipboard long-press on symbols key =="
-B=$(dump | tr '>' '>\n' | grep -i 'content-desc="?123"' | grep -o 'bounds="\[[0-9]*,[0-9]*\]\[[0-9]*,[0-9]*\]"' | head -1)
+B=$(dump | tr '>' '>\n' | grep -iE 'content-desc="(123|[?]123)"' | grep -o 'bounds="\[[0-9]*,[0-9]*\]\[[0-9]*,[0-9]*\]"' | head -1)
 if [ -n "$B" ]; then
   nums=$(echo "$B" | grep -o '[0-9]*' | tr '\n' ' '); read -r x1 y1 x2 y2 <<< "$nums"
   X=$(( (x1+x2)/2 )); Y=$(( (y1+y2)/2 ))

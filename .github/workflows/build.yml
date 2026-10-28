@@ -1,6 +1,10 @@
 name: build
 on:
   push:
+    paths-ignore:
+      - 'tools/**'
+      - '.github/**'
+      - '**.md'
   workflow_dispatch:
     inputs:
       publish:
