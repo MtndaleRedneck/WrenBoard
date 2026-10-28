@@ -38,26 +38,34 @@ for try in 1 2 3 4 5; do
   echo "$R1" | grep -q "com.android.settings" && { note "system settings opened by the wizard button (tap $try)"; break; }
 done
 snap system_settings_keyboards
-note "== enable WrenBoard toggle in system settings =="
-if click_re "WrenBoard"; then
-  sleep 1.5; snap after_toggle_tap
-  click_re "OK|Ok|Accept|Continue" && note "confirmed security dialog" || note "no confirm dialog found (or none shown)"
-  sleep 1; snap after_confirm
+click_switch() {
+  local x b nums; x=$(dumpui)
+  b=$(echo "$x" | sed 's/>/>\n/g' | grep 'class="android.widget.Switch"' | grep -i "content-desc=\"$1\"" | grep -o 'bounds="\[[0-9]*,[0-9]*\]\[[0-9]*,[0-9]*\]"' | head -1)
+  [ -z "$b" ] && return 1
+  nums=$(echo "$b" | grep -o '[0-9]*' | tr '\n' ' '); set -- $nums
+  adb shell input tap $(( ($1+$3)/2 )) $(( ($2+$4)/2 )); sleep 1.5; return 0
+}
+note "== enable WrenBoard: tap its switch (not its row) in system settings =="
+if click_switch "WrenBoard"; then
+  note "tapped the WrenBoard switch"; sleep 1; snap after_switch_tap
+  note "resumed: $(resumed)"
+  if click_re "OK|Ok|Accept|Continue"; then note "confirmed the system warning dialog"; sleep 1; snap after_confirm; else note "no system warning dialog found"; fi
 else
-  note "FAIL: no WrenBoard entry on the keyboards settings screen"
+  note "FAIL: no WrenBoard switch on the keyboards settings screen"
 fi
 note "enabled IMEs now: $(adb shell settings get secure enabled_input_methods | tr -d '\r')"
-adb shell input keyevent KEYCODE_BACK; sleep 2; snap back_in_wizard_a
-for step in 2 3 4; do
-  note "== wizard step $step: look for the next action =="
-  if click_re "Switch Input Methods|Switch input methods|Switch Input Method|Select WrenBoard|Choose WrenBoard|Choose Input Method|Select Input Method|Switch|Choose|Select"; then
-    sleep 2; snap wizard_action_$step
-    if click_re "WrenBoard"; then note "picked WrenBoard in picker"; sleep 2; snap after_pick_$step; fi
+echo "$(adb shell settings get secure enabled_input_methods)" | grep -q "$PKG" && note "CHECK: WrenBoard is in the enabled list" || note "CHECK FAILED: WrenBoard not in the enabled list"
+adb shell input keyevent KEYCODE_BACK; sleep 2; note "resumed after back: $(resumed)"; snap back_after_enable
+for step in 2 3; do
+  note "== wizard step 2: tap 'Switch Input Methods' (attempt $step) =="
+  if click_re "Switch Input Methods"; then
+    sleep 2; note "resumed: $(resumed)"; snap picker_$step
+    if click_re "WrenBoard"; then note "picked WrenBoard in the picker"; sleep 2; snap after_pick_$step; else note "WrenBoard row not found in picker"; fi
   else
-    note "no known action button on this screen (see SCREEN line for visible texts)"
+    note "'Switch Input Methods' button not found (see SCREEN line)"
   fi
   [ "$(default_now)" = "$PKG/org.futo.inputmethod.latin.LatinIME" ] && break
-  adb shell input keyevent KEYCODE_BACK >/dev/null 2>&1; sleep 1; snap back_in_wizard_b$step
+  adb shell input keyevent KEYCODE_BACK >/dev/null 2>&1; sleep 1; snap back_b$step
 done
 note "default IME after user-style flow: $(default_now)"
 echo "$(default_now)" | grep -q "$PKG" && note "SETUP-FLOW: WrenBoard became default via UI" || note "SETUP-FLOW: INCOMPLETE - WrenBoard not default via UI (see screens)"
