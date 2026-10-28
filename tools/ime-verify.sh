@@ -196,7 +196,17 @@ dim "after-shift-single"
 note "== caps lock via shift DOUBLE-TAP (SwiftKey baseline) =="
 clear_field
 SH=$(jq -r '.keys.shift | "\(.[0]) \(.[1])"' "$GEOM")
-adb shell "input tap $SH & input tap $SH & wait"
+DT_OK=""
+for attempt in 1 2 3 4 5; do
+  adb shell "nohup getevent -lt > /sdcard/ge.txt 2>&1 &" ; sleep 0.5
+  adb shell "input tap $SH; input tap $SH"
+  sleep 0.5; adb shell "pkill getevent" >/dev/null 2>&1
+  GAP=$(adb shell cat /sdcard/ge.txt | tr -d '\r' | grep "BTN_TOUCH *DOWN" | sed -n 's/^\[ *\([0-9.]*\)\].*/\1/p' | awk 'NR==1{a=$1}NR==2{printf "%d", ($1-a)*1000}')
+  note "double-tap attempt $attempt: measured down-to-down gap ${GAP:-unmeasured} ms (system double-tap window ~300 ms)"
+  if [ -n "$GAP" ] && [ "$GAP" -le 250 ]; then DT_OK=1; break; fi
+  sleep 0.8   # slow pair = shift on then off, back to unshifted; retry
+done
+[ -z "$DT_OK" ] && note "WARN: no double-tap landed inside 250 ms; caps double-tap result is NOT a valid test"
 sleep 0.8
 shot 06a_capslock_doubletap_state
 type_letters w o r l d
@@ -235,25 +245,37 @@ dim "after-case-cycle"
 
 note "== whole-word hold backspace (accelerating) =="
 clear_field
-type_letters h e l l o; tapk space; type_letters w o r l d; tapk space; type_letters h e l l o; tapk space; type_letters w o r l d; tapk space; type_letters h e l l o
+type_letters h e l l o; tapk space; type_letters w o r l d; tapk space; type_letters h e l l o; tapk space; type_letters w o r l d; tapk space; type_letters h e l l o; tapk space; type_letters w o r l d; tapk space; type_letters h e l l o; tapk space; type_letters w o r l d
 sleep 0.6
 BEFORE=$(edit_text)
+note "backspace test text: '$BEFORE'"
 BS=$(jq -r '.keys.backspace | "\(.[0]) \(.[1])"' "$GEOM")
 adb logcat -c
-hold_key $BS 2500
-sleep 0.9
+hold_key $BS 4500
+sleep 1.0
 shot 08b_backspace_midhold
-sleep 2.5
-SERIES=$(adb logcat -d -s IMETARGET:I | tr -d '\r' | sed -n 's/.*IMETARGET: FIELD=//p')
-note "hold-backspace field series (each state after a delete): $(echo "$SERIES" | tr '\n' '|')"
-AFTER1=$(edit_text)
-note "hold-backspace: '$BEFORE' -> '$AFTER1'"
-# word-level = at least one single step removes >=2 characters; letter-level steps remove exactly 1
-MAXDROP=$(echo "$SERIES" | awk 'BEGIN{p=-1;m=0}{l=length($0); if(p>=0 && p-l>m)m=p-l; p=l}END{print m}')
-note "largest single-step delete: $MAXDROP chars"
-if [ "$MAXDROP" -ge 2 ]; then note "PASS: hold-backspace removes whole words per step (max step $MAXDROP)"; else note "FAIL: hold-backspace is letter-by-letter (max step $MAXDROP)"; fi
-STEPS=$(echo "$SERIES" | wc -l)
-note "steps observed in one hold: $STEPS"
+sleep 4.5
+adb logcat -d -v time -s IMETARGET:I | tr -d '\r' > shots/backspace_series.txt
+python3 - "$BEFORE" shots/backspace_series.txt >> "$R" <<'PY'
+import sys,re
+before=sys.argv[1]; rows=[]
+for l in open(sys.argv[2]):
+    m=re.match(r'\d+-\d+ (\d+):(\d+):(\d+\.\d+) .*FIELD=(.*)$',l.rstrip('\n'))
+    if m: rows.append((int(m[1])*3600+int(m[2])*60+float(m[3]),m[4]))
+states=[t for _,t in rows]; times=[t for t,_ in rows]
+print("backspace states: "+" | ".join(repr(x) for x in states))
+bad=[x for x in states if not (before.startswith(x) and (x=="" or x.endswith(" ") or x==before or before[len(x):len(x)+1]==" "))]
+drops=[len(a)-len(b) for a,b in zip([before]+states,states)]
+print("step drops (chars): %s" % drops)
+print(("PASS" if states and not bad and max(drops+[0])>=2 else "FAIL")+": hold-backspace every step ends on a word boundary (no mid-word states)" + ("" if not bad else "; mid-word states: %r"%bad))
+iv=[times[i+1]-times[i] for i in range(len(times)-1)]
+print("step intervals (s): "+", ".join("%.2f"%x for x in iv))
+if len(iv)>=4:
+    h=len(iv)//2; fa=sum(iv[:h])/h; sa=sum(iv[h:])/(len(iv)-h)
+    print(("PASS" if sa<fa else "FAIL")+": hold-backspace accelerates (first-half mean %.2fs, second-half mean %.2fs)"%(fa,sa))
+else:
+    print("FAIL: hold-backspace too few steps (%d) to assess acceleration"%len(iv))
+PY
 dim "after-backspace"
 
 note "== symbols page 1 =="
