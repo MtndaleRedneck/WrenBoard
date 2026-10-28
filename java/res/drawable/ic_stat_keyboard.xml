@@ -1,0 +1,11 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+  <!-- Generic keyboard glyph for status-bar/subtype icons (WrenBoard; not the FUTO mark). -->
+  <path
+      android:fillColor="#FFFFFFFF"
+      android:fillType="evenOdd"
+      android:pathData="M3,5.5C2.17,5.5 1.5,6.17 1.5,7L1.5,17C1.5,17.83 2.17,18.5 3,18.5L21,18.5C21.83,18.5 22.5,17.83 22.5,17L22.5,7C22.5,6.17 21.83,5.5 21,5.5ZM4,7.5L6,7.5L6,9.5L4,9.5ZM7,7.5L9,7.5L9,9.5L7,9.5ZM10,7.5L12,7.5L12,9.5L10,9.5ZM13,7.5L15,7.5L15,9.5L13,9.5ZM16,7.5L18,7.5L18,9.5L16,9.5ZM19,7.5L20,7.5L20,9.5L19,9.5ZM4,10.5L6,10.5L6,12.5L4,12.5ZM7,10.5L9,10.5L9,12.5L7,12.5ZM10,10.5L12,10.5L12,12.5L10,12.5ZM13,10.5L15,10.5L15,12.5L13,12.5ZM16,10.5L18,10.5L18,12.5L16,12.5ZM19,10.5L20,10.5L20,12.5L19,12.5ZM4,13.5L6,13.5L6,15.5L4,15.5ZM7,13.5L9,13.5L9,15.5L7,15.5ZM10,13.5L15,13.5L15,15.5L10,15.5ZM16,13.5L18,13.5L18,15.5L16,15.5ZM19,13.5L20,13.5L20,15.5L19,15.5Z"/>
+</vector>

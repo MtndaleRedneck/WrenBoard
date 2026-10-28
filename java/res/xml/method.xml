@@ -6,7 +6,7 @@
     android:supportsSwitchingToNextInputMethod="true"
     android:supportsInlineSuggestions="true"
     android:suppressesSpellChecker="true">
-    <subtype android:icon="@drawable/ic_launcher_foreground"
+    <subtype android:icon="@drawable/ic_stat_keyboard"
         android:label="@string/english_ime_name"
         android:imeSubtypeMode="keyboard"
         android:isAsciiCapable="true"

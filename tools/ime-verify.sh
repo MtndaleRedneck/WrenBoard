@@ -43,6 +43,32 @@ adb shell settings put secure show_ime_with_hard_keyboard 1
 adb shell ime enable "$IME" >> "$R" 2>&1
 adb shell ime set "$IME" >> "$R" 2>&1
 CUR=$(adb shell settings get secure default_input_method)
+if ! echo "$CUR" | grep -q "$PKG"; then
+  note "standard enable failed; collecting diagnostics + trying fallbacks"
+  note "--- pm list packages (grep $PKG) ---"
+  adb shell pm list packages | grep -i wrenboard >> "$R" 2>&1
+  note "--- ime list -a (full) ---"
+  adb shell ime list -a >> "$R" 2>&1
+  # try the upstream-style component id explicitly
+  IME2="$PKG/org.futo.inputmethod.latin.LatinIME"
+  note "--- trying explicit id: $IME2 ---"
+  adb shell ime enable "$IME2" >> "$R" 2>&1
+  adb shell ime set "$IME2" >> "$R" 2>&1
+  IME="$IME2"
+  CUR=$(adb shell settings get secure default_input_method)
+fi
+if ! echo "$CUR" | grep -q "$PKG"; then
+  note "--- trying settings-provider fallback ---"
+  adb shell settings put secure enabled_input_methods "$IME" >> "$R" 2>&1
+  adb shell settings put secure default_input_method "$IME" >> "$R" 2>&1
+  CUR=$(adb shell settings get secure default_input_method)
+fi
+if ! echo "$CUR" | grep -q "$PKG"; then
+  note "--- package dump + logcat for root cause ---"
+  adb shell pm dump "$PKG" > shots/pm_dump.txt 2>&1
+  adb logcat -d > shots/logcat.txt 2>&1
+  note "(pm_dump.txt and logcat.txt saved to artifact)"
+fi
 check "IME selected as default" "$PKG" "$CUR"
 # dismiss any IME picker that popped up
 adb shell input keyevent KEYCODE_BACK

@@ -7,7 +7,7 @@
     <string name="spell_checker_service_name">WrenBoard Spell Checker</string>
 
     <!-- Title for Android Keyboard settings screen. "WrenBoard" should not be translated. -->
-    <string name="english_ime_settings">FUTO Keyboard Settings</string>
+    <string name="english_ime_settings">WrenBoard Settings</string>
 
     <!-- Title for the spell checking service settings screen. "WrenBoard" should not be translated. -->
     <string name="android_spell_checker_settings">WrenBoard Spell Checker Settings</string>

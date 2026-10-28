@@ -231,7 +231,7 @@ class TrainingWorker(val context: Context, val parameters: WorkerParameters) : C
             .setContentTitle(title)
             .setTicker(title)
             .setContentText(progress)
-            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setSmallIcon(R.drawable.ic_stat_keyboard)
             .setOngoing(true)
             // Add the cancel action to the notification which can
             // be used to cancel the worker
