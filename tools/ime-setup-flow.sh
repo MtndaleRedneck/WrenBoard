@@ -30,8 +30,14 @@ note "initial default IME: $(default_now)"
 adb shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1; sleep 5
 snap wizard_step1
 note "== wizard step 1: tap 'Open Input Method Settings' =="
-click_re "Open Input Method Settings" && note "tapped wizard button" || note "FAIL: wizard button not found"
-sleep 2; snap system_settings_keyboards
+resumed() { adb shell dumpsys activity activities | grep -E "mResumedActivity|topResumedActivity" | head -1 | tr -s ' '; }
+for try in 1 2 3 4 5; do
+  click_re "Open Input Method Settings" && note "tap $try on wizard button" || { note "wizard button not found on try $try"; break; }
+  sleep 3
+  R1=$(resumed); note "  resumed after tap $try: $R1"
+  echo "$R1" | grep -q "com.android.settings" && { note "system settings opened by the wizard button (tap $try)"; break; }
+done
+snap system_settings_keyboards
 note "== enable WrenBoard toggle in system settings =="
 if click_re "WrenBoard"; then
   sleep 1.5; snap after_toggle_tap
@@ -61,7 +67,8 @@ adb shell am start -n "$TPKG/.TestInput" >/dev/null 2>&1; sleep 3
 x=$(dumpui); b=$(echo "$x" | tr '>' '>\n' | grep 'android.widget.EditText' | grep -o 'bounds="\[[0-9]*,[0-9]*\]\[[0-9]*,[0-9]*\]"' | head -1)
 nums=$(echo "$b" | grep -o '[0-9]*' | tr '\n' ' '); set -- $nums
 [ -n "${1:-}" ] && adb shell input tap $(( ($1+$3)/2 )) $(( ($2+$4)/2 ))
-for i in 1 2 3 4 5 6 7 8 9 10; do sleep 1; c=$(default_now); echo "$c" | grep -q "$PKG" || { note "DEFAULT FLIPPED at t+${i}s -> $c"; break; }; done
+WAS_OURS=$(default_now | grep -c "$PKG")
+for i in 1 2 3 4 5 6 7 8 9 10; do sleep 1; c=$(default_now); echo "$c" | grep -q "$PKG" || { [ "$WAS_OURS" = 1 ] && note "DEFAULT FLIPPED at t+${i}s -> $c" || note "default is not WrenBoard (never became default via UI)"; break; }; done
 sleep 1; snap keyboard_visible
 note "focus: $(adb shell dumpsys window | grep -i mCurrentFocus | head -1 | tr -s ' ')"
 note "ime-state: $(adb shell dumpsys input_method | grep -E 'mInputShown|mCurId' | tr -s ' ' | tr '\n' ' ')"
