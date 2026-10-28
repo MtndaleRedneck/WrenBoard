@@ -25,6 +25,13 @@ val ThirdPartyList: List<ThirdPartyItem> = listOf(
         "Voice Input powered by OpenAI Whisper",
         "https://github.com/openai/whisper",
         "Copyright (c) 2022 OpenAI",
+        License.MIT
+    ),
+    TP(
+        "FUTO whisper-acft voice model",
+        "Bundled English voice model: whisper-tiny.en fine-tuned and converted (ACFT, ggml q8_0), supplied by FUTO unchanged",
+        "https://huggingface.co/futo-org/acft-whisper-tiny.en",
+        "Copyright (c) FUTO",
         License.Apache2
     ),
     TP(

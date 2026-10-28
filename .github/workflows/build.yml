@@ -16,8 +16,8 @@ jobs:
       VERSION_CODE: "1"
     steps:
       - uses: actions/checkout@v4
-      - name: Init build submodules (voice/swipe weights excluded)
-        run: git submodule update --init java/assets/layouts java/assets/themes java/res-large libs translations
+      - name: Init build submodules (swipe weights excluded; bundled English voice model cleared, provenance in README-WRENBOARD.md)
+        run: git submodule update --init java/assets/layouts java/assets/themes java/res-large libs translations voiceinput-shared/src/main/ml
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
