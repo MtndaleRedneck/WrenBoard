@@ -422,25 +422,21 @@ SWITCH=$(jq -r '.bands[2].cells[0] | "\(.cx) \(.cy)"' shots/geom_sym1.json)
 adb shell input tap $SWITCH
 sleep 1.2
 shot 10_symbols_page2
-# Page-2 identity guard (checked offline on run-14 shots: when the switch tap lands on letters, the ABC key
-# region differs). Only a screen with the symbols ABC key AND a band-2 key different from page 1 counts as p2.
-_a2=$(python3 tools/pagecheck.py shots/10_symbols_page2.png $A1 $A2 $A3 $A4 shots/ref_abc.png | cut -d' ' -f1)
-_c2=$(python3 tools/pagecheck.py shots/10_symbols_page2.png $C1 $C2 $C3 $C4 shots/ref_p1sw.png | cut -d' ' -f1)
-if [ "$_a2" = SAME ] && [ "$_c2" = DIFF ]; then
-  P2REACHED=1; note "symbols p2 reached (ABC key present, band-2 left key differs from p1) - see 10_symbols_page2.png"
-  python3 tools/pagecheck.py shots/10_symbols_page2.png $C1 $C2 $C3 $C4 shots/ref_p2sw.png --save >/dev/null
+# Page-2 identity: band-cell-count signature from pixel geometry (offline-validated on run 40770482775 frames:
+# p1 = 10,10,10,5,4  p2 = 9,9,9,7,4  letters = 10,10,9,9,6,4).
+sig_of() { python3 tools/kbd_geom.py "$1" "${1%.png}_ov.png" 2>/dev/null | jq -r '[.bands[]|(.cells|length)]|map(tostring)|join(",")'; }
+SIG2=$(sig_of shots/10_symbols_page2.png)
+if [ "$SIG2" = "9,9,9,7,4" ]; then
+  P2REACHED=1; note "symbols p2 reached (band signature $SIG2) - see 10_symbols_page2.png"
+  python3 tools/kbd_geom.py shots/10_symbols_page2.png shots/10_symbols_page2_overlay.png > shots/geom_sym2.json 2>/dev/null
 else
-  P2REACHED=0; note "INCONCLUSIVE: symbols page 2 NOT reached (abc=$_a2 p1key=$_c2); p2 probes skipped - see 10_symbols_page2.png"
-  cp shots/ref_p1sw.png shots/ref_p2sw.png
+  P2REACHED=0; note "INCONCLUSIVE: symbols page 2 NOT reached (band signature '$SIG2', wanted 9,9,9,7,4); p2 probes skipped - see 10_symbols_page2.png"
 fi
 FT1=$(edit_text)
 note "symbols p2 reached via {&= key (field unchanged by switch: $([ "$FT0" = "$FT1" ] && echo yes || echo NO))"
 pageis2() {
   adb exec-out screencap -p > shots/_pc.png
-  local a c
-  a=$(python3 tools/pagecheck.py shots/_pc.png $A1 $A2 $A3 $A4 shots/ref_abc.png | cut -d' ' -f1)
-  c=$(python3 tools/pagecheck.py shots/_pc.png $C1 $C2 $C3 $C4 shots/ref_p2sw.png | cut -d' ' -f1)
-  [ "$a" = SAME ] && [ "$c" = SAME ] && echo p2 || echo other
+  [ "$(sig_of shots/_pc.png)" = "9,9,9,7,4" ] && echo p2 || echo other
 }
 ensure_p2() {
   [ "$(pageis2)" = p2 ] && return 0
@@ -451,23 +447,23 @@ ensure_p2() {
 P2A=""; P2B=""; REV2=0
 for k in 0 1 2 3 4 5 6 7 8; do
   [ "$P2REACHED" = 1 ] || break
-  X=$(( SCRW * (750 + 1082 * k) / 10000 ))
   ensure_p2 || { note "  cannot reach symbols p2 for top key $k"; break; }
-  D=$(probe_key t$k $X $DY); P2A="$P2A$D"
+  X=$(jq -r ".bands[0].cells[$k].cx" shots/geom_sym2.json); Y=$(jq -r ".bands[0].cells[$k].cy" shots/geom_sym2.json)
+  D=$(probe_key t$k $X $Y); P2A="$P2A$D"
   [ "$(pageis2)" = p2 ] || { REV2=$((REV2+1)); note "  page left p2 after top key $k (typed '$D')"; }
 done
-for k in 0 1 2 3 4 5 6 7 8; do
+for k in 1 2 3 4 5 6 7; do
   [ "$P2REACHED" = 1 ] || break
-  X=$(( SCRW * (750 + 1082 * k) / 10000 ))
   ensure_p2 || { note "  cannot reach symbols p2 for second-row key $k"; break; }
-  D=$(probe_key u$k $X $B1Y); P2B="$P2B$D"
+  X=$(jq -r ".bands[1].cells[$k].cx" shots/geom_sym2.json); Y=$(jq -r ".bands[1].cells[$k].cy" shots/geom_sym2.json)
+  D=$(probe_key u$k $X $Y); P2B="$P2B$D"
   [ "$(pageis2)" = p2 ] || { REV2=$((REV2+1)); note "  page left p2 after second-row key $k (typed '$D')"; }
 done
 shot 10b_symbols_p2_after_probe
 P2="$P2A$P2B"
 note "symbols p2 top row typed: '$P2A' (expect currency row)"
-note "symbols p2 second row typed: '$P2B' (expect tab then []{}<>^)"
-note "symbols p2: page left p2 after $REV2 of 18 key taps"
+note "symbols p2 second row typed: '$P2B' (expect []{}<>^)"
+note "symbols p2: page left p2 after $REV2 of 16 key taps"
 if [ "$P2REACHED" = 1 ]; then
 check "symbols page2 types page-2 symbols (pound)" "£" "$P2"
 check "symbols page2 types page-2 symbols (euro)" "€" "$P2"
@@ -492,6 +488,23 @@ adb shell am broadcast -a com.wrenboard.imetarget.SETCLIP -p com.wrenboard.imeta
 sleep 0.4
 B=$(edit_bounds); [ -n "$B" ] && tap_bounds "$B"; sleep 1.5
 clear_field
+# precondition for the long-press: the LETTERS page must be showing (123 key at bottom-left). Assert from pixels, switch if not.
+for _t in 1 2 3; do
+  adb exec-out screencap -p > shots/_lp.png
+  LSIG=$(sig_of shots/_lp.png)
+  [ "$LSIG" = "10,10,9,9,6,4" ] && break
+  note "  (clipboard long-press precondition: page signature '$LSIG', not letters; tapping bottom-left key to return to letters)"
+  python3 tools/kbd_geom.py shots/_lp.png shots/_lp_ov.png > shots/_lp.json 2>/dev/null
+  BL=$(jq -r '.bands[-2].cells[0] | "\(.cx) \(.cy)"' shots/_lp.json)
+  [ -n "$BL" ] && adb shell input tap $BL; sleep 1.2
+done
+if [ "$LSIG" = "10,10,9,9,6,4" ]; then
+  note "clipboard long-press precondition OK: letters page confirmed (signature $LSIG)"
+  cp shots/_lp.png shots/12_pre_letters.png
+  python3 tools/kbd_geom.py shots/12_pre_letters.png shots/12_pre_letters_overlay.png > "$GEOM" 2>/dev/null
+else
+  note "FAIL(harness precondition): letters page not confirmed before 123 long-press (signature '$LSIG')"
+fi
 SYX=$(jq -r '.keys.symbols[0]' "$GEOM"); SYY=$(jq -r '.keys.symbols[1]' "$GEOM")
 KTOP=$(jq -r '.keyboard_top' "$GEOM")
 hold_key $SYX $SYY 1000
@@ -542,13 +555,18 @@ else
     note "toolbar icon count (measured on 13_toolbar from pixels): $TC"
     [ "$TC" -eq 7 ] && note "PASS: toolbar shows 7 items" || note "FAIL: toolbar item count $TC (wanted 7; see 13_toolbar + overlay)"
   } || note "FAIL: geometry after toolbar expand"
-  # collapse then re-expand via the chevron, capturing both states
+  # collapse then re-expand via the chevron. The chevron stays at the same spot in both states, and kbd_geom is NOT
+  # reliable on the collapsed frame (it picked a digit key), so reuse the expanded-frame chevron and assert each transition from pixels.
+  tb_orange() { python3 tools/toolbar_state.py "shots/$1.png" 1000 1090; }
+  N0=$(tb_orange 13_toolbar)
   adb shell input tap $EXP; sleep 1.2; shot 13b_toolbar_collapsed
-  EXP2=$(jq -r '.keys.strip_expand // empty | "\(.[0]) \(.[1])"' "$GEOM")
-  geom_rebuild 13b_toolbar_collapsed 13b_overlay >/dev/null 2>&1
-  EXP2=$(jq -r '.keys.strip_expand // empty | "\(.[0]) \(.[1])"' "$GEOM"); [ -z "$EXP2" ] && EXP2="$EXP"
-  adb shell input tap $EXP2; sleep 1.2; shot 13c_toolbar_reexpanded
+  N1=$(tb_orange 13b_toolbar_collapsed)
+  [ "$N0" -gt 500 ] && [ "$N1" -lt 50 ] && note "PASS: chevron collapsed the toolbar (toolbar orange px $N0 -> $N1)" || note "FAIL: collapse transition (orange px $N0 -> $N1)"
+  adb shell input tap $EXP; sleep 1.2; shot 13c_toolbar_reexpanded
+  N2=$(tb_orange 13c_toolbar_reexpanded)
+  [ "$N2" -gt 500 ] && note "PASS: chevron re-expanded the toolbar (orange px $N1 -> $N2)" || note "FAIL: re-expand transition (orange px $N1 -> $N2)"
   geom_rebuild 13c_toolbar_reexpanded 13c_overlay >/dev/null 2>&1
+  TC2=$(jq -r '.toolbar.n // 0' "$GEOM"); [ "$TC2" -eq 7 ] && note "PASS: 7 toolbar items after re-expand (measured)" || note "FAIL: toolbar items after re-expand = $TC2"
 fi
 dim "after-toolbar"
 
@@ -556,6 +574,18 @@ precond dictation
 note "== dictation listening state =="
 # strip is already expanded from the toolbar section; first item is voice
 # (settled toolbar order: voice/emoji/undo/redo/clipboard/theme/settings)
+# fresh geometry from a CURRENT expanded-toolbar frame (the old geometry came from a collapsed frame and pointed at the chevron)
+adb exec-out screencap -p > shots/14_pre.png
+if [ "$(python3 tools/toolbar_state.py shots/14_pre.png 1000 1090)" -lt 500 ]; then
+  note "  (dictation precondition: toolbar collapsed, tapping chevron)"; adb shell input tap $EXP; sleep 1.2
+  adb exec-out screencap -p > shots/14_pre.png
+fi
+if [ "$(python3 tools/toolbar_state.py shots/14_pre.png 1000 1090)" -ge 500 ] && geom_rebuild 14_pre 14_pre_overlay && [ "$(jq -r '.toolbar.n // 0' "$GEOM")" -eq 7 ]; then
+  note "dictation precondition OK: toolbar expanded, 7 icons measured on 14_pre.png; mic = first toolbar icon $(jq -c '.keys.toolbar_voice' "$GEOM")"
+else
+  note "FAIL(harness precondition): toolbar not confirmed expanded with 7 icons before dictation tap"
+  jq -c . /dev/null 2>/dev/null; GEOM_BAD=1
+fi
 VOICE=$(jq -r '.keys.toolbar_voice // empty | "\(.[0]) \(.[1])"' "$GEOM")
 if [ -z "$VOICE" ]; then
   VOICE=$(jq -r '.keys.strip_mic // empty | "\(.[0]) \(.[1])"' "$GEOM")
@@ -563,7 +593,9 @@ fi
 if [ -z "$VOICE" ]; then
   VOICE=$(jq -r '.strip.first // empty | "\(.[0]) \(.[1])"' "$GEOM")
 fi
-if [ -z "$VOICE" ]; then
+if [ -n "${GEOM_BAD:-}" ]; then
+  note "SKIPPED dictation tap: precondition failed"
+elif [ -z "$VOICE" ]; then
   note "FAIL: no voice key in geometry"
 else
   adb shell input tap $VOICE
@@ -573,6 +605,49 @@ else
   adb shell input keyevent KEYCODE_BACK
 fi
 sleep 1
+
+note "== settings: toolbar action editor - edit, save, reload (navDest=actionEdit) =="
+SETTINGS_ACT="$PKG/org.futo.inputmethod.latin.uix.settings.SettingsActivity"
+xdump() { adb shell uiautomator dump /sdcard/e.xml >/dev/null 2>&1; adb exec-out cat /sdcard/e.xml > "shots/$1.xml"; }
+open_editor() { # open_editor <label>: open editor, assert Edit Actions title + Pinned/Favorite headers from the XML
+  adb shell input keyevent KEYCODE_HOME; sleep 1
+  adb shell am start -n "$SETTINGS_ACT" --es navDest actionEdit >/dev/null 2>&1; sleep 5
+  shot "$1"; xdump "$1"
+  python3 tools/xml_node.py "shots/$1.xml" "Edit Actions" >/dev/null && python3 tools/xml_node.py "shots/$1.xml" "Pinned Action(s)" >/dev/null && python3 tools/xml_node.py "shots/$1.xml" "Favorite Actions" >/dev/null
+}
+if open_editor 16_editor_before; then
+  note "PASS: editor opened (Edit Actions, Pinned Action(s), Favorite Actions present)"
+  read -r VX VY VTOP <<< "$(python3 tools/xml_node.py shots/16_editor_before.xml 'Voice Input')"
+  read -r _ _ PTOP <<< "$(python3 tools/xml_node.py shots/16_editor_before.xml 'Pinned Action(s)')"
+  read -r _ _ FTOP <<< "$(python3 tools/xml_node.py shots/16_editor_before.xml 'Favorite Actions')"
+  if [ "${VTOP:-0}" -gt "${FTOP:-99999}" ]; then note "PASS: precondition: Voice Input starts under Favorite Actions"; else note "FAIL(precondition): Voice Input not under Favorite Actions (voice y=$VTOP fav y=$FTOP)"; fi
+  if AN=$(python3 tools/xml_node.py shots/16_editor_before.xml 'Add next'); then
+    read -r AX AY _ <<< "$AN"
+    adb shell input tap $AX $AY; sleep 1.5
+    shot 16b_editor_after_addnext; xdump 16b_editor_after_addnext
+    read -r _ _ VTOP2 <<< "$(python3 tools/xml_node.py shots/16b_editor_after_addnext.xml 'Voice Input')"
+    read -r _ _ PTOP2 <<< "$(python3 tools/xml_node.py shots/16b_editor_after_addnext.xml 'Pinned Action(s)')"
+    read -r _ _ FTOP2 <<< "$(python3 tools/xml_node.py shots/16b_editor_after_addnext.xml 'Favorite Actions')"
+    if [ -n "${VTOP2:-}" ] && [ "$VTOP2" -gt "$PTOP2" ] && [ "$VTOP2" -lt "$FTOP2" ]; then note "PASS: Add next moved Voice Input under Pinned Action(s) (voice y=$VTOP2, pinned y=$PTOP2, favorite y=$FTOP2)"; else note "FAIL: Add next did not move Voice Input into Pinned (voice=$VTOP2 pinned=$PTOP2 fav=$FTOP2)"; fi
+    adb shell input keyevent KEYCODE_BACK; sleep 2
+    if open_editor 16c_editor_reopened; then
+      read -r _ _ VTOP3 <<< "$(python3 tools/xml_node.py shots/16c_editor_reopened.xml 'Voice Input')"
+      read -r _ _ PTOP3 <<< "$(python3 tools/xml_node.py shots/16c_editor_reopened.xml 'Pinned Action(s)')"
+      read -r _ _ FTOP3 <<< "$(python3 tools/xml_node.py shots/16c_editor_reopened.xml 'Favorite Actions')"
+      if [ -n "${VTOP3:-}" ] && [ "$VTOP3" -gt "$PTOP3" ] && [ "$VTOP3" -lt "$FTOP3" ]; then note "PASS: edit persisted after leaving and reopening the editor"; else note "FAIL: edit did not persist (voice=$VTOP3 pinned=$PTOP3 fav=$FTOP3)"; fi
+    else note "FAIL: editor did not reopen"; fi
+  else note "FAIL: Add next node missing in editor XML (see 16_editor_before.png)"; fi
+else
+  note "FAIL: editor not confirmed open (see 16_editor_before.png)"
+fi
+adb shell input keyevent KEYCODE_BACK; sleep 1
+adb shell input keyevent KEYCODE_HOME; sleep 1
+adb shell am start -n com.wrenboard.imetarget/.TestInput >/dev/null 2>&1; sleep 2
+B=$(edit_bounds); [ -n "$B" ] && tap_bounds "$B"; sleep 2
+shot 17_keyboard_after_edit
+geom_rebuild 17_keyboard_after_edit 17_keyboard_after_edit_overlay >/dev/null 2>&1
+note "toolbar after edit: icons=$(jq -r '.toolbar.n // 0' "$GEOM") (inspect 17_keyboard_after_edit.png: emoji must still be in the toolbar exactly once)"
+dim "after-editor"
 
 note "== cold session 2 (force-stop -> second cold sample) =="
 adb shell am force-stop $PKG

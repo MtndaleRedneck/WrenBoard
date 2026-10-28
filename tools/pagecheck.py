@@ -9,5 +9,10 @@ if "--save" in sys.argv:
     c.save(ref); print("SAVED"); sys.exit(0)
 r = Image.open(ref).convert("L")
 if r.size != c.size: print("DIFF size"); sys.exit(0)
-d = ImageStat.Stat(ImageChops.difference(c, r)).mean[0]
-print(("SAME %.1f" if d < 10 else "DIFF %.1f") % d)
+# glyph-mask comparison: tiny light labels on dark keys barely move the mean abs diff, so compare the
+# bright-pixel masks instead (a pixel counts as glyph when brighter than 90).
+cm = c.point(lambda v: 255 if v > 90 else 0); rm = r.point(lambda v: 255 if v > 90 else 0)
+diff = sum(1 for a, b in zip(cm.getdata(), rm.getdata()) if a != b)
+union = sum(1 for a, b in zip(cm.getdata(), rm.getdata()) if a or b) or 1
+frac = diff / union
+print(("SAME %.2f" if frac < 0.35 else "DIFF %.2f") % frac)
