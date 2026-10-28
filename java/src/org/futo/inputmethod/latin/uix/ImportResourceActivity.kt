@@ -642,6 +642,8 @@ sealed class ItemBeingImported {
 class ImportResourceActivity : ComponentActivity() {
     private val themeOption: MutableState<ThemeOption?> = mutableStateOf(null)
     private val itemBeingImported: MutableState<ItemBeingImported?> = mutableStateOf(null)
+    // true while the file is being inspected off the main thread (big backups can take a while)
+    private val detecting: MutableState<Boolean> = mutableStateOf(true)
     private var uri: Uri? = null
 
     private fun normalizeFilename(name: String) = name.replace("/", "_").replace(":", "_").replace(" ", "_")
@@ -758,7 +760,9 @@ class ImportResourceActivity : ComponentActivity() {
 
 
     @Composable
-    private fun InnerScreen() = itemBeingImported.value.let { item -> when(item) {
+    private fun InnerScreen() = itemBeingImported.value.let { item -> if(detecting.value) {
+        androidx.compose.material3.Text("Reading file...", color = androidx.compose.material3.MaterialTheme.colorScheme.onSurface, modifier = androidx.compose.ui.Modifier.padding(16.dp))
+    } else when(item) {
         is ItemBeingImported.CustomTheme -> {
             ScrollableList {
                 ScreenTitleWithIcon(
@@ -954,27 +958,36 @@ class ImportResourceActivity : ComponentActivity() {
 
         this.uri = intent?.data!!
 
-        itemBeingImported.value = detectItemBeingImported()
-
-        val item = itemBeingImported.value
-        if(item is ItemBeingImported.CustomTheme && DevAutoAcceptThemeImport) {
-            if(item.v.config == null) {
-                BugViewerState.pushBug(BugInfo(
-                    name = "your custom theme (invalid metadata)",
-                    details = item.v.error ?: "Unknown error",
-                ))
-                BugViewerState.triggerOpen()
-            } else {
-                try {
-                    getInputStream()?.use {
-                        ZipThemes.importTheme(applicationContext, it, item.v)
-                    }
-                } catch(e: Exception) {
-                    android.widget.Toast.makeText(applicationContext, "Import failed: ${e.message}", android.widget.Toast.LENGTH_LONG).show()
+        // Inspect the file off the main thread: detection can scan the whole archive several times.
+        lifecycleScope.launch {
+            val detected = withContext(Dispatchers.IO) {
+                try { detectItemBeingImported() } catch(e: Exception) {
+                    Log.w("ImportResourceActivity", "Could not inspect file", e)
+                    null
                 }
             }
-            finish()
-            return
+            itemBeingImported.value = detected
+            detecting.value = false
+            val item = detected
+            if(item is ItemBeingImported.CustomTheme && DevAutoAcceptThemeImport) {
+                if(item.v.config == null) {
+                    BugViewerState.pushBug(BugInfo(
+                        name = "your custom theme (invalid metadata)",
+                        details = item.v.error ?: "Unknown error",
+                    ))
+                    BugViewerState.triggerOpen()
+                } else {
+                    try {
+                        getInputStream()?.use {
+                            ZipThemes.importTheme(applicationContext, it, item.v)
+                        }
+                    } catch(e: Exception) {
+                        android.widget.Toast.makeText(applicationContext, "Import failed: ${e.message}", android.widget.Toast.LENGTH_LONG).show()
+                    }
+                }
+                finish()
+            }
+
         }
 
         lifecycleScope.launch {
