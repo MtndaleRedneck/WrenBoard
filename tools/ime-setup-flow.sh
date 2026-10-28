@@ -55,18 +55,16 @@ else
 fi
 note "enabled IMEs now: $(adb shell settings get secure enabled_input_methods | tr -d '\r')"
 echo "$(adb shell settings get secure enabled_input_methods)" | grep -q "$PKG" && note "CHECK: WrenBoard is in the enabled list" || note "CHECK FAILED: WrenBoard not in the enabled list"
-adb shell input keyevent KEYCODE_BACK; sleep 2; note "resumed after back: $(resumed)"; snap back_after_enable
-for step in 2 3; do
-  note "== wizard step 2: tap 'Switch Input Methods' (attempt $step) =="
-  if click_re "Switch Input Methods"; then
-    sleep 2; note "resumed: $(resumed)"; snap picker_$step
-    if click_re "WrenBoard"; then note "picked WrenBoard in the picker"; sleep 2; snap after_pick_$step; else note "WrenBoard row not found in picker"; fi
-  else
-    note "'Switch Input Methods' button not found (see SCREEN line)"
-  fi
-  [ "$(default_now)" = "$PKG/org.futo.inputmethod.latin.LatinIME" ] && break
-  adb shell input keyevent KEYCODE_BACK >/dev/null 2>&1; sleep 1; snap back_b$step
-done
+note "resumed (no back pressed; the app moves to step 2 by itself after the dialog): $(resumed)"
+step=2
+note "== wizard step 2: tap 'Switch Input Methods' (single attempt, no back press) =="
+if click_re "Switch Input Methods"; then
+  sleep 2; note "resumed: $(resumed)"; snap picker
+  if click_re "WrenBoard"; then note "picked WrenBoard in the picker"; sleep 2; snap after_pick; else note "WrenBoard row not found in picker (see SCREEN line)"; fi
+else
+  note "'Switch Input Methods' button not found (see SCREEN line)"
+fi
+sleep 2
 note "default IME after user-style flow: $(default_now)"
 echo "$(default_now)" | grep -q "$PKG" && note "SETUP-FLOW: WrenBoard became default via UI" || note "SETUP-FLOW: INCOMPLETE - WrenBoard not default via UI (see screens)"
 note "== focus a field and look for the keyboard =="
