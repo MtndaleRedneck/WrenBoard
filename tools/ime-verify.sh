@@ -60,7 +60,7 @@ tap_bounds() { local nums x1 y1 x2 y2; nums=$(echo "$1" | grep -o '[0-9]*' | tr 
 node_bounds() { dump | tr '>' '>\n' | grep -i "$1" | grep -o 'bounds="\[[0-9]*,[0-9]*\]\[[0-9]*,[0-9]*\]"' | head -1; }
 tap_node() { local b; b=$(node_bounds "$1"); [ -z "$b" ] && return 1; tap_bounds "$b"; sleep 0.4; }
 edit_bounds() { node_bounds 'class="android.widget.EditText"'; }
-edit_text() { dump | tr '>' '>\n' | grep 'class="android.widget.EditText"' | grep -o 'text="[^"]*"' | head -1 | sed 's/^text="//; s/"$//'; }
+edit_text() { sleep 0.3; adb logcat -d -s IMETARGET:I 2>/dev/null | tr -d '\r' | grep 'FIELD=\|CLEARED' | tail -1 | sed -n 's/.*IMETARGET: FIELD=//p'; }
 assert_field() { local got; got=$(edit_text); if [ "$got" = "$2" ]; then note "PASS: $1 ('$got')"; else note "FAIL: $1 (wanted '$2', got '${got:0:160}')"; fi; }
 
 tapk() { # tapk <geometry-key-name>
@@ -78,11 +78,8 @@ geom_rebuild() { # geom_rebuild <screenshot> <overlay> ; returns kbd_geom rc
   python3 tools/kbd_geom.py "shots/$1.png" "shots/$2.png" > "$GEOM" 2>shots/kbd_geom.err
 }
 clear_field() {
-  adb shell input keyevent KEYCODE_BACK; sleep 0.6
-  tap_node 'text="Clear"' || note "WARN: Clear button not found"
-  sleep 0.3
-  local b; b=$(edit_bounds); [ -n "$b" ] && tap_bounds "$b"
-  sleep 1.5
+  adb shell am broadcast -a com.wrenboard.imetarget.CLEAR -p com.wrenboard.imetarget >/dev/null 2>&1
+  sleep 0.8
 }
 screen_hash() { adb exec-out screencap -p | md5sum | cut -d' ' -f1; }
 
@@ -205,7 +202,18 @@ shot 05_shift_typed
 assert_field "shift produced Hello" "Hello"
 dim "after-shift-single"
 
-note "== caps lock via shift long-press =="
+note "== caps lock via shift DOUBLE-TAP (SwiftKey baseline) =="
+clear_field
+SH=$(jq -r '.keys.shift | "\(.[0]) \(.[1])"' "$GEOM")
+adb shell input tap $SH; sleep 0.12; adb shell input tap $SH
+sleep 0.8
+shot 06a_capslock_doubletap_state
+type_letters w o r l d
+sleep 0.5
+shot 06b_capslock_doubletap_typed
+assert_field "caps lock via double-tap typed WORLD" "WORLD"
+tapk shift
+note "== caps lock via shift long-press (observation, not assumed spec) =="
 clear_field
 SH=$(jq -r '.keys.shift | "\(.[0]) \(.[1])"' "$GEOM")
 adb shell input swipe $SH $SH 800
@@ -328,7 +336,7 @@ dim "after-back-to-letters"
 
 note "== clipboard (long-press symbols key, toolbar fallback) =="
 adb shell input keyevent KEYCODE_BACK; sleep 0.6
-tap_node 'text="SetClip"' || note "WARN: SetClip button not found"
+adb shell am broadcast -a com.wrenboard.imetarget.SETCLIP -p com.wrenboard.imetarget >/dev/null 2>&1
 sleep 0.4
 B=$(edit_bounds); [ -n "$B" ] && tap_bounds "$B"; sleep 1.5
 clear_field
