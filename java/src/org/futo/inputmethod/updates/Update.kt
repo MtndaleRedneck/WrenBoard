@@ -234,8 +234,13 @@ fun UpdatesCard(navController: NavHostController) {
     }
 }
 
-// Private Google Form route, wired in once the form exists.
-const val WRENBOARD_FEEDBACK_FORM_URL = ""
+// Private Google Form route. Responses land in a private sheet; nothing is posted publicly.
+const val WRENBOARD_FEEDBACK_FORM_URL = "https://docs.google.com/forms/d/e/1FAIpQLSdgcWZuuFsv2z0hUlCfWbkVJ8RMsWI3Rwc5oP0WK89s6dCiOA/viewform"
+
+// Prefill entry IDs for the feedback form (message field stays empty for the user to write).
+private const val FEEDBACK_ENTRY_PHONE_MODEL = "entry.793045318"
+private const val FEEDBACK_ENTRY_ANDROID = "entry.1132607697"
+private const val FEEDBACK_ENTRY_APP_VERSION = "entry.904027313"
 
 @Composable
 fun FeedbackCard() {
@@ -280,7 +285,12 @@ fun FeedbackCard() {
                     if(WRENBOARD_FEEDBACK_FORM_URL.isNotEmpty()) {
                         TextButton(onClick = {
                             showPreview.value = false
-                            context.openURI(WRENBOARD_FEEDBACK_FORM_URL, newTask = true)
+                            val url = WRENBOARD_FEEDBACK_FORM_URL +
+                                "?usp=pp_url" +
+                                "&" + FEEDBACK_ENTRY_PHONE_MODEL + "=" + Uri.encode("${Build.MANUFACTURER} ${Build.MODEL}") +
+                                "&" + FEEDBACK_ENTRY_ANDROID + "=" + Uri.encode("${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})") +
+                                "&" + FEEDBACK_ENTRY_APP_VERSION + "=" + Uri.encode(BuildConfig.VERSION_NAME)
+                            context.openURI(url, newTask = true)
                         }) {
                             Text(stringResource(R.string.feedback_route_form))
                         }
