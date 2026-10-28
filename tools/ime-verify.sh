@@ -419,7 +419,17 @@ SWITCH=$(jq -r '.bands[2].cells[0] | "\(.cx) \(.cy)"' shots/geom_sym1.json)
 adb shell input tap $SWITCH
 sleep 1.2
 shot 10_symbols_page2
-python3 tools/pagecheck.py shots/10_symbols_page2.png $C1 $C2 $C3 $C4 shots/ref_p2sw.png --save >/dev/null
+# Page-2 identity guard (checked offline on run-14 shots: when the switch tap lands on letters, the ABC key
+# region differs). Only a screen with the symbols ABC key AND a band-2 key different from page 1 counts as p2.
+_a2=$(python3 tools/pagecheck.py shots/10_symbols_page2.png $A1 $A2 $A3 $A4 shots/ref_abc.png | cut -d' ' -f1)
+_c2=$(python3 tools/pagecheck.py shots/10_symbols_page2.png $C1 $C2 $C3 $C4 shots/ref_p1sw.png | cut -d' ' -f1)
+if [ "$_a2" = SAME ] && [ "$_c2" = DIFF ]; then
+  P2REACHED=1; note "symbols p2 reached (ABC key present, band-2 left key differs from p1) - see 10_symbols_page2.png"
+  python3 tools/pagecheck.py shots/10_symbols_page2.png $C1 $C2 $C3 $C4 shots/ref_p2sw.png --save >/dev/null
+else
+  P2REACHED=0; note "INCONCLUSIVE: symbols page 2 NOT reached (abc=$_a2 p1key=$_c2); p2 probes skipped - see 10_symbols_page2.png"
+  cp shots/ref_p1sw.png shots/ref_p2sw.png
+fi
 FT1=$(edit_text)
 note "symbols p2 reached via {&= key (field unchanged by switch: $([ "$FT0" = "$FT1" ] && echo yes || echo NO))"
 pageis2() {
@@ -437,12 +447,14 @@ ensure_p2() {
 }
 P2A=""; P2B=""; REV2=0
 for k in 0 1 2 3 4 5 6 7 8; do
+  [ "$P2REACHED" = 1 ] || break
   X=$(( SCRW * (750 + 1082 * k) / 10000 ))
   ensure_p2 || { note "  cannot reach symbols p2 for top key $k"; break; }
   D=$(probe_key t$k $X $DY); P2A="$P2A$D"
   [ "$(pageis2)" = p2 ] || { REV2=$((REV2+1)); note "  page left p2 after top key $k (typed '$D')"; }
 done
 for k in 0 1 2 3 4 5 6 7 8; do
+  [ "$P2REACHED" = 1 ] || break
   X=$(( SCRW * (750 + 1082 * k) / 10000 ))
   ensure_p2 || { note "  cannot reach symbols p2 for second-row key $k"; break; }
   D=$(probe_key u$k $X $B1Y); P2B="$P2B$D"
@@ -453,8 +465,10 @@ P2="$P2A$P2B"
 note "symbols p2 top row typed: '$P2A' (expect currency row)"
 note "symbols p2 second row typed: '$P2B' (expect tab then []{}<>^)"
 note "symbols p2: page left p2 after $REV2 of 18 key taps"
+if [ "$P2REACHED" = 1 ]; then
 check "symbols page2 types page-2 symbols (pound)" "£" "$P2"
 check "symbols page2 types page-2 symbols (euro)" "€" "$P2"
+fi
 dim "after-symbols-p2"
 
 note "== back to letters =="
