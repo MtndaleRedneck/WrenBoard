@@ -1,3 +1,13 @@
+# WrenBoard
+
+WrenBoard is a customized FUTO Keyboard for Android, combining selected features from FUTO Keyboard and SwiftKey. It ships with a custom default theme; all standard theme choices remain available.
+
+This is a modified copy of FUTO Keyboard (https://github.com/futo-org/android-keyboard). Modifications are marked in git history; original FUTO copyright and license notices are preserved throughout. See README-WRENBOARD.md for fork details and bundled-model provenance.
+
+License: FUTO Source First License 1.1-kb (see LICENSE.md). Free of charge, non-commercial. Payment-related functionality and all licensor notices are retained. Not affiliated with or endorsed by FUTO.
+
+---
+
 # FUTO Keyboard
 
 The goal is to make a good modern keyboard that stays offline and doesn't spy on you. This keyboard is a fork of [LatinIME, The Android Open-Source Keyboard](https://android.googlesource.com/platform/packages/inputmethods/LatinIME), with significant changes made to it.

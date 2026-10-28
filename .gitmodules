@@ -4,9 +4,6 @@
 [submodule "voiceinput-shared/src/main/ml"]
 	path = voiceinput-shared/src/main/ml
 	url = https://gitlab.futo.org/keyboard/voice-input-models.git
-[submodule "java/assets/layouts"]
-	path = java/assets/layouts
-	url = https://github.com/MtndaleRedneck/wrenboard-layouts.git
 [submodule "translations"]
 	path = translations
 	url = https://gitlab.futo.org/keyboard/keyboard-translations-public.git
