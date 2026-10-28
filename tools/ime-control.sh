@@ -15,6 +15,15 @@ FACTORS="${FACTORS:-}"
 note "FACTORS=$FACTORS"
 has() { echo ",$FACTORS," | grep -q ",$1,"; }
 if has grant || has all; then adb shell pm grant "$PKGX" android.permission.RECORD_AUDIO 2>/dev/null; note "factor: RECORD_AUDIO grant"; fi
+cp_() { echo "$(adb shell date +%H:%M:%S) CHECKPOINT[$1] default=$(adb shell settings get secure default_input_method | tr -d '\r')" | tee -a "$R"; }
+wiz() { # wiz <stop|nostop>
+  adb shell monkey -p "$PKGX" -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1; sleep 5
+  adb shell uiautomator dump /sdcard/w.xml >/dev/null 2>&1
+  [ "$1" = stop ] && adb shell am force-stop "$PKGX"
+  note "factor: wizard launch+dump ($1)"
+}
+if has wiznostop; then wiz nostop; fi
+if has wizsettle; then wiz stop; sleep 20; cp_ after-wizard-settle20; fi
 if has wizard || has all; then
   adb shell monkey -p "$PKGX" -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1; sleep 5
   adb shell uiautomator dump /sdcard/w.xml >/dev/null 2>&1
@@ -36,6 +45,8 @@ for i in 1 2 3; do
   sleep 3
 done
 note "NORMAL-REGISTRATION: $REG ($IME)"
+cp_ post-registration
+if has wizafter; then wiz stop; cp_ after-post-reg-wizard; fi
 [ "$REG" = yes ] || exit 0
 if has back || has all; then adb shell input keyevent KEYCODE_BACK; note "factor: BACK key"; fi
 if has poller || has all; then
