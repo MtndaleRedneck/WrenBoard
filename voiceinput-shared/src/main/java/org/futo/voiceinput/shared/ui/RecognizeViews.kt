@@ -194,8 +194,8 @@ fun InnerRecognize(
         Text(
             text,
             modifier = Modifier
-                .offset(x = 0.dp, y = 48.dp)
-                // WrenBoard: opaque backing so the prompt stays readable over the circle
+                .offset(x = 0.dp, y = 72.dp)
+                // WrenBoard: moved below the circle (was 48dp, overlapping its lower edge); WrenBoard: opaque backing so the prompt stays readable over the circle
                 .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(8.dp))
                 .padding(horizontal = 12.dp, vertical = 4.dp),
             textAlign = TextAlign.Center,
