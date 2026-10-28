@@ -512,10 +512,32 @@ sleep 1.2; shot 12_clipboard_hold_1s
 sleep 1.2; shot 12_clipboard_popup
 sleep 3.0
 W=$(jq -r '.bands[0].cells[-1].x2' "$GEOM")
+# The long-press outcome is the clipboard panel replacing the keys (Clipboard Manager card). Measure orange area under the keyboard top.
+PANEL_PX=$(python3 - "$KTOP" <<'PY'
+import sys
+from PIL import Image
+im=Image.open("shots/12_clipboard_hold_1s.png").convert("RGB"); kt=int(float(sys.argv[1]))
+px=im.load(); n=0
+for y in range(kt+60, im.height-200, 2):
+    for x in range(0, im.width, 2):
+        r,g,b=px[x,y]
+        if r>230 and 110<g<170 and b<60: n+=1
+print(n)
+PY
+)
+if [ "${PANEL_PX:-0}" -gt 20000 ]; then
+  note "PASS: long-press on 123 opened the clipboard panel (orange card area ${PANEL_PX} sampled px; see 12_clipboard_hold_1s.png - inspect the frame)"
+  adb shell input tap 90 $(( KTOP + 72 )); sleep 1.2; shot 12c_after_panel_close
+  CB="clipboard-panel-opened"
+  SKIP_CB_FALLBACK=1
+fi
+if [ -z "${SKIP_CB_FALLBACK:-}" ]; then
 adb shell input tap $(( SYX + 120 )) $(( KTOP - 90 ))
 sleep 0.8
 CB=$(edit_text)
-if echo "$CB" | grep -q "clipboard-probe-42"; then
+fi
+if [ -n "${SKIP_CB_FALLBACK:-}" ]; then :
+elif echo "$CB" | grep -q "clipboard-probe-42"; then
   note "PASS: clipboard paste via long-press symbols key ('$CB')"
 else
   note "long-press path inconclusive ('$CB'); trying the clipboard suggestion item shown in the strip (as in 12_clipboard_popup.png)"

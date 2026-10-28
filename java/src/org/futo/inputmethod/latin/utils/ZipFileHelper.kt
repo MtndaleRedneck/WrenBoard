@@ -6,6 +6,8 @@ import java.io.InputStream
 import java.util.zip.ZipInputStream
 
 object ZipFileHelper {
+    private const val MAX_PARSED_ENTRY_BYTES = 16 * 1024 * 1024
+
     fun parse(inputStream: InputStream, vararg targets: Pair<String, (ByteArray) -> Unit>): Boolean {
         val targets = targets.associate { it.first to it.second }
         val found = targets.entries.associate { it.key to false }.toMutableMap()
@@ -16,7 +18,20 @@ object ZipFileHelper {
                     if (targets.containsKey(entry.name)) {
                         found[entry.name] = true
 
-                        val bytes = zipIn.readAllBytesCompat()
+                        val entryName = entry.name
+                        // Bound the ACTUAL decompressed size before it is held in memory
+                        val bytes = java.io.ByteArrayOutputStream().let { bos ->
+                            val buf = ByteArray(16384)
+                            var n = zipIn.read(buf)
+                            while (n >= 0) {
+                                bos.write(buf, 0, n)
+                                if (bos.size() > MAX_PARSED_ENTRY_BYTES) {
+                                    throw java.io.IOException("Archive entry $entryName is unreasonably large")
+                                }
+                                n = zipIn.read(buf)
+                            }
+                            bos.toByteArray()
+                        }
                         targets[entry.name]!!.invoke(bytes)
                     }
 

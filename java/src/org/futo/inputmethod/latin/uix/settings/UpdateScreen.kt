@@ -81,7 +81,7 @@ fun Context.findActivity(): Activity? {
 private fun InputStream.copyToOutputStream(inputStreamLength: Long, outputStream: OutputStream, onProgress: (Float) -> Unit) {
     val buffer = ByteArray(16384);
     var n: Int;
-    var total = 0L;
+    var total = 0;
     val inputStreamLengthFloat = inputStreamLength.toFloat();
 
     while (read(buffer).also { n = it } >= 0) {
@@ -96,6 +96,7 @@ object UpdateStatus {
     val isDownloading = mutableStateOf(false)
     val downloadText = mutableStateOf("")
 
+    var downloadedUpdate: ByteArrayOutputStream? = null
 }
 
 private suspend fun install(scope: CoroutineScope, context: Context, inputStream: InputStream, dataLength: Long, updateStatusText: (String) -> Unit) {
@@ -111,16 +112,26 @@ private suspend fun install(scope: CoroutineScope, context: Context, inputStream
         val sessionId = packageInstaller.createSession(params);
         session = packageInstaller.openSession(sessionId)
 
-        // Stream straight into the installer session (no in-memory copy of the APK).
-        // dataLength is only used for progress and as a size hint (-1 when unknown).
-        session.openWrite("package", 0, if(dataLength > 0) dataLength else -1).use { sessionStream ->
-            inputStream.copyToOutputStream(dataLength, sessionStream) { progress ->
-                val progressText = if(dataLength > 0) "${(progress * 100.0f).toInt()}%" else "..."
-                if (lastProgressText != progressText) {
-                    lastProgressText = progressText
-                    updateStatusText("Downloading... $progressText")
+        if(UpdateStatus.downloadedUpdate == null) {
+            UpdateStatus.downloadedUpdate = ByteArrayOutputStream(dataLength.toInt()).use { outputStream ->
+                inputStream.copyToOutputStream(dataLength, outputStream) { progress ->
+                    val progressText = "${(progress * 100.0f).toInt()}%";
+                    if (lastProgressText != progressText) {
+                        lastProgressText = progressText
+
+                        updateStatusText("Downloading... $progressText")
+                    }
                 }
+
+                // Note: .use will close the outputStream, but closing has no effect
+                // on ByteArrayOutputStream
+                outputStream
             }
+        }
+
+
+        session.openWrite("package", 0, dataLength).use { sessionStream ->
+            UpdateStatus.downloadedUpdate!!.writeTo(sessionStream)
             session.fsync(sessionStream)
         };
 
