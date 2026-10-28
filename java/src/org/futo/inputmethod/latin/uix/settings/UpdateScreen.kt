@@ -49,6 +49,7 @@ import org.futo.inputmethod.latin.uix.InfoDialog
 import org.futo.inputmethod.latin.uix.getSetting
 import org.futo.inputmethod.latin.uix.setSetting
 import org.futo.inputmethod.updates.InstallReceiver
+import org.futo.inputmethod.updates.LAST_UPDATE_CHECK_FAILED
 import org.futo.inputmethod.updates.LAST_UPDATE_CHECK_RESULT
 import org.futo.inputmethod.updates.SKIPPED_UPDATE_VERSION
 import org.futo.inputmethod.updates.UpdateResult
@@ -202,6 +203,10 @@ fun UpdateDialog(navController: NavHostController) {
         context.getSetting(LAST_UPDATE_CHECK_RESULT, "")
     } }
 
+    val lastCheckFailed = remember { runBlocking {
+        context.getSetting(LAST_UPDATE_CHECK_FAILED, false)
+    } }
+
     val lastUpdateResult = if(!LocalInspectionMode.current){
         remember { UpdateResult.fromString(updateInfo) }
     } else {
@@ -213,7 +218,12 @@ fun UpdateDialog(navController: NavHostController) {
     val statusText = UpdateStatus.downloadText
 
     if(lastUpdateResult == null || !lastUpdateResult.isNewer()) {
-        InfoDialog(title = "Up-to-date", body = "As of the last update check, the app is up to date.")
+        if(lastCheckFailed) {
+            // The check failed (no network, a server error, or no release published yet): do not claim "up to date".
+            InfoDialog(title = "Update check failed", body = "WrenBoard could not confirm whether an update is available. There may be no network, or no release is published yet. Use \"Check for updates manually\" in Settings to open the releases page.")
+        } else {
+            InfoDialog(title = "Up-to-date", body = "As of the last update check, the app is up to date.")
+        }
     } else {
         AlertDialog(
             icon = {
