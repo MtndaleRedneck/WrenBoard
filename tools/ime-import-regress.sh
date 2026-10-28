@@ -17,9 +17,13 @@ adb shell "ls -lAR /sdcard/Android/data/$APP/files 2>/dev/null" | head -30 | sed
 adb shell "ls -la $APPDIR/shared_prefs $APPDIR/databases 2>/dev/null" | head -20 | sed 's/^/    /' | tee -a "$R"
 
 seed() { # recreate known pre-existing data
+  adb shell "content insert --uri content://user_dictionary/words --bind word:s:e2epersonalword --bind frequency:i:77 --bind locale:s:en_US" >/dev/null 2>&1
   adb shell "mkdir -p $APPDIR/files/themes $APPDIR/files/clipboardfiles && echo -n KEEP-THEME > $APPDIR/files/themes/preexisting.zip && echo -n KEEP-CLIP > $APPDIR/files/clipboardfiles/keep.txt && chown -R $APPUID:$APPUID $APPDIR/files/themes $APPDIR/files/clipboardfiles"
 }
-snap() { adb shell "cd $APPDIR/files && find themes clipboardfiles -type f 2>/dev/null | sort | xargs md5sum 2>/dev/null" | tr -d '\r'; }
+snap() {
+  adb shell "cd $APPDIR/files && find themes clipboardfiles -type f 2>/dev/null | sort | xargs md5sum 2>/dev/null; md5sum datastore/*.preferences_pb 2>/dev/null; md5sum ../shared_prefs/*.xml 2>/dev/null" | tr -d '\r'
+  adb shell "content query --uri content://user_dictionary/words --projection word:frequency:locale 2>&1" | tr -d '\r' | sort
+}
 exists() { adb shell "[ -e '$1' ] && echo yes || echo no" | tr -d '\r'; }
 fatals() { adb logcat -d 2>/dev/null | grep -c "FATAL EXCEPTION" ; }
 
@@ -57,7 +61,7 @@ for CASE in "E cfg_badtype_last.cfg themes/shouldnotland.zip" "F cfg_crcbad_last
   seed; BEFORE=$(snap); run_import $L $F; AFTER=$(snap)
   note "restore $L ($F): importer Import button present = $IMPORT_BTN"
   if [ "$IMPORT_BTN" != 1 ]; then note "INCONCLUSIVE(harness or early reject): restore $L: no Import button, nothing tapped (see imp_${L}_a.png)"; fi
-  [ "$BEFORE" = "$AFTER" ] && note "PASS: restore $L rejected, themes/ and clipboardfiles/ byte-identical to before" || { note "FAIL: restore $L changed existing data"; echo "--- before"; echo "$BEFORE"; echo "--- after"; echo "$AFTER"; } | tee -a "$R"
+  [ "$BEFORE" = "$AFTER" ] && note "PASS: restore $L rejected, themes/, clipboardfiles/, datastore, shared_prefs and personal dictionary rows identical to before" || { note "FAIL: restore $L changed existing data"; echo "--- before"; echo "$BEFORE"; echo "--- after"; echo "$AFTER"; } | tee -a "$R"
   [ "$(exists $APPDIR/files/$NO)" = no ] && note "PASS: restore $L did not write $NO" || note "FAIL: restore $L wrote $NO"
 done
 [ "$(exists $APPDIR/pwned_by_restore.txt)" = no ] && note "PASS: traversal restore wrote nothing at app root" || note "FAIL: traversal restore wrote $APPDIR/pwned_by_restore.txt"
