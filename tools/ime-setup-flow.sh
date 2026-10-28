@@ -10,12 +10,12 @@ D=shots/setup; mkdir -p "$D"; R="$D/results.txt"; : > "$R"
 note() { echo "$1" | tee -a "$R"; }
 STEP=0
 dumpui() { adb shell rm -f /sdcard/u.xml; for i in 1 2 3; do adb shell uiautomator dump /sdcard/u.xml >/dev/null 2>&1 && break; sleep 1; done; adb shell cat /sdcard/u.xml | tr -d '\r'; }
-texts() { echo "$1" | tr '>' '>\n' | grep -o '\(text\|content-desc\)="[^"]\+"' | sed 's/^[a-z-]*=//' | sort -u | tr '\n' '|'; }
+texts() { echo "$1" | sed 's/>/>\n/g' | grep -o '\(text\|content-desc\)="[^"]\+"' | sed 's/^[a-z-]*=//' | sort -u | tr '\n' '|'; }
 snap() { STEP=$((STEP+1)); local n; n=$(printf "%02d_%s" $STEP "$1"); adb exec-out screencap -p > "$D/$n.png"; local x; x=$(dumpui); echo "$x" > "$D/$n.xml"; note "SCREEN $n texts: $(texts "$x")"; }
 # click first node whose text/content-desc matches regex $1 (case-insens). returns 0 if clicked.
 click_re() {
   local x b; x=$(dumpui)
-  b=$(echo "$x" | tr '>' '>\n' | grep -i -E "(text|content-desc)=\"($1)\"" | grep -o 'bounds="\[[0-9]*,[0-9]*\]\[[0-9]*,[0-9]*\]"' | head -1)
+  b=$(echo "$x" | sed 's/>/>\n/g' | grep -i -E "(text|content-desc)=\"($1)\"" | grep -o 'bounds="\[[0-9]*,[0-9]*\]\[[0-9]*,[0-9]*\]"' | head -1)
   [ -z "$b" ] && return 1
   local nums; nums=$(echo "$b" | grep -o '[0-9]*' | tr '\n' ' '); set -- $nums
   adb shell input tap $(( ($1+$3)/2 )) $(( ($2+$4)/2 )); sleep 1.5; return 0
@@ -64,7 +64,7 @@ echo "$(default_now)" | grep -q "$PKG" && note "SETUP-FLOW: WrenBoard became def
 note "== focus a field and look for the keyboard =="
 adb install -r "$TARGET_APK" >> "$R" 2>&1
 adb shell am start -n "$TPKG/.TestInput" >/dev/null 2>&1; sleep 3
-x=$(dumpui); b=$(echo "$x" | tr '>' '>\n' | grep 'android.widget.EditText' | grep -o 'bounds="\[[0-9]*,[0-9]*\]\[[0-9]*,[0-9]*\]"' | head -1)
+x=$(dumpui); b=$(echo "$x" | sed 's/>/>\n/g' | grep 'android.widget.EditText' | grep -o 'bounds="\[[0-9]*,[0-9]*\]\[[0-9]*,[0-9]*\]"' | head -1)
 nums=$(echo "$b" | grep -o '[0-9]*' | tr '\n' ' '); set -- $nums
 [ -n "${1:-}" ] && adb shell input tap $(( ($1+$3)/2 )) $(( ($2+$4)/2 ))
 WAS_OURS=$(default_now | grep -c "$PKG")

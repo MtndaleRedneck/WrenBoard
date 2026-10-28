@@ -79,7 +79,7 @@ for c in 1 2 3 4; do
   adb install -r "$TARGET_APK" >> "$R" 2>&1
   adb shell am start -n "$TPKG/.TestInput" >/dev/null 2>&1
   sleep 3
-  XY=$(adb shell uiautomator dump /sdcard/u.xml >/dev/null 2>&1; adb shell cat /sdcard/u.xml | tr '>' '>\n' | grep 'android.widget.EditText' | grep -o 'bounds="\[[0-9]*,[0-9]*\]\[[0-9]*,[0-9]*\]"' | head -1 | grep -o '[0-9]*' | tr '\n' ' ')
+  XY=$(adb shell uiautomator dump /sdcard/u.xml >/dev/null 2>&1; adb shell cat /sdcard/u.xml | sed 's/>/>\n/g' | grep 'android.widget.EditText' | grep -o 'bounds="\[[0-9]*,[0-9]*\]\[[0-9]*,[0-9]*\]"' | head -1 | grep -o '[0-9]*' | tr '\n' ' ')
   read -r x1 y1 x2 y2 <<< "$XY"
   adb shell input tap $(( (x1+x2)/2 )) $(( (y1+y2)/2 ))
   sample "cycle$c" 20 || { adb shell ime set "$IME" >> "$R" 2>&1; sleep 2; }
