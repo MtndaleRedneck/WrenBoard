@@ -541,6 +541,8 @@ object SettingsExporter {
             entry = zipIn.nextEntry
         }
 
+        // Files are in place: let dictionaries open again BEFORE asking the IME to reload them.
+        org.futo.inputmethod.latin.personalization.PersonalizationHelper.endRestore()
         GlobalIMEMessage.tryEmit(IMEMessage.ReloadResources)
     }
 
