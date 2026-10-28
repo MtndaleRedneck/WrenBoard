@@ -308,6 +308,8 @@ object SettingsExporter {
 
     private fun String.splitSlash(): String = split("/", limit = 2)[1]
 
+    private const val MAX_IN_MEMORY_ENTRY_BYTES = 16L * 1024 * 1024
+
     private class RestoreDirs(context: Context) {
         val transformers = ModelPaths.getModelDirectory(context)
         val ext = context.getExternalFilesDir(null)!!
@@ -360,8 +362,18 @@ object SettingsExporter {
             var e = zin.nextEntry
             while(e != null) {
                 destinationFor(e.name, dirs)
+                // Entries parsed in memory get a sanity bound on ACTUAL decompressed bytes
+                // (not the archive's declared size). File entries are bounded by free space.
+                val inMemory = e.name == datastoreFileName || e.name == sharedPreferencesFileName || e.name == personalDictFileName
+                var entryBytes = 0L
                 var n = zin.read(buf)
-                while(n >= 0) { total += n; n = zin.read(buf) }
+                while(n >= 0) {
+                    total += n; entryBytes += n
+                    if(inMemory && entryBytes > MAX_IN_MEMORY_ENTRY_BYTES) {
+                        throw java.io.IOException("Backup entry ${e.name} is unreasonably large")
+                    }
+                    n = zin.read(buf)
+                }
                 zin.closeEntry()
                 e = zin.nextEntry
             }
