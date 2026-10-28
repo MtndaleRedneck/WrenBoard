@@ -12,6 +12,25 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
+      - name: Init voice-model submodule (dictation engine check only)
+        run: git submodule update --init voiceinput-shared/src/main/ml
+      - name: Install pillow for keyboard geometry
+        run: pip install --quiet pillow
+      - name: Transcribe known sample through bundled engine + model
+        run: |
+          set -e
+          bash tools/whisper-cli/build.sh
+          ls -la voiceinput-shared/src/main/ml/
+          MODEL=$(ls voiceinput-shared/src/main/ml/*.bin* | head -1)
+          echo "model: $MODEL"
+          sha256sum "$MODEL" | tee dictation-engine.txt
+          tools/whisper-cli/out/whisper-cli "$MODEL" tools/samples/jfk.wav | tee -a dictation-engine.txt
+          if grep -qi "fellow Americans" dictation-engine.txt; then
+            echo "DICTATION-ENGINE: PASS" | tee -a dictation-engine.txt
+          else
+            echo "DICTATION-ENGINE: FAIL" | tee -a dictation-engine.txt
+            exit 1
+          fi
       - name: Get APK from build run
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -23,6 +42,8 @@ jobs:
           echo "Using build run $RID"
           gh run download "$RID" -n WrenBoard-baseline-apk -D apk
           ls -la apk/
+      - name: Build ime-target APK (deterministic EditText target)
+        run: bash tools/ime-target/build.sh
       - name: Enable KVM
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
@@ -37,21 +58,18 @@ jobs:
           arch: x86_64
           profile: Nexus 6
           disable-animations: true
-          script: |
-            mkdir -p shots
-            echo "== control: official upstream FUTO APK on same emulator ==" | tee shots/results.txt
-            curl -sSL -o /tmp/control.apk https://github.com/futo-org/android-keyboard/releases/download/0.1.30/keyboard-0.1.30.apk
-            bash tools/ime-diagnose.sh /tmp/control.apk org.futo.inputmethod.latin
-            cat shots/diagnose-org_futo_inputmethod_latin.txt >> shots/results.txt
-            adb uninstall org.futo.inputmethod.latin || true
-            echo "== subject: WrenBoard APK ==" | tee -a shots/results.txt
-            bash tools/ime-verify.sh apk/*.apk
+          script: bash tools/ime-verify.sh apk/*.apk tools/ime-target/out/imetarget.apk
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: ime-verify-shots
-          path: shots/
+          path: |
+            shots/
+            dictation-engine.txt
           retention-days: 30
       - name: Verification results
         if: always()
-        run: cat shots/results.txt || true
+        run: |
+          cat dictation-engine.txt || true
+          echo "-----"
+          cat shots/results.txt || true
