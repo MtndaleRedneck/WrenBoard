@@ -1,0 +1,39 @@
+name: ime-settings-probe
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: "build run id for the WrenBoard APK"
+        required: true
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Get APK
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh run download "${{ inputs.run_id }}" -n WrenBoard-baseline-apk -D apk
+          ls -la apk/
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Probe settings screens
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          target: google_apis
+          arch: x86_64
+          profile: Nexus 6
+          disable-animations: true
+          script: bash tools/ime-settings-probe.sh apk/*.apk
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: settings-probe
+          path: shots/
+          retention-days: 30
