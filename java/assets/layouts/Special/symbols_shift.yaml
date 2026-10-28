@@ -1,0 +1,40 @@
+name: "Symbols (Shifted)"
+numberRowMode: AlwaysDisabled
+attributes:
+  shiftable: false
+rows:
+  - letters:
+      # £ € ¥ ¢ © ® ™ ~ ¿
+      - "£"
+      - "€"
+      - "¥"
+      - "¢"
+      - "©"
+      - "®"
+      - "™"
+      - "~"
+      - "¿"
+  - letters:
+      # Tab (arrow-into-bar glyph), then [ ] { } < > ^ ¡
+      - type: base
+        spec: "⇥|!code/key_tab"
+      - "["
+      - "]"
+      - "{"
+      - "}"
+      - "<"
+      - ">"
+      - "^"
+      - "¡"
+  - letters:
+      # 123 (shift back), then ` ; ÷ \ | ¦ ¬, then delete
+      - "$shift"
+      - "`"
+      - ";"
+      - "÷"
+      - "\\"
+      - "|"
+      - "¦"
+      - "¬"
+      - "$delete"
+  - bottom: "$alphabet $space × § ¶ ° $enter"
