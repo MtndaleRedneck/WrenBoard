@@ -1,0 +1,49 @@
+name: ime-verify
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: "build run id to take the APK from (blank = latest successful build)"
+        required: false
+        default: ""
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Get APK from build run
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          RID="${{ inputs.run_id }}"
+          if [ -z "$RID" ]; then
+            RID=$(gh run list --workflow build.yml --status success --limit 1 --json databaseId -q '.[0].databaseId')
+          fi
+          echo "Using build run $RID"
+          gh run download "$RID" -n WrenBoard-baseline-apk -D apk
+          ls -la apk/
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+          ls -la /dev/kvm
+      - name: Run installed-IME verification on emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          target: google_apis
+          arch: x86_64
+          profile: Nexus 6
+          disable-animations: true
+          script: bash tools/ime-verify.sh apk/*.apk
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ime-verify-shots
+          path: shots/
+          retention-days: 30
+      - name: Verification results
+        if: always()
+        run: cat shots/results.txt || true

@@ -43,7 +43,6 @@ import org.futo.inputmethod.latin.uix.settings.useDataStore
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import org.futo.inputmethod.latin.uix.SettingsKey
 
-val DictionaryOnboardingDone = SettingsKey(booleanPreferencesKey("dictionary_onboarding_done"), false)
 import org.futo.inputmethod.latin.uix.settings.NavigationItemStyle
 import org.futo.inputmethod.latin.uix.settings.UserSetting
 import org.futo.inputmethod.latin.uix.settings.UserSettingsMenu
@@ -59,6 +58,8 @@ import org.futo.inputmethod.updates.SKIPPED_UPDATE_VERSION
 import org.futo.inputmethod.updates.UpdateResult
 import org.futo.inputmethod.updates.UpdatesCard
 import org.futo.inputmethod.updates.openManualUpdateCheck
+
+val DictionaryOnboardingDone = SettingsKey(booleanPreferencesKey("dictionary_onboarding_done"), false)
 
 val HomeScreenLite = UserSettingsMenu(
     title = R.string.settings_home_title,
