@@ -1,0 +1,52 @@
+name: ime-control
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: "build run id for the WrenBoard APK"
+        required: true
+jobs:
+  control:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [upstream, wren]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build ime-target APK
+        run: bash tools/ime-target/build.sh
+      - name: Fetch APKs
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ "${{ matrix.variant }}" = "upstream" ]; then
+            curl -sSL -o /tmp/ime.apk https://github.com/futo-org/android-keyboard/releases/download/0.1.30/keyboard-0.1.30.apk
+            echo org.futo.inputmethod.latin > /tmp/pkg
+          else
+            gh run download "${{ inputs.run_id }}" -n WrenBoard-baseline-apk -D apk
+            cp apk/*.apk /tmp/ime.apk
+            echo com.wrenboard.keyboard > /tmp/pkg
+          fi
+          ls -la /tmp/ime.apk
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Run control
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          target: google_apis
+          arch: x86_64
+          profile: Nexus 6
+          disable-animations: true
+          script: bash tools/ime-control.sh /tmp/ime.apk $(cat /tmp/pkg) tools/ime-target/out/imetarget.apk ${{ matrix.variant }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: control-${{ matrix.variant }}
+          path: shots/
+          retention-days: 30
