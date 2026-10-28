@@ -9,5 +9,6 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
+        <provider android:name=".FixtureProvider" android:authorities="com.wrenboard.imetarget.fix" android:exported="true"/>
     </application>
 </manifest>

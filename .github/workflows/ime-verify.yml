@@ -42,8 +42,10 @@ jobs:
           echo "Using build run $RID"
           gh run download "$RID" -n WrenBoard-baseline-apk -D apk
           ls -la apk/
+      - name: Generate import-regression fixtures
+        run: python3 tools/make_fixtures.py tools/ime-target/fixtures
       - name: Build ime-target APK (deterministic EditText target)
-        run: bash tools/ime-target/build.sh
+        run: ASSETS_DIR="$PWD/tools/ime-target/fixtures" bash tools/ime-target/build.sh
       - name: Enable KVM
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules

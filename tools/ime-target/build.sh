@@ -8,9 +8,9 @@ PJAR=$(ls "$ANDROID_HOME"/platforms/android-*/android.jar | sort -V | tail -1)
 echo "build-tools: $BT"
 echo "platform jar: $PJAR"
 rm -rf out && mkdir -p out/classes out/dex
-javac -source 8 -target 8 -cp "$PJAR" -d out/classes src/com/wrenboard/imetarget/TestInput.java
+javac -source 8 -target 8 -cp "$PJAR" -d out/classes src/com/wrenboard/imetarget/*.java
 "$BT/d8" --min-api 21 --lib "$PJAR" --output out/dex out/classes/com/wrenboard/imetarget/*.class
-"$BT/aapt2" link -o out/imetarget-unaligned.apk -I "$PJAR" --manifest AndroidManifest.xml
+"$BT/aapt2" link -o out/imetarget-unaligned.apk -I "$PJAR" --manifest AndroidManifest.xml ${ASSETS_DIR:+-A "$ASSETS_DIR"}
 (cd out/dex && zip -q -X ../imetarget-unaligned.apk classes.dex)
 "$BT/zipalign" -f 4 out/imetarget-unaligned.apk out/imetarget-aligned.apk
 keytool -genkeypair -keystore out/debug.keystore -alias androiddebugkey -keyalg RSA \

@@ -775,6 +775,8 @@ note "bmgr dry run:"; adb shell bmgr enabled 2>&1 | head -2 | sed 's/^/    /' | 
 adb shell bmgr backupnow com.wrenboard.keyboard 2>&1 | head -6 | sed 's/^/    /' | tee -a "$R"
 adb shell bmgr list transports 2>&1 | head -4 | sed 's/^/    /' | tee -a "$R"
 
+source tools/ime-import-regress.sh
+
 note "== cold session 2 (force-stop -> second cold sample) =="
 adb shell am force-stop $PKG
 sleep 2
