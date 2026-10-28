@@ -49,6 +49,9 @@ else
   # 4. import the export file
   adb shell am start -W -a android.intent.action.VIEW -d "content://com.wrenboard.imetarget.fix/exp.backup" -t application/octet-stream -n "$APP/org.futo.inputmethod.latin.uix.ImportResourceActivity" >/dev/null 2>&1
   sleep 4; shot e2e_03_importer; xdump e2e_03_importer
+  adb logcat -d -v threadtime 2>/dev/null | tr -d '\r' | grep -i -E "ImportResource|FixtureProvider|imetarget|EACCES|ENOENT|FileNotFound|SecurityException|Permission Denial|avc: .*denied|wrenboard" | tail -80 > shots/logcat_e2e_importer.txt; note "e2e importer logcat lines captured: $(wc -l < shots/logcat_e2e_importer.txt) (shots/logcat_e2e_importer.txt)"
+  adb shell "run-as com.wrenboard.imetarget sh -c 'ls -lZ files/; wc -c < files/exp.backup'" 2>&1 | tr -d '\r' | sed 's/^/    post-uninstall provider-file: /' | tee -a "$R"
+  adb shell dumpsys package com.wrenboard.imetarget 2>/dev/null | grep -i -E "userId|provider" | head -5 | sed 's/^/    target-pkg: /' | tee -a "$R"
   if IB=$(python3 tools/xml_node.py shots/e2e_03_importer.xml 'Import'); then
     read -r IX IY _ <<< "$IB"; adb shell input tap $IX $IY; sleep 12; shot e2e_04_after_restore
     ALLOK=1
