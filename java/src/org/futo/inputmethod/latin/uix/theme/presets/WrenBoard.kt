@@ -4,6 +4,7 @@ import android.graphics.drawable.GradientDrawable
 import android.util.TypedValue
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import org.futo.inputmethod.latin.R
@@ -21,6 +22,7 @@ import org.futo.inputmethod.latin.uix.theme.selector.ThemePreview
 // Colors measured from the user's reference design.
 
 private val AccentOrange = Color(0xFFFF8A14)
+private val HintGrey = 0xFFECECEC.toInt()
 
 private val darkScheme = extendedDarkColorScheme(
     primary=AccentOrange,
@@ -50,7 +52,7 @@ private val darkScheme = extendedDarkColorScheme(
     keyboardSurfaceDim=Color(0xFF3C3C3C),
     keyboardContainer=Color(0xFF232323),
     keyboardContainerVariant=Color(0xFF1C1C1C),
-    onKeyboardContainer=Color(0xFFF5F5F5),
+    onKeyboardContainer=AccentOrange,
     keyboardPress=Color(0xFF565656),
     keyboardFade0=Color(0xFF3C3C3C),
     keyboardFade1=Color(0xFF3C3C3C),
@@ -81,7 +83,8 @@ private fun wrenKeyBackgrounds(context: android.content.Context) = KeyedBitmaps(
                 KeyQualifier.Pressed
             ),
             bitmap = KeyBackground(
-                foregroundColor = 0xFFFFFFFF.toInt(),
+                foregroundColor = AccentOrange.toArgb(),
+                hintColor = HintGrey,
                 outlineColor = 0xFF0E0E0E.toInt(),
                 outlineWidth = 1.dp,
                 background = keyGradient(context, 0xFF6A6A6A.toInt(), 0xFF383838.toInt())
@@ -91,7 +94,8 @@ private fun wrenKeyBackgrounds(context: android.content.Context) = KeyedBitmaps(
         KeyedBitmap(
             qualifiers = setOf(KeyQualifier.Pressed),
             bitmap = KeyBackground(
-                foregroundColor = 0xFFFFFFFF.toInt(),
+                foregroundColor = AccentOrange.toArgb(),
+                hintColor = HintGrey,
                 outlineColor = 0xFF0E0E0E.toInt(),
                 outlineWidth = 1.dp,
                 background = keyGradient(context, 0xFF565656.toInt(), 0xFF242424.toInt())
@@ -101,7 +105,8 @@ private fun wrenKeyBackgrounds(context: android.content.Context) = KeyedBitmaps(
         KeyedBitmap(
             qualifiers = setOf(KeyQualifier.RowColSelector(RowColSelection.RowEq(0))),
             bitmap = KeyBackground(
-                foregroundColor = 0xFFF5F5F5.toInt(),
+                foregroundColor = AccentOrange.toArgb(),
+                hintColor = HintGrey,
                 outlineColor = 0xFF0E0E0E.toInt(),
                 outlineWidth = 1.dp,
                 background = keyGradient(context, 0xFF515151.toInt(), 0xFF242424.toInt())
@@ -111,7 +116,8 @@ private fun wrenKeyBackgrounds(context: android.content.Context) = KeyedBitmaps(
         KeyedBitmap(
             qualifiers = emptySet(),
             bitmap = KeyBackground(
-                foregroundColor = 0xFFF5F5F5.toInt(),
+                foregroundColor = AccentOrange.toArgb(),
+                hintColor = HintGrey,
                 outlineColor = 0xFF0E0E0E.toInt(),
                 outlineWidth = 1.dp,
                 background = keyGradient(context, 0xFF3E3E3E.toInt(), 0xFF060606.toInt())

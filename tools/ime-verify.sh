@@ -271,7 +271,9 @@ for dev in $(adb shell getevent -lp 2>/dev/null | tr -d '\r' | awk '/^add device
 done
 clear_field
 if [ -z "$TDEV" ]; then
-  note "INCONCLUSIVE: no evdev touch device delivered a tap; double-tap gesture NOT tested"
+  note "no evdev touch device delivered a tap; FALLBACK: two 'input tap' calls back-to-back in ONE adb shell (gap unmeasured, not evdev). The caps-lock outcome below is the only evidence."
+  clear_field
+  adb shell "input tap $SH; input tap $SH" >/dev/null 2>&1
 else
   SX=$(( ${SH% *} * TRX / SW )); SY=$(( ${SH#* } * TRY / SHH ))
   tapev() { echo "sendevent $TDEV 3 57 9; sendevent $TDEV 3 53 $SX; sendevent $TDEV 3 54 $SY; sendevent $TDEV 1 330 1; sendevent $TDEV 0 0 0; sendevent $TDEV 3 57 4294967295; sendevent $TDEV 1 330 0; sendevent $TDEV 0 0 0"; }
@@ -530,14 +532,21 @@ EXP=$(jq -r '.keys.strip_expand // empty | "\(.[0]) \(.[1])"' "$GEOM")
 if [ -z "$EXP" ]; then
   note "FAIL: no strip expander in geometry"
 else
-  adb shell input tap $EXP
-  sleep 1.2
+  # approved default: toolbar starts EXPANDED. Capture as-is first (no tap).
+  sleep 1.0
   shot 13_toolbar
   geom_rebuild 13_toolbar 13_toolbar_overlay && {
     TC=$(jq -r '.strip.clusters // 0' "$GEOM")
     note "expanded strip clusters: $TC"
     [ "$TC" -eq 7 ] && note "PASS: toolbar shows 7 items" || note "FAIL: toolbar item count $TC (wanted 7; see 13_toolbar + overlay)"
   } || note "FAIL: geometry after toolbar expand"
+  # collapse then re-expand via the chevron, capturing both states
+  adb shell input tap $EXP; sleep 1.2; shot 13b_toolbar_collapsed
+  EXP2=$(jq -r '.keys.strip_expand // empty | "\(.[0]) \(.[1])"' "$GEOM")
+  geom_rebuild 13b_toolbar_collapsed 13b_overlay >/dev/null 2>&1
+  EXP2=$(jq -r '.keys.strip_expand // empty | "\(.[0]) \(.[1])"' "$GEOM"); [ -z "$EXP2" ] && EXP2="$EXP"
+  adb shell input tap $EXP2; sleep 1.2; shot 13c_toolbar_reexpanded
+  geom_rebuild 13c_toolbar_reexpanded 13c_overlay >/dev/null 2>&1
 fi
 dim "after-toolbar"
 

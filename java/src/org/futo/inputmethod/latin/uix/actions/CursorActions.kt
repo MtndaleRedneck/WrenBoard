@@ -19,7 +19,7 @@ private fun getMetaState(manager: KeyboardManagerForAction): Int = 0
 
 
 val ArrowUpAction = Action(
-    icon = R.drawable.chevron_up,
+    icon = R.drawable.arrow_tri_up,
     name = R.string.action_cursor_up_title,
     simplePressImpl = { manager, _ ->
         manager.sendKeyEvent(KeyEvent.KEYCODE_DPAD_UP, getMetaState(manager))
@@ -28,7 +28,7 @@ val ArrowUpAction = Action(
 )
 
 val ArrowDownAction = Action(
-    icon = R.drawable.chevron_down,
+    icon = R.drawable.arrow_tri_down,
     name = R.string.action_cursor_down_title,
     simplePressImpl = { manager, _ ->
         manager.sendKeyEvent(KeyEvent.KEYCODE_DPAD_DOWN, getMetaState(manager))
@@ -37,7 +37,7 @@ val ArrowDownAction = Action(
 )
 
 val ArrowLeftAction = Action(
-    icon = R.drawable.chevron_left,
+    icon = R.drawable.arrow_tri_left,
     name = R.string.action_cursor_left_title,
     simplePressImpl = { manager, _ ->
         manager.sendKeyEvent(KeyEvent.KEYCODE_DPAD_LEFT, getMetaState(manager))
@@ -46,7 +46,7 @@ val ArrowLeftAction = Action(
 )
 
 val ArrowRightAction = Action(
-    icon = R.drawable.chevron_right,
+    icon = R.drawable.arrow_tri_right,
     name = R.string.action_cursor_right_title,
     simplePressImpl = { manager, _ ->
         manager.sendKeyEvent(KeyEvent.KEYCODE_DPAD_RIGHT, getMetaState(manager))

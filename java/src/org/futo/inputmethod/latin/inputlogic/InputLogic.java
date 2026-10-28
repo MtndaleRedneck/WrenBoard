@@ -1974,7 +1974,9 @@ public final class InputLogic {
      * @param settingsValues The current settings values.
      */
     private void performRecapitalization(final SettingsValues settingsValues) {
-        if (!mRecapitalizeStatus.mIsEnabled()) {
+        // Recapitalization of an existing selection waits for a cursor move after start-input;
+        // SwiftKey-style cycling of the word before the cursor does not.
+        if (!mRecapitalizeStatus.mIsEnabled() && mConnection.hasSelection()) {
             return; // Recapitalize is disabled for now
         }
         if (!mConnection.hasSelection()) {
@@ -1984,6 +1986,7 @@ public final class InputLogic {
             if (!mConnection.hasSelection()) {
                 return;
             }
+            mRecapitalizeStatus.enable(); // our own selection, so following taps keep cycling
         }
         final int selectionStart = mConnection.getExpectedSelectionStart();
         final int selectionEnd = mConnection.getExpectedSelectionEnd();

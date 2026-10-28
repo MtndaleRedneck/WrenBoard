@@ -133,8 +133,8 @@ val DefaultNumberRowClassic = Row(
 val DefaultBottomRow = Row(
     bottom = listOf(
         TemplateSymbolsKey,
-        ContextualKey(fallbackKey = BaseKey(",")),
         TemplateActionKey,
+        ContextualKey(fallbackKey = BaseKey(",")),
         TemplateSpaceKey,
         TemplateOptionalZWNJKey,
         TemplatePeriodKey,

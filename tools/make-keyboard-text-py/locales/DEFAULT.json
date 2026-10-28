@@ -252,21 +252,18 @@
             "⁹",
             "₉"
         ],
-        "symbols_0": [
-            "⁰",
-            "₀",
-            "ⁿ",
-            "∅"
-        ],
+        "symbols_0": [],
         "tablet_comma": [],
         "period": [
-            "!text/morekeys_punctuation"
+            "\\,",
+            "!",
+            "?"
         ],
         "tablet_period": [
             "!text/morekeys_tablet_punctuation"
         ],
         "bottomrow_comma": [
-            "!icon/action_settings|!code/action_settings"
+            "!icon/action_voice_input|!code/action_voice_input"
         ],
         "exclamation": [
             "¡",
@@ -415,7 +412,7 @@
         "wait_key": "!string/label_wait_key"
     },
     "keylabel": {
-        "to_alpha": "ABC",
+        "to_alpha": "abc",
         "to_symbol": "123",
         "to_more_symbol": "{&=",
         "tablet_to_more_symbol": "~ [ <",
@@ -539,10 +536,10 @@
         "9": "!text/keyspec_left_parenthesis",
         "0": "!text/keyspec_right_parenthesis",
 
-        "q": "_",
-        "w": "\\\\",
-        "e": "|",
-        "r": "=",
+        "q": "\\%",
+        "w": "^",
+        "e": "~",
+        "r": "\\|",
         "t": "!text/keyspec_left_square_bracket",
         "y": "!text/keyspec_right_square_bracket",
         "u": "!text/keyspec_less_than",
@@ -552,24 +549,21 @@
 
         "a": "@",
         "s": "#",
-        "d": [
-            "!text/keyspec_currency",
-            "$"
-        ],
-        "f": "\\%",
-        "g": ["&", "|"],
-        "h": ["-", "–", "—", "_"],
-        "j": ["+", "="],
-        "k": ["!text/keyspec_left_parenthesis", "!text/keyspec_left_square_bracket", "!text/keyspec_left_curly_bracket", "!text/keyspec_less_than"],
-        "l": ["!text/keyspec_right_parenthesis", "!text/keyspec_right_square_bracket", "!text/keyspec_right_curly_bracket", "!text/keyspec_greater_than"],
+        "d": "&",
+        "f": "*",
+        "g": "-",
+        "h": "+",
+        "j": "=",
+        "k": "!text/keyspec_left_parenthesis",
+        "l": "!text/keyspec_right_parenthesis",
 
-        "z": "*",
-        "x": "\"",
-        "c": "'",
-        "v": ":",
-        "b": "!text/keyspec_symbols_semicolon",
-        "n": "!",
-        "m": ["!text/keyspec_symbols_question", "/"],
+        "z": "_",
+        "x": "$",
+        "c": "\"",
+        "v": "'",
+        "b": ":",
+        "n": "!text/keyspec_symbols_semicolon",
+        "m": "/",
 
         "r2_e1": "/"
     }

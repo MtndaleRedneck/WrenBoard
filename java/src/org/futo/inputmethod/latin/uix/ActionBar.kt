@@ -120,7 +120,14 @@ import org.futo.inputmethod.latin.SuggestedWords.SuggestedWordInfo.KIND_TYPED
 import org.futo.inputmethod.latin.SuggestionBlacklist
 import org.futo.inputmethod.latin.common.Constants
 import org.futo.inputmethod.latin.suggestions.SuggestionStripViewListener
+import org.futo.inputmethod.latin.uix.actions.ActionCategory
+import org.futo.inputmethod.latin.uix.actions.ActionsSettings
+import org.futo.inputmethod.latin.uix.actions.EmojiAction
 import org.futo.inputmethod.latin.uix.actions.FavoriteActions
+import org.futo.inputmethod.latin.uix.actions.VoiceInputAction
+import org.futo.inputmethod.latin.uix.actions.ensureWellFormed
+import org.futo.inputmethod.latin.uix.actions.toActionEditorItems
+import org.futo.inputmethod.latin.uix.actions.toActionMap
 import org.futo.inputmethod.latin.uix.actions.MoreActionsAction
 import org.futo.inputmethod.latin.uix.actions.PinnedActions
 import org.futo.inputmethod.latin.uix.actions.toActionList
@@ -181,7 +188,7 @@ val ActionBarScrollOffsetSetting = SettingsKey(
 
 val ActionBarExpanded = SettingsKey(
     booleanPreferencesKey("actionExpanded"),
-    false
+    true // WrenBoard: approved layout shows the toolbar row above the suggestion strip by default
 )
 
 val OldStyleActionsBar = SettingsKey(
@@ -541,8 +548,7 @@ fun RowScope.SuggestionItems(words: SuggestedWords, onClick: (i: Int) -> Unit, o
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun LazyItemScope.ActionItem(idx: Int, action: Action, onSelect: (Action) -> Unit, onLongSelect: (Action) -> Unit) {
-    val width = 56.dp
+fun LazyItemScope.ActionItem(idx: Int, action: Action, onSelect: (Action) -> Unit, onLongSelect: (Action) -> Unit, width: androidx.compose.ui.unit.Dp = 56.dp) {
 
     val modifier = Modifier
         .width(width)
@@ -624,8 +630,26 @@ fun ActionItems(onSelect: (Action) -> Unit, onLongSelect: (Action) -> Unit) {
         }
     }
 
-    val actionItems = remember(actions) {
-        actions.toActionList().toSet().toList()
+    // WrenBoard: emoji lives on the bottom-row action key AND in the toolbar. The action editor
+    // de-duplicates across categories, so mirror emoji into the toolbar whenever it is the
+    // action key. Moving emoji elsewhere (or disabling it) removes it from both places.
+    val editorMap = if(!LocalInspectionMode.current) {
+        useDataStoreValue(ActionsSettings)
+    } else {
+        ActionsSettings.default
+    }
+    val emojiIsActionKey = remember(editorMap) {
+        editorMap.toActionEditorItems().ensureWellFormed().toActionMap()[ActionCategory.ActionKey]
+            ?.firstOrNull() == EmojiAction
+    }
+
+    val actionItems = remember(actions, emojiIsActionKey) {
+        val base = actions.toActionList().toSet().toMutableList()
+        if(emojiIsActionKey && !base.contains(EmojiAction)) {
+            val voiceIdx = base.indexOf(VoiceInputAction)
+            base.add(if(voiceIdx >= 0) voiceIdx + 1 else 0, EmojiAction)
+        }
+        base.toList()
     }
 
     val lazyListState = rememberLazyListState(scrollItemIndex, scrollItemOffset)
@@ -646,16 +670,21 @@ fun ActionItems(onSelect: (Action) -> Unit, onLongSelect: (Action) -> Unit) {
                 && (lazyListState.layoutInfo.visibleItemsInfo.lastOrNull()?.key != actionItems.lastOrNull()?.name)
     } }
 
-    Box(Modifier.safeKeyboardPadding()) {
+    BoxWithConstraints(Modifier.safeKeyboardPadding()) {
+        // WrenBoard: the approved layout spreads the toolbar actions evenly across the row
+        // (no overflow button); more than 7 actions fall back to a scrolling row.
+        val evenSpread = actionItems.size in 1..7
+        val itemWidth = if (evenSpread) maxWidth / actionItems.size else 56.dp
         LazyRow(state = lazyListState) {
-            item {
-                ActionItemSmall(action = MoreActionsAction, onSelect = {
-                    onSelect(MoreActionsAction)
-                }, onLongSelect = { })
-
+            if (!evenSpread) {
+                item {
+                    ActionItemSmall(action = MoreActionsAction, onSelect = {
+                        onSelect(MoreActionsAction)
+                    }, onLongSelect = { })
+                }
             }
             items(actionItems.size, key = { actionItems[it].name }) {
-                ActionItem(it, actionItems[it], onSelect, onLongSelect)
+                ActionItem(it, actionItems[it], onSelect, onLongSelect, itemWidth)
             }
         }
 

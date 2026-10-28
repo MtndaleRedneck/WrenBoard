@@ -14,7 +14,8 @@ data class KeyBackground(
     val outlineWidth: Dp = 3.dp,
     val padding: Rect = Rect(0,0,0,0),
     val gap: RectF = RectF(1.0f,1.0f,1.0f,1.0f),
-    val background: Drawable
+    val background: Drawable,
+    val hintColor: Int? = null
 )
 
 data class KeyIcon(

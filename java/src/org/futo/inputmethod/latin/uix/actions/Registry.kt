@@ -263,8 +263,9 @@ fun String.toActionList(): List<Action> = split(",").mapNotNull { AllActionsMap[
 
 val DefaultActionSettings = mapOf(
     ActionCategory.ActionKey to listOf(EmojiAction),
-    ActionCategory.PinnedKey to listOf(VoiceInputAction),
-    ActionCategory.Favorites to listOf(UndoAction, RedoAction, ClipboardHistoryAction, ThemeAction, SettingsAction),
+    ActionCategory.PinnedKey to listOf(),
+    // Approved layout: seven inline toolbar actions in this order (emoji also stays on the bottom-row action key)
+    ActionCategory.Favorites to listOf(VoiceInputAction, EmojiAction, UndoAction, RedoAction, ClipboardHistoryAction, ThemeAction, SettingsAction),
     ActionCategory.More to listOf(), // Remaining actions get populated automatically by ensureWellFormed
     // Crossed out in the approved action list: stored in Settings (re-enable via the action editor)
     ActionCategory.Disabled to listOf(

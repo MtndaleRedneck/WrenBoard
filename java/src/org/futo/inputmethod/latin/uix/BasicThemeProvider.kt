@@ -376,7 +376,11 @@ class BasicThemeProvider(val context: Context, val colorScheme: KeyboardColorSch
         addIcon(KeyboardIconsSet.NAME_SETTINGS_KEY, R.drawable.settings, onKeyColor)
         addIcon(KeyboardIconsSet.NAME_SPACE_KEY, null, onKeyColor)
         addIcon(KeyboardIconsSet.NAME_SPACE_KEY_FOR_NUMBER_LAYOUT, R.drawable.space, onKeyColor)
-        addIcon(KeyboardIconsSet.NAME_ENTER_KEY, R.drawable.sym_keyboard_return_lxx_light, enterKeyForeground)
+        if(advanced.keyBackgrounds != null) {
+            addIcon(KeyboardIconsSet.NAME_ENTER_KEY, R.drawable.enter_bold, onKeyColor)
+        } else {
+            addIcon(KeyboardIconsSet.NAME_ENTER_KEY, R.drawable.sym_keyboard_return_lxx_light, enterKeyForeground)
+        }
         addIcon(KeyboardIconsSet.NAME_GO_KEY, R.drawable.sym_keyboard_go_lxx_light, enterKeyForeground)
         addIcon(KeyboardIconsSet.NAME_SEARCH_KEY, R.drawable.sym_keyboard_search_lxx_light, enterKeyForeground)
         addIcon(KeyboardIconsSet.NAME_SEND_KEY, R.drawable.sym_keyboard_send_lxx_light, enterKeyForeground)

@@ -153,7 +153,7 @@ class AdvancedThemeMatcher(
             ).roundToInt())
         }
 
-        val hintColor = foundBackground?.foregroundColor?.let { fgCol ->
+        val hintColor = foundBackground?.hintColor ?: foundBackground?.foregroundColor?.let { fgCol ->
             Color(fgCol).let { it.copy(alpha = it.alpha*0.8f) }.toArgb()
         } ?: key.selectHintTextColor(drawableProvider, params)
 

@@ -382,8 +382,8 @@ data class TemplateCurrencyKey(val currency: String) : AbstractKey {
 }
 
 data class PeriodKey(
-    val default: AbstractKey = BaseKey("."),
-    val alternative: AbstractKey = BaseKey(".",
+    val default: AbstractKey = BaseKey(".", hint = ",!?"),
+    val alternative: AbstractKey = BaseKey(".", hint = ",!?",
         moreKeys = listOf(
             "!text/keyspec_symbols_question",
             "!text/keyspec_comma",
