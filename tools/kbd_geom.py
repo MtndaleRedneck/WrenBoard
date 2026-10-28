@@ -142,6 +142,10 @@ def main():
             {"x1": a, "y1": y1, "x2": b, "y2": y2,
              "cx": (a + b) // 2, "cy": (y1 + y2) // 2} for (a, b) in cells]})
 
+    # Key-styled suggestion boxes form a dark band with few cells right under the strip: not a key row.
+    while len(out_bands) > 4 and len(out_bands[0]["cells"]) <= 5 and out_bands[0]["y1"] < top + 300:
+        out_bands.pop(0)
+
     # Strip: the collapsed expander/mic row (or expanded toolbar) lives in
     # the zone between keyboard top and the first key band.
     strip = None
@@ -193,7 +197,7 @@ def main():
     # chevron circle + suggestions on the lower row. Measured separately.
     toolbar = None
     if z2 - z1 >= 60:
-        mid = z1 + (z2 - z1) // 2
+        mid = min(z1 + 140, z1 + (z2 - z1) // 2)
         def is_orange(p):
             return (p[0] > 180 and 70 < p[1] < 190 and p[2] < 90 and p[0] - p[2] > 110) or (p[0] + p[1] + p[2]) / 3.0 > 170
         ocol = []
@@ -227,29 +231,34 @@ def main():
         # lower row: first dark cluster = chevron circle
         lo1 = (items[0][1] + 75) if items else mid + 4
         lo2 = min(z2, lo1 + 130) if items else z2
-        lowc = []
-        for x in range(0, W, 2):
-            n = 0
-            rows_ = list(range(lo1, lo2 + 1, 3))
-            for y in rows_:
-                p = px[x, y]
-                if (p[0] + p[1] + p[2]) / 3.0 < bg - 16:
-                    n += 1
-            lowc.append(n / max(len(rows_), 1))
-        i = 0
-        chev = None
-        while i < len(lowc):
-            if lowc[i] > 0.25:
-                x1 = i
-                while i < len(lowc) and lowc[i] > 0.15:
-                    i += 1
-                if (i - 1 - x1) >= 8:
-                    chev = (x1 * 2, (i - 1) * 2)
-                    break
-            i += 1
+        # chevron circle: orange outline ring at the far left of the lower row
+        oxs = [x for x in range(0, 260, 2) for y in range(lo1, lo2 + 1, 3) if is_orange(px[x, y]) and px[x, y][0] > 180 and px[x, y][2] < 90]
+        chev = (min(oxs), max(oxs)) if len(oxs) >= 6 else None
+        if chev is None:
+            lowc = []
+            for x in range(0, W, 2):
+                n = 0
+                rows_ = list(range(lo1, lo2 + 1, 3))
+                for y in rows_:
+                    p = px[x, y]
+                    if (p[0] + p[1] + p[2]) / 3.0 < bg - 16:
+                        n += 1
+                lowc.append(n / max(len(rows_), 1))
+            i = 0
+            while i < len(lowc):
+                if lowc[i] > 0.25:
+                    x1 = i
+                    while i < len(lowc) and lowc[i] > 0.15:
+                        i += 1
+                    if (i - 1 - x1) >= 8:
+                        chev = (x1 * 2, (i - 1) * 2)
+                        break
+                i += 1
         if chev:
-            cyy = (lo1 + lo2) // 2
+            oy = [y for x in range(chev[0], chev[1] + 1, 2) for y in range(lo1, lo2 + 1, 2) if px[x, y][0] > 180 and px[x, y][2] < 90 and px[x, y][0] - px[x, y][2] > 110]
+            cyy = sum(oy) // len(oy) if oy else (lo1 + lo2) // 2
             strip = dict(strip or {})
+            strip.setdefault("y1", z1); strip.setdefault("y2", z2); strip.setdefault("clusters", 0); strip.setdefault("last", [W - 40, (lo1 + lo2) // 2])
             strip["first"] = [(chev[0] + chev[1]) // 2, cyy]
             strip["cy"] = cyy
             strip["chevron"] = True
