@@ -225,6 +225,20 @@ if [ "$C1" = "Hello" ] && [ "$C2" = "HELLO" ]; then
 else
   note "FAIL: word-case cycling variant A (expected Hello/HELLO/hello). Active IME was ours at preceding checkpoint; shift state per 07c-07e screenshots"
 fi
+note "== word-case cycling variant B: same, but cursor moved once first (tap at end of field) =="
+clear_field
+type_letters h e l l o
+sleep 1.0
+EB=$(edit_bounds)
+if [ -n "$EB" ]; then nums=$(echo "$EB" | grep -o '[0-9]*' | tr '\n' ' '); set -- $nums; adb shell input tap $(( $3 - 30 )) $(( ($2+$4)/2 )); sleep 1.2; fi
+shot 07f_caseB_before_tap
+adb shell log -t IMETARGET "CASEMARK-B"
+tapk shift; sleep 0.8; D1=$(edit_text); shot 07g_caseB_tap1
+tapk shift; sleep 0.8; D2=$(edit_text); shot 07h_caseB_tap2
+tapk shift; sleep 0.8; D3=$(edit_text); shot 07i_caseB_tap3
+note "word-case cycle (variant B, cursor moved first) observed: hello -> '$D1' -> '$D2' -> '$D3'"
+if [ "$D1" = "Hello" ] && [ "$D2" = "HELLO" ]; then note "PASS: word-case cycling variant B (Hello then HELLO; third tap -> '$D3')"; else note "FAIL: word-case cycling variant B (see 07f-07i)"; fi
+adb logcat -d > shots/logcat_after_case.txt 2>&1
 dim "after-case-cycle"
 
 note "== normalize shift to off before caps tests =="
@@ -242,9 +256,9 @@ DT_OK=""
 # actually delivers touches, then send two timed taps and measure the gap with getevent.
 SCR=$(adb shell wm size | tr -d '\r' | grep -o '[0-9]*x[0-9]*' | tail -1); SW=${SCR%x*}; SHH=${SCR#*x}
 TDEV=""
-for dev in $(adb shell getevent -p 2>/dev/null | tr -d '\r' | awk '/^add device/{d=$4} /ABS_MT_POSITION_X/{print d}' | sort -u); do
-  RX=$(adb shell getevent -p "$dev" 2>/dev/null | tr -d '\r' | sed -n 's/.*ABS_MT_POSITION_X .*max \([0-9]*\).*/\1/p' | head -1)
-  RY=$(adb shell getevent -p "$dev" 2>/dev/null | tr -d '\r' | sed -n 's/.*ABS_MT_POSITION_Y .*max \([0-9]*\).*/\1/p' | head -1)
+for dev in $(adb shell getevent -lp 2>/dev/null | tr -d '\r' | awk '/^add device/{d=$4} /ABS_MT_POSITION_X/{print d}' | sort -u); do
+  RX=$(adb shell getevent -lp "$dev" 2>/dev/null | tr -d '\r' | sed -n 's/.*ABS_MT_POSITION_X .*max \([0-9]*\).*/\1/p' | head -1)
+  RY=$(adb shell getevent -lp "$dev" 2>/dev/null | tr -d '\r' | sed -n 's/.*ABS_MT_POSITION_Y .*max \([0-9]*\).*/\1/p' | head -1)
   [ -z "$RX" ] && continue
   # probe: tap 'h' via this device, see whether the field changes
   HXY=$(jq -r '.keys.h | "\(.[0]) \(.[1])"' "$GEOM"); hx=${HXY% *}; hy=${HXY#* }
@@ -354,22 +368,44 @@ probe_key() { # probe_key <label> <x> <y> -> prints typed delta
   before=$(edit_text); adb shell input tap $2 $3; sleep 0.5; after=$(edit_text)
   if [ "${after:0:${#before}}" = "$before" ]; then echo "${after:${#before}}"; else echo "?"; fi
 }
+# page identity via pixel crops: bottom-left key ('ABC' on both symbols pages) and band2-left key
+# ('{&=' on page 1, '123' on page 2); letters page has '123' bottom-left.
+read -r A1 A2 A3 A4 <<< "$(jq -r '.bands[3].cells[0] | "\(.x1) \(.y1) \(.x2) \(.y2)"' shots/geom_sym1.json)"
+read -r C1 C2 C3 C4 <<< "$(jq -r '.bands[2].cells[0] | "\(.x1) \(.y1) \(.x2) \(.y2)"' shots/geom_sym1.json)"
+python3 tools/pagecheck.py shots/09_symbols_page1.png $A1 $A2 $A3 $A4 shots/ref_abc.png --save >/dev/null
+python3 tools/pagecheck.py shots/09_symbols_page1.png $C1 $C2 $C3 $C4 shots/ref_p1sw.png --save >/dev/null
+pageis() { # pageis p1|other
+  adb exec-out screencap -p > shots/_pc.png
+  local a c
+  a=$(python3 tools/pagecheck.py shots/_pc.png $A1 $A2 $A3 $A4 shots/ref_abc.png | cut -d' ' -f1)
+  c=$(python3 tools/pagecheck.py shots/_pc.png $C1 $C2 $C3 $C4 shots/ref_p1sw.png | cut -d' ' -f1)
+  [ "$a" = SAME ] && [ "$c" = SAME ] && echo p1 || echo other
+}
+ensure_p1() { # return keyboard to symbols page 1 if it reverted to letters
+  [ "$(pageis)" = p1 ] && return 0
+  note "  (page not symbols p1 - re-entering via 123 key; page reverted after previous key)"
+  tapk symbols; sleep 1.0
+  [ "$(pageis)" = p1 ]
+}
 clear_field
-adb shell am broadcast -a com.wrenboard.imetarget.CLEAR -p com.wrenboard.imetarget >/dev/null 2>&1
-P1=""; MISS=0
-note "symbols p1 per-key probe (rowDigits y=$DY, row1 y=$B1Y, row2 y=$B2Y, width=$SCRW)"
+note "symbols p1 per-key probe, page re-entered whenever it reverted (rowDigits y=$DY, row1 y=$B1Y, row2 y=$B2Y, width=$SCRW)"
+REVERT=0; DIGITS=""; P1B=""
 for k in 0 1 2 3 4 5 6 7 8 9; do
   X=$(( SCRW * (528 + 992 * k) / 10000 ))
-  D=$(probe_key d$k $X $DY); P1="$P1$D"; [ -z "$D" ] && MISS=$((MISS+1))
+  ensure_p1 || { note "  cannot reach symbols p1 for digit $k"; break; }
+  D=$(probe_key d$k $X $DY); DIGITS="$DIGITS$D"
+  [ "$(pageis)" = p1 ] || { REVERT=$((REVERT+1)); note "  page left symbols p1 after digit key $k (typed '$D')"; }
 done
-DIGITS="$P1"; P1B=""
 for k in 0 1 2 3 4 5 6 7 8 9; do
   X=$(( SCRW * (528 + 992 * k) / 10000 ))
+  ensure_p1 || { note "  cannot reach symbols p1 for symbol key $k"; break; }
   D=$(probe_key s$k $X $B1Y); P1B="$P1B$D"
+  [ "$(pageis)" = p1 ] || { REVERT=$((REVERT+1)); note "  page left symbols p1 after symbol key $k (typed '$D')"; }
 done
 shot 09d_symbols_after_probe
 note "symbols p1 digit row typed: '$DIGITS' (expect 1234567890)"
 note "symbols p1 symbol row typed: '$P1B' (expect @#\$&_-()=%)"
+note "symbols p1: page reverted to letters/other after $REVERT of 20 key taps"
 P1="$DIGITS$P1B"
 check "symbols page1 digit row types 1234567890" "1234567890" "$DIGITS"
 check "symbols page1 symbol row includes @" "@" "$P1B"
@@ -378,25 +414,45 @@ dim "after-symbols-p1"
 note "== symbols page 2 =="
 clear_field
 FT0=$(edit_text)
+ensure_p1 || note "  could not confirm symbols p1 before switching to p2"
 SWITCH=$(jq -r '.bands[2].cells[0] | "\(.cx) \(.cy)"' shots/geom_sym1.json)
 adb shell input tap $SWITCH
 sleep 1.2
 shot 10_symbols_page2
+python3 tools/pagecheck.py shots/10_symbols_page2.png $C1 $C2 $C3 $C4 shots/ref_p2sw.png --save >/dev/null
 FT1=$(edit_text)
-note "symbols p2 reached via {&= key (field unchanged by switch: $([ "$FT0" = "$FT1" ] && echo yes || echo NO)); positional probe, same row positions as page 1"
-P2A=""; P2B=""
+note "symbols p2 reached via {&= key (field unchanged by switch: $([ "$FT0" = "$FT1" ] && echo yes || echo NO))"
+pageis2() {
+  adb exec-out screencap -p > shots/_pc.png
+  local a c
+  a=$(python3 tools/pagecheck.py shots/_pc.png $A1 $A2 $A3 $A4 shots/ref_abc.png | cut -d' ' -f1)
+  c=$(python3 tools/pagecheck.py shots/_pc.png $C1 $C2 $C3 $C4 shots/ref_p2sw.png | cut -d' ' -f1)
+  [ "$a" = SAME ] && [ "$c" = SAME ] && echo p2 || echo other
+}
+ensure_p2() {
+  [ "$(pageis2)" = p2 ] && return 0
+  note "  (page not symbols p2 - re-entering)"
+  ensure_p1 && { adb shell input tap $SWITCH; sleep 1.0; }
+  [ "$(pageis2)" = p2 ]
+}
+P2A=""; P2B=""; REV2=0
 for k in 0 1 2 3 4 5 6 7 8; do
   X=$(( SCRW * (750 + 1082 * k) / 10000 ))
+  ensure_p2 || { note "  cannot reach symbols p2 for top key $k"; break; }
   D=$(probe_key t$k $X $DY); P2A="$P2A$D"
+  [ "$(pageis2)" = p2 ] || { REV2=$((REV2+1)); note "  page left p2 after top key $k (typed '$D')"; }
 done
 for k in 0 1 2 3 4 5 6 7 8; do
   X=$(( SCRW * (750 + 1082 * k) / 10000 ))
+  ensure_p2 || { note "  cannot reach symbols p2 for second-row key $k"; break; }
   D=$(probe_key u$k $X $B1Y); P2B="$P2B$D"
+  [ "$(pageis2)" = p2 ] || { REV2=$((REV2+1)); note "  page left p2 after second-row key $k (typed '$D')"; }
 done
 shot 10b_symbols_p2_after_probe
 P2="$P2A$P2B"
-note "symbols p2 top row typed: '$P2A' (expect £€¥¢©®™~¿)"
-note "symbols p2 second row typed: '$P2B' (expect tab then []{}<>^¡)"
+note "symbols p2 top row typed: '$P2A' (expect currency row)"
+note "symbols p2 second row typed: '$P2B' (expect tab then []{}<>^)"
+note "symbols p2: page left p2 after $REV2 of 18 key taps"
 check "symbols page2 types page-2 symbols (pound)" "£" "$P2"
 check "symbols page2 types page-2 symbols (euro)" "€" "$P2"
 dim "after-symbols-p2"
@@ -430,7 +486,14 @@ CB=$(edit_text)
 if echo "$CB" | grep -q "clipboard-probe-42"; then
   note "PASS: clipboard paste via long-press symbols key ('$CB')"
 else
-  note "long-press path inconclusive ('$CB'); trying toolbar clipboard item"
+  note "long-press path inconclusive ('$CB'); trying the clipboard suggestion item shown in the strip (as in 12_clipboard_popup.png)"
+  STY=$(jq -r '.strip.cy // empty' "$GEOM")
+  if [ -n "$STY" ]; then
+    adb shell input tap 360 $STY; sleep 1.0
+    CB1=$(edit_text); shot 12a_clipboard_strip_item
+    if echo "$CB1" | grep -q "clipboard-probe-42"; then note "PASS: clipboard paste via strip clipboard item ('$CB1')"; CB="$CB1"; fi
+  fi
+  if ! echo "$CB" | grep -q "clipboard-probe-42"; then
   TC=$(jq -r '.strip.clusters // 0' "$GEOM")
   if [ "$TC" -ge 5 ]; then
     TY=$(jq -r '.strip.cy' "$GEOM")
@@ -443,6 +506,7 @@ else
     echo "$CB2" | grep -q "clipboard-probe-42" && note "PASS: clipboard paste via toolbar ('$CB2')" || note "FAIL: clipboard paste ('$CB2')"
   else
     note "FAIL: clipboard paste and no toolbar fallback cells ($TC)"
+  fi
   fi
 fi
 dim "after-clipboard"
@@ -466,9 +530,9 @@ dim "after-toolbar"
 note "== dictation listening state =="
 # strip is already expanded from the toolbar section; first item is voice
 # (settled toolbar order: voice/emoji/undo/redo/clipboard/theme/settings)
-VOICE=$(jq -r '.strip.first // empty | "\(.[0]) \(.[1])"' "$GEOM")
+VOICE=$(jq -r '.keys.strip_mic // empty | "\(.[0]) \(.[1])"' "$GEOM")
 if [ -z "$VOICE" ]; then
-  VOICE=$(jq -r '.keys.strip_mic // empty | "\(.[0]) \(.[1])"' "$GEOM")
+  VOICE=$(jq -r '.strip.first // empty | "\(.[0]) \(.[1])"' "$GEOM")
 fi
 if [ -z "$VOICE" ]; then
   note "FAIL: no voice key in geometry"
@@ -476,7 +540,7 @@ else
   adb shell input tap $VOICE
   sleep 3
   shot 14_dictation_state
-  adb shell pidof "$PKG" >/dev/null && note "PASS: dictation tap - app alive, listening state captured (audio injection N/A in CI; engine transcription validated via dictation-engine artifact)" || note "FAIL: app died after dictation tap"
+  adb shell pidof "$PKG" >/dev/null && note "OBSERVATION: dictation tap done, app alive. NOT a pass: the listening UI must be confirmed from 14_dictation_state.png (an earlier run tapped the wrong strip item). Audio injection N/A in CI." || note "FAIL: app died after dictation tap"
   adb shell input keyevent KEYCODE_BACK
 fi
 sleep 1
@@ -506,6 +570,7 @@ else
 fi
 shot 15_cold2_state
 
+adb logcat -d > shots/logcat_full.txt 2>&1
 note "== final =="
 dim "final"
 CUR=$(adb shell settings get secure default_input_method)
