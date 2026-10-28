@@ -76,14 +76,12 @@ public final class SafeFiles {
             if (!ok) //noinspection ResultOfMethodCallIgnored
                 tmp.delete();
         }
+        // rename(2) replaces an existing file atomically. Never delete dest first: if the move
+        // fails, the original must stay intact.
         if (!tmp.renameTo(dest)) {
             //noinspection ResultOfMethodCallIgnored
-            dest.delete();
-            if (!tmp.renameTo(dest)) {
-                //noinspection ResultOfMethodCallIgnored
-                tmp.delete();
-                throw new IOException("Could not move imported file into place");
-            }
+            tmp.delete();
+            throw new IOException("Could not move imported file into place");
         }
     }
 }

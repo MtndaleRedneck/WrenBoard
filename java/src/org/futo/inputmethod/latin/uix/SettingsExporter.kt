@@ -159,6 +159,27 @@ object SettingsExporter {
         editor.apply()
     }
 
+    /** Same traversal as readSharedPrefs, without applying anything. */
+    private fun checkSharedPrefs(text: String) {
+        val root = JSONObject(text)
+        val keys = root.keys()
+        while (keys.hasNext()) {
+            val k = keys.next()
+            val item = root.getJSONObject(k)
+            when (item.getString("t")) {
+                "b" -> item.getBoolean("v")
+                "i" -> item.getInt("v")
+                "l" -> item.getLong("v")
+                "f" -> item.getDouble("v")
+                "s" -> item.getString("v")
+                "ss" -> {
+                    val arr = item.getJSONArray("v")
+                    for (i in 0 until arr.length()) arr.getString(i)
+                }
+            }
+        }
+    }
+
     private fun writePersonalDict(
         context: Context,
         outputStream: OutputStream
@@ -355,7 +376,7 @@ object SettingsExporter {
     }
 
     /** Reads the whole staged archive without writing anything: checks names and integrity, returns uncompressed bytes. */
-    private fun validateArchive(staged: File, dirs: RestoreDirs): Long {
+    private suspend fun validateArchive(staged: File, dirs: RestoreDirs): Long {
         var total = 0L
         val buf = ByteArray(16384)
         ZipInputStream(staged.inputStream().buffered()).use { zin ->
@@ -366,13 +387,28 @@ object SettingsExporter {
                 // (not the archive's declared size). File entries are bounded by free space.
                 val inMemory = e.name == datastoreFileName || e.name == sharedPreferencesFileName || e.name == personalDictFileName
                 var entryBytes = 0L
+                val held = if(inMemory) java.io.ByteArrayOutputStream() else null
                 var n = zin.read(buf)
                 while(n >= 0) {
                     total += n; entryBytes += n
                     if(inMemory && entryBytes > MAX_IN_MEMORY_ENTRY_BYTES) {
                         throw java.io.IOException("Backup entry ${e.name} is unreasonably large")
                     }
+                    held?.write(buf, 0, n)
                     n = zin.read(buf)
+                }
+                // Parse these entries now (nothing is applied) so a malformed one is rejected before any deletion.
+                if(held != null) {
+                    val bytes = held.toByteArray()
+                    try {
+                        when(e.name) {
+                            datastoreFileName -> PreferencesSerializer.readFrom(bytes.inputStream().source().buffer())
+                            sharedPreferencesFileName -> checkSharedPrefs(bytes.toByteString().utf8())
+                            else -> Json.decodeFromString<List<PersonalWord>>(bytes.toByteString().utf8())
+                        }
+                    } catch(ex: Exception) {
+                        throw java.io.IOException("Backup entry ${e.name} could not be parsed: ${ex.message}")
+                    }
                 }
                 zin.closeEntry()
                 e = zin.nextEntry
