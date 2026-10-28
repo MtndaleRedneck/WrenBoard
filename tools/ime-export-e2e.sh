@@ -36,6 +36,7 @@ else
   adb shell "unzip -l '$EXPF' 2>/dev/null || true" | head -30 | sed 's/^/    /' | tee -a "$R"
   TU=$(adb shell stat -c %u /data/data/com.wrenboard.imetarget | tr -d '\r')
   adb shell "mkdir -p /data/data/com.wrenboard.imetarget/files && cp '$EXPF' /data/data/com.wrenboard.imetarget/files/exp.backup && chown -R $TU:$TU /data/data/com.wrenboard.imetarget/files"
+    adb shell "restorecon -R /data/data/com.wrenboard.imetarget/files 2>/dev/null; ls -lZ /data/data/com.wrenboard.imetarget/files/exp.backup; md5sum '$EXPF' /data/data/com.wrenboard.imetarget/files/exp.backup; run-as com.wrenboard.imetarget sh -c 'wc -c < files/exp.backup' 2>&1" | tr -d '\r' | sed 's/^/    copy-check: /' | tee -a "$R"
   # 3. fresh install: remove the app and all its data, install again
   adb shell input keyevent KEYCODE_HOME
   adb uninstall $APP >/dev/null 2>&1; sleep 2

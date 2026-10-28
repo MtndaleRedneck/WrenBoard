@@ -40,6 +40,7 @@ if adb shell id 2>/dev/null | grep -q "uid=0"; then
     if [ "${LCNT:-0}" -gt 0 ]; then note "PASS: export contains $LCNT userdict/ entries (typed learned data was exported)"; else note "FAIL: export contains NO userdict/ entries although words were typed (or unzip unavailable on the emulator: check)"; fi
     TU=$(adb shell stat -c %u /data/data/com.wrenboard.imetarget | tr -d '\r')
     adb shell "mkdir -p /data/data/com.wrenboard.imetarget/files && cp '$LEXP' /data/data/com.wrenboard.imetarget/files/exp.backup && chown -R $TU:$TU /data/data/com.wrenboard.imetarget/files"
+    adb shell "restorecon -R /data/data/com.wrenboard.imetarget/files 2>/dev/null; ls -lZ /data/data/com.wrenboard.imetarget/files/exp.backup; md5sum '$LEXP' /data/data/com.wrenboard.imetarget/files/exp.backup; run-as com.wrenboard.imetarget sh -c 'wc -c < files/exp.backup' 2>&1" | tr -d '\r' | sed 's/^/    copy-check: /' | tee -a "$R"
     # change the learned words on the RUNNING instance: learn another word
     adb unroot >/dev/null 2>&1; sleep 3; adb wait-for-device
     precond learn2; clear_field
