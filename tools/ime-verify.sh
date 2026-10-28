@@ -38,8 +38,10 @@ fail_early() {
   adb shell dumpsys input_method > shots/dumpsys_ime.txt 2>&1
   adb shell ime list -a >> shots/dumpsys_ime.txt 2>&1
   adb shell dumpsys window > shots/dumpsys_window.txt 2>&1
-  adb logcat -d -t 400 > shots/logcat_tail.txt 2>&1
-  note "ABORTED with decisive logs (dumpsys_ime/dumpsys_window/logcat_tail)"
+  adb logcat -d > shots/logcat_full.txt 2>&1
+  adb logcat -b crash -d > shots/logcat_crash.txt 2>&1
+  adb logcat -b system -d > shots/logcat_system.txt 2>&1
+  note "ABORTED with decisive logs (dumpsys_ime/dumpsys_window/logcat_full/crash/system)"
   exit 1
 }
 
@@ -124,10 +126,37 @@ sleep 3
 dim "target-launched"
 B=$(edit_bounds)
 [ -n "$B" ] && tap_bounds "$B" || fail_early "EditText node not found in ime-target"
-sleep 2
+# poll default IME for 10s after focus: pin any fallback flip to its exact time
+FLIP=""
+for i in 1 2 3 4 5 6 7 8 9 10; do
+  sleep 1
+  CURI=$(adb shell settings get secure default_input_method)
+  if ! echo "$CURI" | grep -q "$PKG"; then FLIP="t+${i}s -> $CURI"; break; fi
+done
 dim "field-tapped"
+[ -n "$FLIP" ] && note "DEFAULT-IME FLIP DETECTED: $FLIP"
 focus_log
-shot 02_keyboard
+if [ -n "$FLIP" ]; then
+  note "capturing full buffers at flip moment"
+  adb logcat -d > shots/logcat_at_flip.txt 2>&1
+  adb logcat -b crash -d > shots/logcat_crash_at_flip.txt 2>&1
+  adb logcat -b system -d > shots/logcat_system_at_flip.txt 2>&1
+  note "recovery probe: re-set IME and retap field"
+  adb shell ime set "$IME" >> "$R" 2>&1
+  B=$(edit_bounds); [ -n "$B" ] && tap_bounds "$B"
+  sleep 3
+  CUR2=$(adb shell settings get secure default_input_method)
+  if echo "$CUR2" | grep -q "$PKG"; then
+    note "RECOVERY-PROBE: second attempt HOLDS (first-session race, not persistent fault)"
+    shot 02_keyboard
+  else
+    note "RECOVERY-PROBE: second attempt FLIPPED AGAIN -> $CUR2 (persistent fault)"
+    shot 02_keyboard
+    fail_early "default IME flips to $CUR2 on every input session"
+  fi
+else
+  shot 02_keyboard
+fi
 dump > shots/ui_keyboard.xml 2>/dev/null
 geom_rebuild 02_keyboard 02_keyboard_overlay
 GRC=$?
