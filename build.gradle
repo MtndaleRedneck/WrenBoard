@@ -201,8 +201,8 @@ android {
         versionName getVersionName()
         versionCode getVersionCode()
 
-        applicationId 'org.futo.inputmethod.latin'
-        testApplicationId 'org.futo.inputmethod.latin.tests'
+        applicationId 'com.wrenboard.keyboard'
+        testApplicationId 'com.wrenboard.keyboard.tests'
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = false
     }
@@ -289,7 +289,7 @@ android {
 
             buildConfigField "boolean", "IS_PLAYSTORE_BUILD", "false"
             buildConfigField "boolean", "UPDATE_CHECKING", "true"
-            buildConfigField "boolean", "UPDATE_CHECKING_NETWORK", "false"
+            buildConfigField "boolean", "UPDATE_CHECKING_NETWORK", "true"
             buildConfigField "String", "BRANCH", "\"${getBranch()}\""
             getIsDefault().set(true)
 
@@ -300,7 +300,7 @@ android {
             dimension "buildType"
             buildConfigField "boolean", "IS_PLAYSTORE_BUILD", "false"
             buildConfigField "boolean", "UPDATE_CHECKING", "true"
-            buildConfigField "boolean", "UPDATE_CHECKING_NETWORK", "false"
+            buildConfigField "boolean", "UPDATE_CHECKING_NETWORK", "true"
             buildConfigField "String", "BRANCH", "\"${getBranch()}\""
 
             buildConfigField "String", "PAYMENT_PRICE", "FUTOPAY_PRICE"

@@ -18,6 +18,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment.Companion.CenterVertically
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -37,6 +38,7 @@ import org.futo.inputmethod.latin.uix.SYSTEM_VOICE_INPUT_PACKAGE
 import org.futo.inputmethod.latin.uix.TextEditPopupActivity
 import org.futo.inputmethod.latin.uix.USE_SYSTEM_VOICE_INPUT
 import org.futo.inputmethod.latin.uix.settings.NavigationItem
+import org.futo.inputmethod.latin.uix.settings.useDataStore
 import org.futo.inputmethod.latin.uix.settings.NavigationItemStyle
 import org.futo.inputmethod.latin.uix.settings.UserSetting
 import org.futo.inputmethod.latin.uix.settings.UserSettingsMenu
@@ -46,6 +48,11 @@ import org.futo.inputmethod.latin.uix.settings.userSettingDecorationOnly
 import org.futo.inputmethod.latin.uix.settings.userSettingNavigationItem
 import org.futo.inputmethod.latin.uix.theme.Typography
 import org.futo.inputmethod.updates.ConditionalMigrateUpdateNotice
+import org.futo.inputmethod.updates.FeedbackCard
+import org.futo.inputmethod.updates.LAST_UPDATE_CHECK_RESULT
+import org.futo.inputmethod.updates.SKIPPED_UPDATE_VERSION
+import org.futo.inputmethod.updates.UpdateResult
+import org.futo.inputmethod.updates.UpdatesCard
 import org.futo.inputmethod.updates.openManualUpdateCheck
 
 val HomeScreenLite = UserSettingsMenu(
@@ -187,6 +194,16 @@ fun HomeScreen(navController: NavHostController = rememberNavController()) {
     val isDeveloper = useDataStoreValue(IS_DEVELOPER)
     val isPaid = useDataStoreValue(IS_ALREADY_PAID)
 
+    // Prompt on entry when a newer version is known and not skipped
+    val (updateInfo, _) = useDataStore(key = LAST_UPDATE_CHECK_RESULT, default = "")
+    val (skippedVersion, _) = useDataStore(key = SKIPPED_UPDATE_VERSION, default = -1)
+    LaunchedEffect(updateInfo, skippedVersion) {
+        val result = UpdateResult.fromString(updateInfo)
+        if(result != null && result.isNewer() && result.nextVersion != skippedVersion) {
+            navController.navigate("update")
+        }
+    }
+
     Column {
         Column(
             modifier = Modifier
@@ -215,6 +232,9 @@ fun HomeScreen(navController: NavHostController = rememberNavController()) {
             ConditionalUnpaidNoticeWithNav(navController)
 
             HomeScreenLite.render(showTitle = false)
+
+            UpdatesCard(navController)
+            FeedbackCard()
 
 
             Spacer(modifier = Modifier.height(16.dp))

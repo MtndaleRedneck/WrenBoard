@@ -164,6 +164,16 @@
     <string name="theme_rainbow">Rainbow</string>
     <string name="theme_snowfall">Snowfall</string>
     <string name="theme_steel_gray">Steel Gray</string>
+    <string name="theme_wrenboard">WrenBoard</string>
+    <string name="updates_card_title">Updates</string>
+    <string name="updates_card_new_version">Version %1$s is available.</string>
+    <string name="updates_card_up_to_date">WrenBoard checks for new versions automatically.</string>
+    <string name="updates_card_view_update">View update</string>
+    <string name="updates_card_check_now">Check now</string>
+    <string name="updates_card_skip">Skip this version</string>
+    <string name="feedback_card_title">Feedback</string>
+    <string name="feedback_card_body">Report a problem or suggest an idea.</string>
+    <string name="feedback_card_button">Open feedback page</string>
     <string name="theme_sunflower">Sunflower</string>
     <string name="theme_cotton_candy">Cotton Candy</string>
     <string name="theme_hotdog">Hot Dog</string>

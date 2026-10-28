@@ -1974,8 +1974,16 @@ public final class InputLogic {
      * @param settingsValues The current settings values.
      */
     private void performRecapitalization(final SettingsValues settingsValues) {
-        if (!mConnection.hasSelection() || !mRecapitalizeStatus.mIsEnabled()) {
-            return; // No selection or recapitalize is disabled for now
+        if (!mRecapitalizeStatus.mIsEnabled()) {
+            return; // Recapitalize is disabled for now
+        }
+        if (!mConnection.hasSelection()) {
+            // SwiftKey-style: with no selection, cycle the capitalization of the word
+            // immediately before the cursor.
+            selectWordBeforeCursorForRecapitalization(settingsValues);
+            if (!mConnection.hasSelection()) {
+                return;
+            }
         }
         final int selectionStart = mConnection.getExpectedSelectionStart();
         final int selectionEnd = mConnection.getExpectedSelectionEnd();
@@ -2005,6 +2013,39 @@ public final class InputLogic {
         mConnection.send();
         mConnection.setSelection(mRecapitalizeStatus.getNewCursorStart(),
                 mRecapitalizeStatus.getNewCursorEnd());
+    }
+
+    /**
+     * Selects the word immediately before the cursor so that shift-tap cycles its
+     * capitalization. Does nothing when a word is being composed or when the character
+     * right before the cursor is a separator.
+     */
+    private void selectWordBeforeCursorForRecapitalization(final SettingsValues settingsValues) {
+        if (mWordComposer.isComposingWord()) {
+            return;
+        }
+        final int cursorPosition = mConnection.getExpectedSelectionEnd();
+        final CharSequence textBeforeCursor = mConnection.getTextBeforeCursor(
+                Constants.MAX_CHARACTERS_FOR_RECAPITALIZATION, 0);
+        if (TextUtils.isEmpty(textBeforeCursor)) {
+            return;
+        }
+        final int[] separators = settingsValues.mSpacingAndPunctuations.sortedWordSeparators;
+        int wordStart = textBeforeCursor.length();
+        while (wordStart > 0) {
+            final int codePoint = Character.codePointBefore(textBeforeCursor, wordStart);
+            if (java.util.Arrays.binarySearch(separators, codePoint) >= 0
+                    || Character.isWhitespace(codePoint)) {
+                break;
+            }
+            wordStart -= Character.charCount(codePoint);
+        }
+        final int wordLength = textBeforeCursor.length() - wordStart;
+        if (wordLength <= 0) {
+            return;
+        }
+        mConnection.setSelection(cursorPosition - wordLength, cursorPosition);
+        mConnection.send();
     }
 
     private void performAdditionToUserHistoryDictionary(final SettingsValues settingsValues,

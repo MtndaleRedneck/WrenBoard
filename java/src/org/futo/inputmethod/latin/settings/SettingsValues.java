@@ -176,12 +176,12 @@ public class SettingsValues {
                         RegistryKt.getDefaultActionKey()
                 ));
         mShowsActionKey = mActionKeyId != -1;
-        mIsNumberRowEnabledByUser = prefs.getBoolean(Settings.PREF_ENABLE_NUMBER_ROW, false);
+        mIsNumberRowEnabledByUser = prefs.getBoolean(Settings.PREF_ENABLE_NUMBER_ROW, true);
         mIsNumberRowEnabled = mIsNumberRowEnabledByUser
                 || (inputAttributes.mIsPasswordField && !inputAttributes.mIsNumericalPasswordField)
                 || inputAttributes.mIsEmailField;
         mUseLocalNumbers = !prefs.getBoolean(Settings.PREF_USE_WESTERN_NUMERALS, false);
-        mIsArrowRowEnabled = prefs.getBoolean(Settings.PREF_ENABLE_ARROW_ROW, false);
+        mIsArrowRowEnabled = prefs.getBoolean(Settings.PREF_ENABLE_ARROW_ROW, true);
         mIsUsingAlternativePeriodKey = prefs.getBoolean(Settings.PREF_ENABLE_ALT_PERIOD_KEY, false) && SettingsValues.altPeriodKeyAllowedForLocale(mLocale);
         mUseDictionaryKeyBoosting = prefs.getBoolean(Settings.PREF_USE_DICT_KEY_BOOSTING, true);
         mUseContactsDict = prefs.getBoolean(Settings.PREF_KEY_USE_CONTACTS_DICT, true);
@@ -211,9 +211,9 @@ public class SettingsValues {
                 legacySpacebarMode == Settings.SPACEBAR_MODE_SWIPE_CURSOR_LEGACY ? Settings.SPACEBAR_MODE_LANGUAGE : Settings.SPACEBAR_MODE_CURSOR);
 
         mBackspaceMode = prefs.getInt(Settings.PREF_BACKSPACE_MODE, Settings.BACKSPACE_MODE_CHARACTERS);
-        mBackspaceModeHold = prefs.getInt(Settings.PREF_BACKSPACE_MODE_HOLD, mBackspaceMode);
+        mBackspaceModeHold = prefs.getInt(Settings.PREF_BACKSPACE_MODE_HOLD, Settings.BACKSPACE_MODE_WORDS);
         mNumberRowMode = mIsNumberRowEnabledByUser ?
-                prefs.getInt(Settings.PREF_NUMBER_ROW_MODE, Settings.NUMBER_ROW_MODE_DEFAULT)
+                prefs.getInt(Settings.PREF_NUMBER_ROW_MODE, Settings.NUMBER_ROW_MODE_CLASSIC)
                 : Settings.NUMBER_ROW_MODE_DEFAULT;
         mAltSpacesMode = inputAttributes.mIsEmailField ? Settings.SPACES_MODE_NONE : prefs.getInt(Settings.PREF_ALT_SPACES_MODE, Settings.DEFAULT_ALT_SPACES_MODE);
 

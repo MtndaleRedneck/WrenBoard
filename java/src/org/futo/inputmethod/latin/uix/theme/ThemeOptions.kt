@@ -23,6 +23,7 @@ import org.futo.inputmethod.latin.uix.theme.presets.Gradient1
 import org.futo.inputmethod.latin.uix.theme.presets.HotDog
 import org.futo.inputmethod.latin.uix.theme.presets.Snowfall
 import org.futo.inputmethod.latin.uix.theme.presets.SteelGray
+import org.futo.inputmethod.latin.uix.theme.presets.WrenBoardTheme
 import org.futo.inputmethod.latin.uix.theme.presets.Sunflower
 import org.futo.inputmethod.latin.uix.theme.presets.VoiceInputTheme
 import org.futo.inputmethod.latin.uix.theme.presets.DevTheme
@@ -50,6 +51,7 @@ val ThemeOptions = mapOf(
 
     Sunflower.key to Sunflower,
     Snowfall.key to Snowfall,
+    WrenBoardTheme.key to WrenBoardTheme,
     SteelGray.key to SteelGray,
     Emerald.key to Emerald,
     CottonCandy.key to CottonCandy,
@@ -71,11 +73,7 @@ fun defaultThemeOption(context: Context): ThemeOption =
     if(context.resources.getBoolean(R.bool.use_dev_styling)) {
         DevTheme
     } else {
-        if(DynamicSystemTheme.available(context)) {
-            DynamicSystemTheme
-        } else {
-            DefaultDarkScheme
-        }
+        WrenBoardTheme
     }
 
 fun getThemeOption(context: Context, key: String): ThemeOption? {

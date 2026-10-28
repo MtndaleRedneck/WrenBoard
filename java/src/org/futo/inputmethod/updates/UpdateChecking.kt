@@ -9,66 +9,84 @@ import android.util.Log
 import androidx.datastore.preferences.core.edit
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
-//import okhttp3.OkHttpClient
-//import okhttp3.Request
-//import okhttp3.internal.closeQuietly
 import org.futo.inputmethod.latin.uix.dataStore
 import org.futo.inputmethod.latin.uix.getSetting
 import org.futo.inputmethod.latin.BuildConfig
 import java.lang.Exception
+import java.net.HttpURLConnection
+import java.net.URL
 
-const val UPDATE_URL = "https://keyboard.futo.tech/keyboard_version"
+const val UPDATE_URL = "https://api.github.com/repos/MtndaleRedneck/WrenBoard/releases/latest"
+const val RELEASES_PAGE_URL = "https://github.com/MtndaleRedneck/WrenBoard/releases/latest"
+
+@Serializable
+private data class GithubAsset(
+    val name: String = "",
+    val browser_download_url: String = ""
+)
+
+@Serializable
+private data class GithubRelease(
+    val tag_name: String = "",
+    val draft: Boolean = false,
+    val prerelease: Boolean = false,
+    val assets: List<GithubAsset> = emptyList()
+)
+
+private val updateJson = Json { ignoreUnknownKeys = true }
+
+fun versionStringToCode(version: String): Int {
+    val core = version.substringBefore('-').removePrefix("v")
+    val parts = core.split(".")
+    if(parts.isEmpty() || parts.any { it.toIntOrNull() == null }) return -1
+    val major = parts.getOrElse(0) { "0" }.toInt()
+    val minor = parts.getOrElse(1) { "0" }.toInt()
+    val patch = parts.getOrElse(2) { "0" }.toInt()
+    return major * 1000000 + minor * 1000 + patch
+}
 
 suspend fun checkForUpdate(): UpdateResult? {
     if(!BuildConfig.UPDATE_CHECKING || !BuildConfig.UPDATE_CHECKING_NETWORK) return null
-    else return null
 
-    // TODO: Move this code to a different source directory so we can enable or disable
-    // it per build flavor (e.g. so nightly can have update checking)
-    /*
     return withContext(Dispatchers.IO) {
-        val httpClient = OkHttpClient()
-
-        val request = Request.Builder().method("GET", null).url(UPDATE_URL).build()
-
         try {
-            val response = httpClient.newCall(request).execute()
-
-            val body = response.body
-            val result = if (body != null) {
-                val data = body.string().lines()
-                body.closeQuietly()
-
-                val latestVersion = data[0].toInt()
-                val latestVersionUrl = data[1]
-                val latestVersionString = data[2]
-                if(latestVersionUrl.startsWith("https://voiceinput.futo.org/") || latestVersionUrl.startsWith("https://keyboard.futo.org/")){
-                    Log.d("UpdateChecking", "Retrieved update for version ${latestVersionString}")
-                    UpdateResult(
-                        nextVersion = latestVersion,
-                        apkUrl = latestVersionUrl,
-                        nextVersionString = latestVersionString
-                    )
-                } else {
-                    Log.e("UpdateChecking", "Update URL contains unknown prefix: ${latestVersionUrl}")
-                    null
-                }
-            } else {
-                Log.e("UpdateChecking", "Body of result is null")
-                null
+            val connection = (URL(UPDATE_URL).openConnection() as HttpURLConnection).apply {
+                connectTimeout = 10000
+                readTimeout = 10000
+                setRequestProperty("Accept", "application/vnd.github+json")
+                setRequestProperty("User-Agent", "WrenBoard-UpdateCheck")
             }
 
-            response.closeQuietly()
+            val body = connection.inputStream.bufferedReader().use { it.readText() }
+            connection.disconnect()
 
-            result
+            val release = updateJson.decodeFromString<GithubRelease>(body)
+            if(release.draft || release.prerelease) return@withContext null
+
+            val versionString = release.tag_name.removePrefix("v")
+            val nextVersion = versionStringToCode(versionString)
+            if(nextVersion <= 0) return@withContext null
+
+            val apkUrl = release.assets
+                .firstOrNull { it.name.endsWith(".apk") }
+                ?.browser_download_url
+                ?: return@withContext null
+
+            Log.d("UpdateChecking", "Retrieved update for version $versionString")
+            UpdateResult(
+                nextVersion = nextVersion,
+                apkUrl = apkUrl,
+                nextVersionString = versionString
+            )
         } catch (e: Exception) {
             Log.e("UpdateChecking", "Checking update failed with exception")
             e.printStackTrace()
             null
         }
-    }*/
+    }
 }
 
 suspend fun checkForUpdateAndSaveToPreferences(context: Context): Boolean {

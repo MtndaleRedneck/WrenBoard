@@ -11,6 +11,7 @@ import android.content.pm.PackageInstaller
 import android.util.Log
 import android.view.WindowManager
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Info
@@ -46,8 +47,10 @@ import kotlinx.coroutines.withContext
 import org.futo.inputmethod.latin.R
 import org.futo.inputmethod.latin.uix.InfoDialog
 import org.futo.inputmethod.latin.uix.getSetting
+import org.futo.inputmethod.latin.uix.setSetting
 import org.futo.inputmethod.updates.InstallReceiver
 import org.futo.inputmethod.updates.LAST_UPDATE_CHECK_RESULT
+import org.futo.inputmethod.updates.SKIPPED_UPDATE_VERSION
 import org.futo.inputmethod.updates.UpdateResult
 import org.futo.inputmethod.updates.openURI
 import java.io.ByteArrayOutputStream
@@ -254,10 +257,20 @@ fun UpdateDialog(navController: NavHostController) {
                 }
             },
             dismissButton = {
-                TextButton(onClick = {
-                    navController.navigateUp()
-                }, enabled = !isDownloading.value) {
-                    Text(stringResource(R.string.autoupdater_dismiss_update))
+                Row {
+                    TextButton(onClick = {
+                        scope.lifecycleScope.launch {
+                            context.setSetting(SKIPPED_UPDATE_VERSION, lastUpdateResult.nextVersion)
+                        }
+                        navController.navigateUp()
+                    }, enabled = !isDownloading.value) {
+                        Text(stringResource(R.string.updates_card_skip))
+                    }
+                    TextButton(onClick = {
+                        navController.navigateUp()
+                    }, enabled = !isDownloading.value) {
+                        Text(stringResource(R.string.autoupdater_dismiss_update))
+                    }
                 }
             }
         )

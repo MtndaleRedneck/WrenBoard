@@ -18,7 +18,7 @@ data class UpdateResult(
 
     companion object {
         fun currentVersion(): Int {
-            return BuildConfig.VERSION_CODE
+            return versionStringToCode(BuildConfig.VERSION_NAME)
         }
 
         fun currentVersionString(): String {

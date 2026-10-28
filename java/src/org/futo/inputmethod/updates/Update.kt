@@ -28,6 +28,8 @@ import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.navigation.NavHostController
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import androidx.navigation.compose.rememberNavController
 import org.futo.inputmethod.latin.BuildConfig
 import org.futo.inputmethod.latin.R
@@ -43,7 +45,9 @@ import org.futo.inputmethod.latin.uix.settings.useDataStore
 val LAST_UPDATE_CHECK_RESULT = stringPreferencesKey("last_update_check_result")
 val LAST_UPDATE_CHECK_FAILED = booleanPreferencesKey("last_update_check_failed")
 
-val DISABLE_UPDATE_REMINDER = SettingsKey(booleanPreferencesKey("disable_update_reminder"), false)
+val DISABLE_UPDATE_REMINDER = SettingsKey(booleanPreferencesKey("disable_update_reminder"), true)
+
+val SKIPPED_UPDATE_VERSION = intPreferencesKey("skipped_update_version")
 
 val DEFER_MANUAL_UPDATE_UNTIL = longPreferencesKey("defer_manual_update_until")
 val DEFERMENT_VERSION = intPreferencesKey("defer_manual_update_version")
@@ -96,13 +100,7 @@ fun Context.openURI(uri: String, newTask: Boolean = false) {
 }
 
 fun Context.openManualUpdateCheck() {
-    openURI("https://keyboard.futo.tech/manual_update?version=${BuildConfig.VERSION_CODE}&build=${BuildConfig.FLAVOR}".let {
-        if(BuildConfig.BRANCH != "master") {
-            it + "&branch=${BuildConfig.BRANCH}&name=${BuildConfig.VERSION_NAME}"
-        } else {
-            it
-        }
-    }, newTask = true)
+    openURI(RELEASES_PAGE_URL, newTask = true)
 }
 
 @Composable
@@ -120,7 +118,8 @@ fun ConditionalUpdate(navController: NavHostController = rememberNavController()
     }
 
     val context = LocalContext.current
-    if(lastUpdateResult != null && lastUpdateResult.isNewer()) {
+    val (skippedVersion, _) = useDataStore(key = SKIPPED_UPDATE_VERSION, default = -1)
+    if(lastUpdateResult != null && lastUpdateResult.isNewer() && lastUpdateResult.nextVersion != skippedVersion) {
         SettingItem(
             title = stringResource(R.string.settings_update_available),
             subtitle = "${UpdateResult.currentVersionString()} -> ${lastUpdateResult.nextVersionString}",
@@ -145,7 +144,7 @@ fun ConditionalUpdate(navController: NavHostController = rememberNavController()
 
 val dismissedMigrateUpdateNotice = SettingsKey(
     key = booleanPreferencesKey("dismissedMigrateFdroidObtainiumNotice"),
-    default = BuildConfig.IS_PLAYSTORE_BUILD
+    default = true
 )
 
 @Composable
@@ -170,7 +169,7 @@ fun ConditionalMigrateUpdateNotice() {
             ) {
                 Box(modifier = Modifier.weight(1.0f)) {
                     Button(onClick = {
-                        context.openURI("https://keyboard.futo.tech/#downloads")
+                        context.openURI(RELEASES_PAGE_URL)
                     }, modifier = Modifier.align(Alignment.Center)) {
                         Text(stringResource(R.string.manual_update_notice_visit_site_button))
                     }
@@ -186,6 +185,63 @@ fun ConditionalMigrateUpdateNotice() {
                         Text(stringResource(R.string.manual_update_notice_dismiss_notice_button))
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+fun UpdatesCard(navController: NavHostController) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val (updateInfo, _) = useDataStore(key = LAST_UPDATE_CHECK_RESULT, default = "")
+    val (skipped, _) = useDataStore(key = SKIPPED_UPDATE_VERSION, default = -1)
+    val result = if(!LocalInspectionMode.current) {
+        UpdateResult.fromString(updateInfo)
+    } else {
+        UpdateResult(1000000, "https://example.com/app.apk", "1.0.0")
+    }
+    val newer = result != null && result.isNewer() && result.nextVersion != skipped
+
+    PaymentSurface(isPrimary = true) {
+        PaymentSurfaceHeading(stringResource(R.string.updates_card_title))
+
+        ParagraphText(
+            if(newer) {
+                stringResource(R.string.updates_card_new_version, result!!.nextVersionString)
+            } else {
+                stringResource(R.string.updates_card_up_to_date)
+            }
+        )
+
+        Row(modifier = Modifier.fillMaxWidth()) {
+            Button(onClick = {
+                scope.launch {
+                    checkForUpdateAndSaveToPreferences(context)
+                    navController.navigate("update")
+                }
+            }, modifier = Modifier.align(Alignment.CenterVertically)) {
+                Text(stringResource(
+                    if(newer) R.string.updates_card_view_update else R.string.updates_card_check_now
+                ))
+            }
+        }
+    }
+}
+
+@Composable
+fun FeedbackCard() {
+    val context = LocalContext.current
+    PaymentSurface(isPrimary = true) {
+        PaymentSurfaceHeading(stringResource(R.string.feedback_card_title))
+
+        ParagraphText(stringResource(R.string.feedback_card_body))
+
+        Row(modifier = Modifier.fillMaxWidth()) {
+            Button(onClick = {
+                context.openURI("https://github.com/MtndaleRedneck/WrenBoard/issues", newTask = true)
+            }, modifier = Modifier.align(Alignment.CenterVertically)) {
+                Text(stringResource(R.string.feedback_card_button))
             }
         }
     }

@@ -37,7 +37,7 @@ import org.futo.inputmethod.v2keyboard.KeyVisualStyle
 
 val KeyBordersSetting = SettingsKey(booleanPreferencesKey("keyBorders"), true)
 val HiddenKeysSetting = SettingsKey(booleanPreferencesKey("hiddenKeys1"), false)
-val KeyHintsSetting   = SettingsKey(booleanPreferencesKey("keyHints"), false)
+val KeyHintsSetting   = SettingsKey(booleanPreferencesKey("keyHints"), true)
 
 fun<T> Preferences.get(key: SettingsKey<T>): T {
     return this[key.key] ?: key.default

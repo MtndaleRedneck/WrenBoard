@@ -21,6 +21,7 @@ val FunctionalAttributes = KeyAttributes(
 )
 
 private val ShiftMoreKeys = listOf("!noPanelAutoMoreKey!", " |!code/key_capslock")
+private val SymbolsMoreKeys = listOf("!noPanelAutoMoreKey!", "!icon/action_clipboard_history|!code/action_clipboard_history")
 
 
 interface TemplatedKey : AbstractKey {
@@ -93,6 +94,7 @@ val TemplateDeleteKey = DeleteKey()
 data class SymbolsKey(val attributes: KeyAttributes = KeyAttributes()) : TemplatedKey {
     override val templateKey: Key = BaseKey(
         spec = "!text/keylabel_to_symbol|!code/key_switch_alpha_symbol",
+        moreKeys = SymbolsMoreKeys,
         attributes = attributes + FunctionalAttributes
     )
 }
