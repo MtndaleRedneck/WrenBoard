@@ -21,7 +21,18 @@ GEOM=shots/geom.json
 shot() { adb exec-out screencap -p > "shots/$1.png"; echo "shot $1" >> "$R"; }
 note() { echo "$1" | tee -a "$R"; }
 check() { if echo "$3" | grep -qi "$2"; then note "PASS: $1"; else note "FAIL: $1 (wanted '$2' in '${3:0:160}')"; fi; }
-dump() { adb shell uiautomator dump /sdcard/ui.xml >/dev/null 2>&1; adb shell cat /sdcard/ui.xml; }
+dump() {
+  local i x
+  for i in 1 2 3 4; do
+    adb shell rm -f /sdcard/ui.xml
+    adb shell uiautomator dump /sdcard/ui.xml >/dev/null 2>&1
+    x=$(adb shell cat /sdcard/ui.xml 2>/dev/null)
+    if echo "$x" | grep -q "<hierarchy"; then echo "$x"; return 0; fi
+    sleep 0.6
+  done
+  echo ""
+  return 1
+}
 
 dim() { # dim <step-label>: log default_input_method ownership
   local cur
@@ -46,7 +57,7 @@ fail_early() {
 }
 
 tap_bounds() { local nums x1 y1 x2 y2; nums=$(echo "$1" | grep -o '[0-9]*' | tr '\n' ' '); read -r x1 y1 x2 y2 <<< "$nums"; adb shell input tap $(( (x1+x2)/2 )) $(( (y1+y2)/2 )); }
-node_bounds() { dump | tr '>' '>\n' | grep "$1" | grep -o 'bounds="\[[0-9]*,[0-9]*\]\[[0-9]*,[0-9]*\]"' | head -1; }
+node_bounds() { dump | tr '>' '>\n' | grep -i "$1" | grep -o 'bounds="\[[0-9]*,[0-9]*\]\[[0-9]*,[0-9]*\]"' | head -1; }
 tap_node() { local b; b=$(node_bounds "$1"); [ -z "$b" ] && return 1; tap_bounds "$b"; sleep 0.4; }
 edit_bounds() { node_bounds 'class="android.widget.EditText"'; }
 edit_text() { dump | tr '>' '>\n' | grep 'class="android.widget.EditText"' | grep -o 'text="[^"]*"' | head -1 | sed 's/^text="//; s/"$//'; }
@@ -134,7 +145,7 @@ for i in 1 2 3 4 5 6 7 8 9 10; do
   if ! echo "$CURI" | grep -q "$PKG"; then FLIP="t+${i}s -> $CURI"; break; fi
 done
 dim "field-tapped"
-[ -n "$FLIP" ] && note "DEFAULT-IME FLIP DETECTED: $FLIP"
+if [ -n "$FLIP" ]; then note "COLD-SESSION-1 FLIP DETECTED: $FLIP"; else note "COLD-SESSION-1: no flip (held 10s)"; fi
 focus_log
 if [ -n "$FLIP" ]; then
   note "capturing full buffers at flip moment"
@@ -147,10 +158,10 @@ if [ -n "$FLIP" ]; then
   sleep 3
   CUR2=$(adb shell settings get secure default_input_method)
   if echo "$CUR2" | grep -q "$PKG"; then
-    note "RECOVERY-PROBE: second attempt HOLDS (first-session race, not persistent fault)"
+    note "WARM-SESSION (recovery probe): second attempt HOLDS - cold-first-session-only switch, not persistent"
     shot 02_keyboard
   else
-    note "RECOVERY-PROBE: second attempt FLIPPED AGAIN -> $CUR2 (persistent fault)"
+    note "WARM-SESSION (recovery probe): FLIPPED AGAIN -> $CUR2 - persistent fault"
     shot 02_keyboard
     fail_early "default IME flips to $CUR2 on every input session"
   fi
@@ -383,6 +394,31 @@ else
   adb shell input keyevent KEYCODE_BACK
 fi
 sleep 1
+
+note "== cold session 2 (force-stop -> second cold sample) =="
+adb shell am force-stop $PKG
+sleep 2
+adb shell am start -n com.wrenboard.imetarget/.TestInput >/dev/null 2>&1
+sleep 2
+B=$(edit_bounds); [ -n "$B" ] && tap_bounds "$B"
+FLIP2=""
+for i in 1 2 3 4 5 6 7 8 9 10; do
+  sleep 1
+  CURI=$(adb shell settings get secure default_input_method)
+  if ! echo "$CURI" | grep -q "$PKG"; then FLIP2="t+${i}s -> $CURI"; break; fi
+done
+if [ -n "$FLIP2" ]; then
+  note "COLD-SESSION-2 FLIP DETECTED: $FLIP2"
+  adb logcat -d > shots/logcat_at_flip2.txt 2>&1
+  adb logcat -b crash -d > shots/logcat_crash_at_flip2.txt 2>&1
+  adb shell ime set "$IME" >> "$R" 2>&1
+  B=$(edit_bounds); [ -n "$B" ] && tap_bounds "$B"; sleep 3
+  CUR2=$(adb shell settings get secure default_input_method)
+  if echo "$CUR2" | grep -q "$PKG"; then note "WARM-SESSION-2: holds after re-set"; else note "WARM-SESSION-2: flipped again -> $CUR2"; fi
+else
+  note "COLD-SESSION-2: no flip (held 10s)"
+fi
+shot 15_cold2_state
 
 note "== final =="
 dim "final"
