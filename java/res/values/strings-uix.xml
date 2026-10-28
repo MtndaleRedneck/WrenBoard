@@ -652,8 +652,8 @@
     <string name="help_menu_futo_chat_subtitle">Wanna talk but don\'t like Discord? Chat here</string>
     <string name="help_menu_github">Public issue tracker (GitHub)</string>
     <string name="help_menu_github_subtitle">Specific bug or feature request? Post here</string>
-    <string name="help_menu_email">Email keyboard@futo.org</string>
-    <string name="help_menu_email_subtitle">Private feedback, help, or don\'t use GitHub? Email us</string>
+    <string name="help_menu_email">Send feedback (form)</string>
+    <string name="help_menu_email_subtitle">Private feedback or help? Fill in the feedback form</string>
     <string name="help_menu_email_tags">gmail, support, contact, help, broken, bug, error, issue, problem, complaint, ticket, payment, support, glitch, malfunction, fix, customer service, crash, question, inquiry, assistance</string>
 
     <!-- Setup configuration -->

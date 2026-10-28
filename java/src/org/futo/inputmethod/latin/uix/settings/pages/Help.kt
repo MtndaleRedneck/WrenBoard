@@ -126,7 +126,7 @@ val HelpMenu = UserSettingsMenu(
             subtitle = R.string.help_menu_github_subtitle,
             style = NavigationItemStyle.Misc,
             navigate = { nav ->
-                nav.context.openURI("https://github.com/futo-org/android-keyboard/issues")
+                nav.context.openURI("https://github.com/MtndaleRedneck/WrenBoard/issues")
             }
         ),
         userSettingNavigationItem(
@@ -134,7 +134,7 @@ val HelpMenu = UserSettingsMenu(
             subtitle = R.string.help_menu_email_subtitle,
             style = NavigationItemStyle.Mail,
             navigate = { nav ->
-                nav.context.openURI("mailto:keyboard@futo.org")
+                nav.context.openURI(org.futo.inputmethod.updates.WRENBOARD_FEEDBACK_FORM_URL)
             }
         ).copy(searchTags = R.string.help_menu_email_tags),
     )

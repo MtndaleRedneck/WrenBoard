@@ -123,9 +123,9 @@ val BugViewerAction = Action(
                             }
 
                             TextButton(onClick = {
-                                manager.getContext().openURI("mailto:keyboard@futo.org", newTask = true)
+                                manager.getContext().openURI(org.futo.inputmethod.updates.WRENBOARD_FEEDBACK_FORM_URL, newTask = true)
                             }) {
-                                Text("Email us (include the copy)")
+                                Text("Open feedback form (paste the copy)")
                             }
                         }
                         Text(it.details, style = DebugLabel)
