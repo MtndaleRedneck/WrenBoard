@@ -81,6 +81,27 @@ public class PersonalizationHelper {
         }
     }
 
+    /**
+     * Runs file IO on the dictionary (keyboard) executor and waits. Dictionary flush/reload/regenerate
+     * tasks run on the same single thread, so this IO cannot interleave with them. Must NOT be called
+     * from the keyboard executor thread itself (it would wait on itself); callers use Dispatchers.IO.
+     */
+    public static <T> T callOnKeyboardExecutor(final java.util.concurrent.Callable<T> task)
+            throws Exception {
+        final java.util.concurrent.Future<T> f = org.futo.inputmethod.latin.utils.ExecutorUtils
+                .getBackgroundExecutor(org.futo.inputmethod.latin.utils.ExecutorUtils.KEYBOARD)
+                .submit(task);
+        try {
+            return f.get(30, java.util.concurrent.TimeUnit.SECONDS);
+        } catch (final java.util.concurrent.TimeoutException e) {
+            throw new java.io.IOException("Timed out waiting for the dictionary task queue", e);
+        } catch (final java.util.concurrent.ExecutionException e) {
+            final Throwable c = e.getCause();
+            if (c instanceof Exception) throw (Exception) c;
+            throw e;
+        }
+    }
+
     /** Writes pending learned words to their files and waits for it, so an export copies current data. */
     public static boolean flushAllAndWait() {
         synchronized (sLangUserHistoryDictCache) {

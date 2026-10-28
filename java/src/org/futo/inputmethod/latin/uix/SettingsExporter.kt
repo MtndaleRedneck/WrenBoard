@@ -280,26 +280,29 @@ object SettingsExporter {
             }
         }
 
-        // Collect UserHistoryDictionaries
-        context.filesDir.listFiles()?.forEach { resourceFile ->
-            // WrenBoard: learned words are plain FILES (UserHistoryDictionary.<locale>.dict) in filesDir.
-            if(resourceFile.name.startsWith("UserHistoryDictionary") && resourceFile.isFile) {
-                zipOut.putNextEntry(ZipEntry("userdict/${resourceFile.name}"))
-                resourceFile.inputStream().use { it.copyTo(zipOut) }
-                zipOut.closeEntry()
-            } else if(resourceFile.name.startsWith("UserHistoryDictionary")
-                && resourceFile.isDirectory
-            ) {
-                resourceFile.listFiles()!!.forEach { subfile ->
-                    val entry = ZipEntry("userdict/${resourceFile.name}/${subfile.name}")
-                    zipOut.putNextEntry(entry)
-                    subfile.inputStream().use { it.copyTo(zipOut) }
-                    zipOut.closeEntry()
+        // Collect UserHistoryDictionaries: read as ONE task on the dictionary executor so the files are
+        // not changed by a flush/reload while being read.
+        val dictSnapshot = org.futo.inputmethod.latin.personalization.PersonalizationHelper.callOnKeyboardExecutor {
+            val out = mutableListOf<Pair<String, ByteArray>>()
+            context.filesDir.listFiles()?.forEach { f ->
+                if(f.name.startsWith("UserHistoryDictionary")) {
+                    if(f.isFile) {
+                        out.add("userdict/${f.name}" to f.readBytes())
+                    } else if(f.isDirectory) {
+                        f.listFiles()?.forEach { sub ->
+                            if(sub.isFile) out.add("userdict/${f.name}/${sub.name}" to sub.readBytes())
+                        }
+                    }
                 }
             }
+            out
+        }
+        dictSnapshot.forEach { (name, bytes) ->
+            zipOut.putNextEntry(ZipEntry(name))
+            zipOut.write(bytes)
+            zipOut.closeEntry()
         }
 
-        // Collect clipboard files
         context.clipboardDir.listFiles()?.forEach { clipboardFile ->
             assert(!clipboardFile.isDirectory)
             val entry = ZipEntry("clipboard/${clipboardFile.name}")
@@ -482,9 +485,11 @@ object SettingsExporter {
             }
 
             // delete all user dictionaries
-            context.filesDir.listFiles()?.forEach {
-                if(it.name.startsWith("UserHistoryDictionary")) {
-                    it.deleteRecursively()
+            org.futo.inputmethod.latin.personalization.PersonalizationHelper.callOnKeyboardExecutor {
+                context.filesDir.listFiles()?.forEach {
+                    if(it.name.startsWith("UserHistoryDictionary")) {
+                        it.deleteRecursively()
+                    }
                 }
             }
 
@@ -527,7 +532,11 @@ object SettingsExporter {
                 destinationFor(entry.name, dirs) != null -> {
                     val dest = destinationFor(entry.name, dirs)!!
                     dest.parentFile?.mkdirs()
-                    dest.outputStream().use { SafeFiles.copyBounded(zipIn, it, dest.parentFile!!) }
+                    val write = { dest.outputStream().use { SafeFiles.copyBounded(zipIn, it, dest.parentFile!!) } }
+                    if(entry.name.startsWith("userdict/")) {
+                        // serialized with dictionary flush/reload tasks (same executor)
+                        org.futo.inputmethod.latin.personalization.PersonalizationHelper.callOnKeyboardExecutor { write() }
+                    } else write()
                 }
 
                 else -> {

@@ -318,25 +318,25 @@ class SettingsActivity : ComponentActivity(), DynamicThemeProviderOwner {
             lifecycleScope.launch {
                 exportInProgress.value = 2
                 withContext(Dispatchers.IO) {
-                    // Flush learned words BEFORE the destination is opened (opening may truncate an
-                    // existing file). If that fails, stop and leave the destination untouched.
-                    if(!org.futo.inputmethod.latin.personalization.PersonalizationHelper.flushAllAndWait()) {
-                        withContext(Dispatchers.Main) {
-                            android.widget.Toast.makeText(applicationContext, "Export stopped: could not save learned words first. Nothing was written. Try again.", android.widget.Toast.LENGTH_LONG).show()
-                        }
-                        return@withContext
-                    }
+                    // Build the complete backup in a private temp file FIRST. The destination is opened
+                    // only after that succeeds, so a failed build never truncates an existing file.
+                    val stagedExport = java.io.File.createTempFile("export", ".backup", cacheDir)
                     try {
+                        stagedExport.outputStream().use {
+                            SettingsExporter.exportSettings(this@SettingsActivity, it, true)
+                        }
                         data?.data?.let { uri ->
                             contentResolver.openOutputStream(uri)!!
-                        }?.use {
-                            SettingsExporter.exportSettings(this@SettingsActivity, it, true)
+                        }?.use { out ->
+                            stagedExport.inputStream().use { it.copyTo(out) }
                         }
                     } catch(e: Exception) {
                         android.util.Log.w("SettingsActivity", "Export failed", e)
                         withContext(Dispatchers.Main) {
-                            android.widget.Toast.makeText(applicationContext, "Export failed: ${e.message}. The backup file may be incomplete; export again.", android.widget.Toast.LENGTH_LONG).show()
+                            android.widget.Toast.makeText(applicationContext, "Export failed: ${e.message}. If a file was already being written it may be incomplete; export again.", android.widget.Toast.LENGTH_LONG).show()
                         }
+                    } finally {
+                        stagedExport.delete()
                     }
                 }
                 exportInProgress.value = 0
