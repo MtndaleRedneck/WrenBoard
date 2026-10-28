@@ -214,7 +214,9 @@ object SettingsExporter {
     ) = ZipOutputStream(outputStream).use { zipOut ->
         zipOut.setLevel(1)
         // Make sure learned words still pending in memory are on disk before the files are copied.
-        org.futo.inputmethod.latin.personalization.PersonalizationHelper.flushAllAndWait()
+        if(!org.futo.inputmethod.latin.personalization.PersonalizationHelper.flushAllAndWait()) {
+            throw java.io.IOException("Could not save learned words before exporting")
+        }
 
         // Write version and date
         zipOut.putNextEntry(ZipEntry(versionFileName))
@@ -441,6 +443,8 @@ object SettingsExporter {
             }
             staged.inputStream().buffered().use { loadSettingsValidated(context, it, destructive, dirs) }
         } finally {
+            // Re-allow dictionaries to open (the gate is set by quiesceForRestore)
+            org.futo.inputmethod.latin.personalization.PersonalizationHelper.endRestore()
             staged.delete()
         }
     }

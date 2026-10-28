@@ -318,10 +318,25 @@ class SettingsActivity : ComponentActivity(), DynamicThemeProviderOwner {
             lifecycleScope.launch {
                 exportInProgress.value = 2
                 withContext(Dispatchers.IO) {
-                    data?.data?.let { uri ->
-                        contentResolver.openOutputStream(uri)!!
-                    }?.use {
-                        SettingsExporter.exportSettings(this@SettingsActivity, it, true)
+                    // Flush learned words BEFORE the destination is opened (opening may truncate an
+                    // existing file). If that fails, stop and leave the destination untouched.
+                    if(!org.futo.inputmethod.latin.personalization.PersonalizationHelper.flushAllAndWait()) {
+                        withContext(Dispatchers.Main) {
+                            android.widget.Toast.makeText(applicationContext, "Export stopped: could not save learned words first. Nothing was written. Try again.", android.widget.Toast.LENGTH_LONG).show()
+                        }
+                        return@withContext
+                    }
+                    try {
+                        data?.data?.let { uri ->
+                            contentResolver.openOutputStream(uri)!!
+                        }?.use {
+                            SettingsExporter.exportSettings(this@SettingsActivity, it, true)
+                        }
+                    } catch(e: Exception) {
+                        android.util.Log.w("SettingsActivity", "Export failed", e)
+                        withContext(Dispatchers.Main) {
+                            android.widget.Toast.makeText(applicationContext, "Export failed: ${e.message}. The backup file may be incomplete; export again.", android.widget.Toast.LENGTH_LONG).show()
+                        }
                     }
                 }
                 exportInProgress.value = 0

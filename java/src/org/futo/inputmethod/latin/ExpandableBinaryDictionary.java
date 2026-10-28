@@ -642,6 +642,11 @@ abstract public class ExpandableBinaryDictionary extends Dictionary {
             @Override
             public void run() {
                 try {
+                    if (org.futo.inputmethod.latin.personalization.PersonalizationHelper.isRestoreInProgress()) {
+                        // A restore is replacing dictionary files: do not open or create any now.
+                        // The next access after the restore reloads from the restored files.
+                        return;
+                    }
                     if (!dictFile.exists() || isNeededToRecreate()) {
                         // If the dictionary file does not exist or contents have been updated,
                         // generate a new one.

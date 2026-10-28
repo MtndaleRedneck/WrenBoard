@@ -96,9 +96,21 @@ public class PersonalizationHelper {
      * Before a restore replaces the files: close the live dictionaries WITHOUT flushing and wait until
      * every queued task has run, so no stale in-memory data is written over the restored files later.
      */
+    /** While true, no dictionary may be (re)opened or created; set by quiesceForRestore, cleared by endRestore. */
+    private static volatile boolean sRestoreInProgress = false;
+
+    public static boolean isRestoreInProgress() {
+        return sRestoreInProgress;
+    }
+
+    public static void endRestore() {
+        sRestoreInProgress = false;
+    }
+
     public static boolean quiesceForRestore() {
+        sRestoreInProgress = true;
         // Pending words are flushed first, so aborting a restore after this loses nothing.
-        if (!flushAllAndWait()) return false;
+        if (!flushAllAndWait()) { sRestoreInProgress = false; return false; }
         synchronized (sLangUserHistoryDictCache) {
             UserHistoryDictionary.forceUncleanClose = true;
             try {
