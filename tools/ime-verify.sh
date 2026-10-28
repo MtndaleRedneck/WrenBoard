@@ -507,9 +507,10 @@ else
 fi
 SYX=$(jq -r '.keys.symbols[0]' "$GEOM"); SYY=$(jq -r '.keys.symbols[1]' "$GEOM")
 KTOP=$(jq -r '.keyboard_top' "$GEOM")
-hold_key $SYX $SYY 1000
-sleep 1.5
-shot 12_clipboard_popup
+hold_key $SYX $SYY 4500
+sleep 1.2; shot 12_clipboard_hold_1s
+sleep 1.2; shot 12_clipboard_popup
+sleep 3.0
 W=$(jq -r '.bands[0].cells[-1].x2' "$GEOM")
 adb shell input tap $(( SYX + 120 )) $(( KTOP - 90 ))
 sleep 0.8
