@@ -10,6 +10,11 @@ if adb shell id 2>/dev/null | grep -q "uid=0"; then IR_ROOT=1; else IR_ROOT=0; f
 note "adb root available: $IR_ROOT"
 if [ "$IR_ROOT" = 1 ]; then
 APPUID=$(adb shell stat -c %u $APPDIR | tr -d '\r')
+note "physical app data inventory after the typing tests (filesDir, depth 3):"
+adb shell "ls -lAR $APPDIR/files 2>/dev/null" | head -80 | sed 's/^/    /' | tee -a "$R"
+note "external files inventory:"
+adb shell "ls -lAR /sdcard/Android/data/$APP/files 2>/dev/null" | head -30 | sed 's/^/    /' | tee -a "$R"
+adb shell "ls -la $APPDIR/shared_prefs $APPDIR/databases 2>/dev/null" | head -20 | sed 's/^/    /' | tee -a "$R"
 
 seed() { # recreate known pre-existing data
   adb shell "mkdir -p $APPDIR/files/themes $APPDIR/files/clipboardfiles && echo -n KEEP-THEME > $APPDIR/files/themes/preexisting.zip && echo -n KEEP-CLIP > $APPDIR/files/clipboardfiles/keep.txt && chown -R $APPUID:$APPUID $APPDIR/files/themes $APPDIR/files/clipboardfiles"

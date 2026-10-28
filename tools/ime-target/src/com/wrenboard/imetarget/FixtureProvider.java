@@ -21,11 +21,18 @@ public class FixtureProvider extends ContentProvider {
         final String name = uri.getLastPathSegment();
         if (name == null || name.contains("/") || name.contains("..")) throw new FileNotFoundException(name);
         final InputStream in;
+        InputStream opened;
         try {
-            in = getContext().getAssets().open(name);
+            opened = getContext().getAssets().open(name);
         } catch (IOException e) {
-            throw new FileNotFoundException(name);
+            // fall back to a file placed in this app's private files dir by the test harness
+            try {
+                opened = new java.io.FileInputStream(new java.io.File(getContext().getFilesDir(), name));
+            } catch (IOException e2) {
+                throw new FileNotFoundException(name);
+            }
         }
+        in = opened;
         try {
             final ParcelFileDescriptor[] pipe = ParcelFileDescriptor.createPipe();
             new Thread(() -> {
