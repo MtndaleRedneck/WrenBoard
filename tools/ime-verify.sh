@@ -275,7 +275,7 @@ check "symbols page2 types page-2 symbols (euro)" "€" "$P2"
 dim "after-symbols-p2"
 
 note "== back to letters =="
-ABC=$(jq -r '.bands[-1].cells[0] | "\(.cx) \(.cy)"' "$GEOM")
+ABC=$(jq -r 'if (.bands[-1].cells | length) == 4 then .bands[-2].cells[0] else .bands[-1].cells[0] end | "\(.cx) \(.cy)"' "$GEOM")
 [ -n "$ABC" ] && adb shell input tap $ABC
 sleep 1.0
 shot 11_back_to_letters
@@ -305,9 +305,9 @@ if echo "$CB" | grep -q "clipboard-probe-42"; then
   note "PASS: clipboard paste via long-press symbols key ('$CB')"
 else
   note "long-press path inconclusive ('$CB'); trying toolbar clipboard item"
-  TC=$(jq -r '.toolbar.cells // 0' "$GEOM")
+  TC=$(jq -r '.strip.clusters // 0' "$GEOM")
   if [ "$TC" -ge 5 ]; then
-    TY=$(jq -r '.toolbar.cy' "$GEOM")
+    TY=$(jq -r '.strip.cy' "$GEOM")
     adb shell input tap $(( W / (2 * TC) + 4 * W / TC )) $TY
     sleep 1.2
     shot 12b_clipboard_toolbar
@@ -321,22 +321,37 @@ else
 fi
 dim "after-clipboard"
 
-note "== toolbar =="
-shot 13_toolbar
-TC=$(jq -r '.toolbar.cells // 0' "$GEOM")
-[ "$TC" -eq 7 ] && note "PASS: toolbar shows 7 items" || note "FAIL: toolbar item count $TC (wanted 7; see 13_toolbar + overlay)"
+note "== toolbar (expand strip, count items) =="
+EXP=$(jq -r '.keys.strip_expand // empty | "\(.[0]) \(.[1])"' "$GEOM")
+if [ -z "$EXP" ]; then
+  note "FAIL: no strip expander in geometry"
+else
+  adb shell input tap $EXP
+  sleep 1.2
+  shot 13_toolbar
+  geom_rebuild 13_toolbar 13_toolbar_overlay && {
+    TC=$(jq -r '.strip.clusters // 0' "$GEOM")
+    note "expanded strip clusters: $TC"
+    [ "$TC" -eq 7 ] && note "PASS: toolbar shows 7 items" || note "FAIL: toolbar item count $TC (wanted 7; see 13_toolbar + overlay)"
+  } || note "FAIL: geometry after toolbar expand"
+fi
+dim "after-toolbar"
 
 note "== dictation listening state =="
-clear_field
-VOICE=$(jq -r '.keys.toolbar_voice // empty | "\(.[0]) \(.[1])"' "$GEOM")
-if [ -n "$VOICE" ]; then
+# strip is already expanded from the toolbar section; first item is voice
+# (settled toolbar order: voice/emoji/undo/redo/clipboard/theme/settings)
+VOICE=$(jq -r '.strip.first // empty | "\(.[0]) \(.[1])"' "$GEOM")
+if [ -z "$VOICE" ]; then
+  VOICE=$(jq -r '.keys.strip_mic // empty | "\(.[0]) \(.[1])"' "$GEOM")
+fi
+if [ -z "$VOICE" ]; then
+  note "FAIL: no voice key in geometry"
+else
   adb shell input tap $VOICE
   sleep 3
   shot 14_dictation_state
-  adb shell pidof "$PKG" >/dev/null && note "PASS: dictation tap - app alive, listening state captured (audio injection N/A in CI; engine transcription validated via whisper-cli artifact)" || note "FAIL: app died after dictation tap"
+  adb shell pidof "$PKG" >/dev/null && note "PASS: dictation tap - app alive, listening state captured (audio injection N/A in CI; engine transcription validated via dictation-engine artifact)" || note "FAIL: app died after dictation tap"
   adb shell input keyevent KEYCODE_BACK
-else
-  note "FAIL: no toolbar voice key in geometry"
 fi
 sleep 1
 
