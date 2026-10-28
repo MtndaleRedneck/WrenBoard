@@ -88,13 +88,37 @@ public class PersonalizationHelper {
      */
     public static <T> T callOnKeyboardExecutor(final java.util.concurrent.Callable<T> task)
             throws Exception {
+        // 'state' makes start-vs-cancel atomic: after a timeout the task either never starts (cancelled)
+        // or is already running, in which case we wait for it to finish. Nothing can mutate files
+        // after this method has returned or thrown.
+        final Object lock = new Object();
+        final boolean[] state = new boolean[2]; // [0] started, [1] cancelled
         final java.util.concurrent.Future<T> f = org.futo.inputmethod.latin.utils.ExecutorUtils
                 .getBackgroundExecutor(org.futo.inputmethod.latin.utils.ExecutorUtils.KEYBOARD)
-                .submit(task);
+                .submit(new java.util.concurrent.Callable<T>() {
+                    @Override
+                    public T call() throws Exception {
+                        synchronized (lock) {
+                            if (state[1]) throw new java.util.concurrent.CancellationException();
+                            state[0] = true;
+                        }
+                        return task.call();
+                    }
+                });
         try {
-            return f.get(30, java.util.concurrent.TimeUnit.SECONDS);
-        } catch (final java.util.concurrent.TimeoutException e) {
-            throw new java.io.IOException("Timed out waiting for the dictionary task queue", e);
+            try {
+                return f.get(30, java.util.concurrent.TimeUnit.SECONDS);
+            } catch (final java.util.concurrent.TimeoutException e) {
+                synchronized (lock) {
+                    if (!state[0]) {
+                        state[1] = true;
+                        f.cancel(false);
+                        throw new java.io.IOException("Timed out waiting for the dictionary task queue", e);
+                    }
+                }
+                // Already running: let the file IO finish rather than abandon it half done.
+                return f.get();
+            }
         } catch (final java.util.concurrent.ExecutionException e) {
             final Throwable c = e.getCause();
             if (c instanceof Exception) throw (Exception) c;
@@ -147,6 +171,7 @@ public class PersonalizationHelper {
     }
 
     public static void removeAllUserHistoryDictionaries(final Context context) {
+        if (sRestoreInProgress) return;
         synchronized (sLangUserHistoryDictCache) {
             for (final ConcurrentHashMap.Entry<String, SoftReference<UserHistoryDictionary>> entry
                     : sLangUserHistoryDictCache.entrySet()) {

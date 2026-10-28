@@ -257,6 +257,9 @@ abstract public class ExpandableBinaryDictionary extends Dictionary {
         asyncExecuteTaskWithWriteLock(new Runnable() {
             @Override
             public void run() {
+                if (org.futo.inputmethod.latin.personalization.PersonalizationHelper.isRestoreInProgress()) {
+                    return; // a restore is replacing the files; do not remove or create them now
+                }
                 removeBinaryDictionaryLocked();
                 createOnMemoryBinaryDictionaryLocked();
             }

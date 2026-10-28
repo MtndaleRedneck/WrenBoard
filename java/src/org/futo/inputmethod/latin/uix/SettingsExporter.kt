@@ -282,25 +282,33 @@ object SettingsExporter {
 
         // Collect UserHistoryDictionaries: read as ONE task on the dictionary executor so the files are
         // not changed by a flush/reload while being read.
-        val dictSnapshot = org.futo.inputmethod.latin.personalization.PersonalizationHelper.callOnKeyboardExecutor {
-            val out = mutableListOf<Pair<String, ByteArray>>()
-            context.filesDir.listFiles()?.forEach { f ->
-                if(f.name.startsWith("UserHistoryDictionary")) {
-                    if(f.isFile) {
-                        out.add("userdict/${f.name}" to f.readBytes())
-                    } else if(f.isDirectory) {
-                        f.listFiles()?.forEach { sub ->
-                            if(sub.isFile) out.add("userdict/${f.name}/${sub.name}" to sub.readBytes())
+        val snapshotDir = File.createTempFile("dictsnap", "", context.cacheDir).also { it.delete(); it.mkdirs() }
+        try {
+            val dictSnapshot = org.futo.inputmethod.latin.personalization.PersonalizationHelper.callOnKeyboardExecutor {
+                val out = mutableListOf<Pair<String, File>>()
+                var n = 0
+                fun snap(entryName: String, src: File) {
+                    val copy = File(snapshotDir, "d${n++}")
+                    src.inputStream().use { i -> copy.outputStream().use { o -> i.copyTo(o) } }
+                    out.add(entryName to copy)
+                }
+                context.filesDir.listFiles()?.forEach { f ->
+                    if(f.name.startsWith("UserHistoryDictionary")) {
+                        if(f.isFile) snap("userdict/${f.name}", f)
+                        else if(f.isDirectory) f.listFiles()?.forEach { sub ->
+                            if(sub.isFile) snap("userdict/${f.name}/${sub.name}", sub)
                         }
                     }
                 }
+                out
             }
-            out
-        }
-        dictSnapshot.forEach { (name, bytes) ->
-            zipOut.putNextEntry(ZipEntry(name))
-            zipOut.write(bytes)
-            zipOut.closeEntry()
+            dictSnapshot.forEach { (name, file) ->
+                zipOut.putNextEntry(ZipEntry(name))
+                file.inputStream().use { it.copyTo(zipOut) }
+                zipOut.closeEntry()
+            }
+        } finally {
+            snapshotDir.deleteRecursively()
         }
 
         context.clipboardDir.listFiles()?.forEach { clipboardFile ->
