@@ -294,8 +294,8 @@ object SettingsExporter {
                 }
                 context.filesDir.listFiles()?.forEach { f ->
                     if(f.name.startsWith("UserHistoryDictionary")) {
-                        if(f.isFile) snap("userdict/${f.name}", f)
-                        else if(f.isDirectory) f.listFiles()?.forEach { sub ->
+                        // Runtime layout (verified on the emulator): a DIRECTORY holding .header and .body files
+                        if(f.isDirectory) f.listFiles()?.forEach { sub ->
                             if(sub.isFile) snap("userdict/${f.name}/${sub.name}", sub)
                         }
                     }
@@ -373,11 +373,10 @@ object SettingsExporter {
             name.startsWith("transformers/") -> SafeFiles.resolveContained(dirs.transformers, rest)
             name.startsWith("userdict/") -> {
                 val names = name.split("/")
-                // 2 parts = learned-words file (current layout); 3 parts = directory form of older backups
-                if((names.size != 2 && names.size != 3) || !names[1].startsWith("UserHistoryDictionary")) {
+                if(names.size != 3 || !names[1].startsWith("UserHistoryDictionary")) {
                     throw SecurityException("Unexpected user dictionary entry: $name")
                 }
-                SafeFiles.resolveContained(dirs.files, names.drop(1).joinToString("/"))
+                SafeFiles.resolveContained(dirs.files, "${names[1]}/${names[2]}")
             }
             name.startsWith("clipboard/") -> {
                 if(rest.contains('/')) throw SecurityException("Unexpected clipboard entry: $name")
