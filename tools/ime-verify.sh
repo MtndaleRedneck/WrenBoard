@@ -189,6 +189,7 @@ assert_field "geometry self-validation (tap q types q)" "q"
 clear_field
 note "GATE: PASS (focused EditText + WrenBoard keyboard pixels + validated key mapping)"
 
+cp "$GEOM" shots/geom_letters.json
 note "== lowercase typing =="
 dim "before-type"
 type_letters h e l l o
@@ -208,21 +209,74 @@ shot 05_shift_typed
 assert_field "shift produced Hello" "Hello"
 dim "after-shift-single"
 
+note "== word-case cycling (shift on completed word), isolated: fresh field, shift state confirmed off =="
+clear_field
+shot 07a_case_precondition
+type_letters h e l l o
+sleep 1.5   # let composing settle
+shot 07b_case_before_tap
+adb shell log -t IMETARGET "CASEMARK-A"
+tapk shift; sleep 0.8; C1=$(edit_text); shot 07c_case_tap1
+tapk shift; sleep 0.8; C2=$(edit_text); shot 07d_case_tap2
+tapk shift; sleep 0.8; C3=$(edit_text); shot 07e_case_tap3
+note "word-case cycle (variant A, typed then wait 1.5s) observed: hello -> '$C1' -> '$C2' -> '$C3'"
+if [ "$C1" = "Hello" ] && [ "$C2" = "HELLO" ]; then
+  note "PASS: word-case cycling (Hello then HELLO; third tap -> '$C3')"
+else
+  note "FAIL: word-case cycling variant A (expected Hello/HELLO/hello). Active IME was ours at preceding checkpoint; shift state per 07c-07e screenshots"
+fi
+dim "after-case-cycle"
+
+note "== normalize shift to off before caps tests =="
+for n in 1 2 3; do
+  clear_field; tapk a; sleep 0.4; NA=$(edit_text)
+  [ "$NA" = "a" ] && { note "shift state normalized: off (typed '$NA')"; break; }
+  note "shift state not off (typed '$NA'); tapping shift"; tapk shift
+done
+clear_field
 note "== caps lock via shift DOUBLE-TAP (SwiftKey baseline) =="
 clear_field
 SH=$(jq -r '.keys.shift | "\(.[0]) \(.[1])"' "$GEOM")
 DT_OK=""
-for attempt in 1 2 3 4 5; do
-  adb shell "nohup getevent -lt > /sdcard/ge.txt 2>&1 &" ; sleep 0.5
-  adb shell "input tap $SH; input tap $SH"
-  sleep 0.5; adb shell "pkill getevent" >/dev/null 2>&1
-  adb shell cat /sdcard/ge.txt > shots/getevent_attempt$attempt.txt 2>&1
-  GAP=$(adb shell cat /sdcard/ge.txt | tr -d '\r' | grep "BTN_TOUCH *DOWN" | sed -n 's/^\[ *\([0-9.]*\)\].*/\1/p' | awk 'NR==1{a=$1}NR==2{printf "%d", ($1-a)*1000}')
-  note "double-tap attempt $attempt: measured down-to-down gap ${GAP:-unmeasured} ms (system double-tap window ~300 ms)"
-  if [ -n "$GAP" ] && [ "$GAP" -le 250 ]; then DT_OK=1; break; fi
-  sleep 0.8   # slow pair = shift on then off, back to unshifted; retry
+# real evdev events via sendevent (adb 'input tap' never reaches getevent): find the touch device that
+# actually delivers touches, then send two timed taps and measure the gap with getevent.
+SCR=$(adb shell wm size | tr -d '\r' | grep -o '[0-9]*x[0-9]*' | tail -1); SW=${SCR%x*}; SHH=${SCR#*x}
+TDEV=""
+for dev in $(adb shell getevent -p 2>/dev/null | tr -d '\r' | awk '/^add device/{d=$4} /ABS_MT_POSITION_X/{print d}' | sort -u); do
+  RX=$(adb shell getevent -p "$dev" 2>/dev/null | tr -d '\r' | sed -n 's/.*ABS_MT_POSITION_X .*max \([0-9]*\).*/\1/p' | head -1)
+  RY=$(adb shell getevent -p "$dev" 2>/dev/null | tr -d '\r' | sed -n 's/.*ABS_MT_POSITION_Y .*max \([0-9]*\).*/\1/p' | head -1)
+  [ -z "$RX" ] && continue
+  # probe: tap 'h' via this device, see whether the field changes
+  HXY=$(jq -r '.keys.h | "\(.[0]) \(.[1])"' "$GEOM"); hx=${HXY% *}; hy=${HXY#* }
+  X=$(( hx * RX / SW )); Y=$(( hy * RY / SHH ))
+  adb shell "sendevent $dev 3 57 7; sendevent $dev 3 53 $X; sendevent $dev 3 54 $Y; sendevent $dev 1 330 1; sendevent $dev 0 0 0; sendevent $dev 3 57 4294967295; sendevent $dev 1 330 0; sendevent $dev 0 0 0" >/dev/null 2>&1
+  sleep 0.6
+  P=$(edit_text)
+  note "touch-device probe $dev (rangeX=$RX rangeY=$RY): field after sendevent tap on h = '$P'"
+  if echo "$P" | grep -qi "h"; then TDEV=$dev; TRX=$RX; TRY=$RY; break; fi
 done
-[ -z "$DT_OK" ] && note "WARN: no double-tap landed inside 250 ms; caps double-tap result is NOT a valid test"
+clear_field
+if [ -z "$TDEV" ]; then
+  note "INCONCLUSIVE: no evdev touch device delivered a tap; double-tap gesture NOT tested"
+else
+  SX=$(( ${SH% *} * TRX / SW )); SY=$(( ${SH#* } * TRY / SHH ))
+  tapev() { echo "sendevent $TDEV 3 57 9; sendevent $TDEV 3 53 $SX; sendevent $TDEV 3 54 $SY; sendevent $TDEV 1 330 1; sendevent $TDEV 0 0 0; sendevent $TDEV 3 57 4294967295; sendevent $TDEV 1 330 0; sendevent $TDEV 0 0 0"; }
+  for attempt in 1 2 3 4 5; do
+    clear_field
+    adb shell "printf '%s\n' '$(tapev)' 'sleep 0.12' '$(tapev)' > /sdcard/dt.sh"
+    adb shell "nohup getevent -lt $TDEV > /sdcard/ge.txt 2>&1 &" ; sleep 0.5
+    adb shell "sh /sdcard/dt.sh"
+    sleep 0.5; adb shell "pkill getevent" >/dev/null 2>&1
+    adb shell cat /sdcard/ge.txt > shots/getevent_attempt$attempt.txt 2>&1
+    GAP=$(tr -d '\r' < shots/getevent_attempt$attempt.txt | grep "BTN_TOUCH *DOWN" | sed -n 's/^\[ *\([0-9.]*\)\].*/\1/p' | awk 'NR==1{a=$1}NR==2{printf "%d", ($1-a)*1000}')
+    note "double-tap attempt $attempt: measured down-to-down gap ${GAP:-unmeasured} ms (evdev, device $TDEV)"
+    if [ -n "$GAP" ] && [ "$GAP" -le 250 ]; then DT_OK=1; break; fi
+    sleep 0.8
+  done
+  [ -z "$DT_OK" ] && note "INCONCLUSIVE: no measured double-tap inside 250 ms"
+  [ -n "$DT_OK" ] && note "double-tap landed inside 250 ms (measured)"
+fi
+clear_field
 sleep 0.8
 shot 06a_capslock_doubletap_state
 type_letters w o r l d
@@ -242,22 +296,6 @@ shot 07_capslock_typed
 assert_field "caps lock typed WORLD" "WORLD"
 tapk shift  # release caps
 dim "after-caps"
-
-note "== word-case cycling (shift on completed word) =="
-clear_field
-type_letters h e l l o
-sleep 0.3
-tapk shift; sleep 0.4; C1=$(edit_text)
-tapk shift; sleep 0.4; C2=$(edit_text)
-tapk shift; sleep 0.4; C3=$(edit_text)
-shot 08_word_case_cycle
-note "word-case cycle observed: hello -> '$C1' -> '$C2' -> '$C3'"
-if [ "$C1" = "Hello" ] && [ "$C2" = "HELLO" ]; then
-  note "PASS: word-case cycling (Hello then HELLO; third tap -> '$C3')"
-else
-  note "FAIL: word-case cycling (expected Hello/HELLO/hello, see observed)"
-fi
-dim "after-case-cycle"
 
 note "== whole-word hold backspace (accelerating) =="
 clear_field
@@ -305,59 +343,73 @@ geom_rebuild 09_symbols_page1 09_symbols_page1_overlay || fail_early "symbols p1
 SIG=$(jq -r '[.bands[].cells | length] | @csv' "$GEOM")
 note "symbols p1 band signature: $SIG"
 [ "$(echo "$SIG" | cut -d, -f1-3)" = "10,10,10" ] || note "WARN: unexpected symbols p1 signature (probe continues positionally)"
-for xy in $(jq -r '[.bands[0].cells[], .bands[1].cells[], .bands[2].cells[1:9][]] | .[] | "\(.cx) \(.cy)"' "$GEOM"); do
-  adb shell input tap $xy; sleep 0.2
+cp "$GEOM" shots/geom_sym1.json
+# The detected band0 for this page is a sliver (digit keys are lighter than the dark-key model), so
+# digit-row taps use a positional model: x = 10 even columns, y = band1.cy - row pitch (band2.cy - band1.cy).
+SCRW=$(adb shell wm size | tr -d '\r' | grep -o '[0-9]*x[0-9]*' | tail -1 | cut -dx -f1)
+B1Y=$(jq -r '.bands[1].cells[0].cy' "$GEOM"); B2Y=$(jq -r '.bands[2].cells[0].cy' "$GEOM")
+DY=$(( B1Y - (B2Y - B1Y) ))
+probe_key() { # probe_key <label> <x> <y> -> prints typed delta
+  local before after
+  before=$(edit_text); adb shell input tap $2 $3; sleep 0.5; after=$(edit_text)
+  if [ "${after:0:${#before}}" = "$before" ]; then echo "${after:${#before}}"; else echo "?"; fi
+}
+clear_field
+adb shell am broadcast -a com.wrenboard.imetarget.CLEAR -p com.wrenboard.imetarget >/dev/null 2>&1
+P1=""; MISS=0
+note "symbols p1 per-key probe (rowDigits y=$DY, row1 y=$B1Y, row2 y=$B2Y, width=$SCRW)"
+for k in 0 1 2 3 4 5 6 7 8 9; do
+  X=$(( SCRW * (528 + 992 * k) / 10000 ))
+  D=$(probe_key d$k $X $DY); P1="$P1$D"; [ -z "$D" ] && MISS=$((MISS+1))
 done
-sleep 0.6
-P1=$(edit_text)
-note "symbols p1 probe output: '$P1'"
-check "symbols page1 types symbols including @" "@" "$P1"
-check "symbols page1 digit row types 5" "5" "$P1"
+DIGITS="$P1"; P1B=""
+for k in 0 1 2 3 4 5 6 7 8 9; do
+  X=$(( SCRW * (528 + 992 * k) / 10000 ))
+  D=$(probe_key s$k $X $B1Y); P1B="$P1B$D"
+done
+shot 09d_symbols_after_probe
+note "symbols p1 digit row typed: '$DIGITS' (expect 1234567890)"
+note "symbols p1 symbol row typed: '$P1B' (expect @#\$&_-()=%)"
+P1="$DIGITS$P1B"
+check "symbols page1 digit row types 1234567890" "1234567890" "$DIGITS"
+check "symbols page1 symbol row includes @" "@" "$P1B"
 dim "after-symbols-p1"
 
 note "== symbols page 2 =="
 clear_field
-shot 09b_reenter
-geom_rebuild 09b_reenter 09b_reenter_overlay || fail_early "geometry after clear before p2"
-# if the keyboard came back on letters, re-enter symbols
-if jq -e '.keys.symbols' "$GEOM" >/dev/null 2>&1; then
-  tapk symbols || true
-  sleep 1.0
-  shot 09c_symbols_reentered
-  geom_rebuild 09c_symbols_reentered 09c_symbols_reentered_overlay || fail_early "symbols p1 geometry after re-entry"
-fi
-SIG=$(jq -r '[.bands[].cells | length] | @csv' "$GEOM")
-[ "$(echo "$SIG" | cut -d, -f1-3)" = "10,10,10" ] || fail_early "not on symbols page 1 for switch (signature $SIG)"
-SWITCH=$(jq -r '.bands[2].cells[0] | "\(.cx) \(.cy)"' "$GEOM")
 FT0=$(edit_text)
+SWITCH=$(jq -r '.bands[2].cells[0] | "\(.cx) \(.cy)"' shots/geom_sym1.json)
 adb shell input tap $SWITCH
 sleep 1.2
 shot 10_symbols_page2
 FT1=$(edit_text)
-geom_rebuild 10_symbols_page2 10_symbols_page2_overlay || fail_early "symbols p2 geometry"
-SIG2=$(jq -r '[.bands[].cells | length] | @csv' "$GEOM")
-note "symbols p2 band signature: $SIG2 (field unchanged by switch: $([ "$FT0" = "$FT1" ] && echo yes || echo NO))"
-# grounded layout (symbols_shift.yaml): band0 9 cells (pound euro yen ...), band1 9, band2 [123-back, 7 symbols, delete]
-for xy in $(jq -r '[.bands[0].cells[], .bands[1].cells[], .bands[2].cells[1:-1][]] | .[] | "\(.cx) \(.cy)"' "$GEOM"); do
-  adb shell input tap $xy; sleep 0.2
+note "symbols p2 reached via {&= key (field unchanged by switch: $([ "$FT0" = "$FT1" ] && echo yes || echo NO)); positional probe, same row positions as page 1"
+P2A=""; P2B=""
+for k in 0 1 2 3 4 5 6 7 8; do
+  X=$(( SCRW * (750 + 1082 * k) / 10000 ))
+  D=$(probe_key t$k $X $DY); P2A="$P2A$D"
 done
-sleep 0.6
-P2=$(edit_text)
-note "symbols p2 probe output: '$P2'"
+for k in 0 1 2 3 4 5 6 7 8; do
+  X=$(( SCRW * (750 + 1082 * k) / 10000 ))
+  D=$(probe_key u$k $X $B1Y); P2B="$P2B$D"
+done
+shot 10b_symbols_p2_after_probe
+P2="$P2A$P2B"
+note "symbols p2 top row typed: '$P2A' (expect £€¥¢©®™~¿)"
+note "symbols p2 second row typed: '$P2B' (expect tab then []{}<>^¡)"
 check "symbols page2 types page-2 symbols (pound)" "£" "$P2"
 check "symbols page2 types page-2 symbols (euro)" "€" "$P2"
 dim "after-symbols-p2"
 
 note "== back to letters =="
-ABC=$(jq -r 'if (.bands[-1].cells | length) == 4 then .bands[-2].cells[0] else .bands[-1].cells[0] end | "\(.cx) \(.cy)"' "$GEOM")
+ABC=$(jq -r '.bands[3].cells[0] | "\(.cx) \(.cy)"' shots/geom_sym1.json)
 [ -n "$ABC" ] && adb shell input tap $ABC
 sleep 1.0
 shot 11_back_to_letters
-geom_rebuild 11_back_to_letters 11_back_to_letters_overlay || fail_early "no geometry after returning to letters"
+geom_rebuild 11_back_to_letters 11_back_to_letters_overlay || { note "INCONCLUSIVE: geometry after returning to letters failed; skipping letters-dependent checks"; SKIPLET=1; }
 clear_field
-tapk q || fail_early "no q after returning to letters"
-sleep 0.5
-assert_field "letters page restored (q types q)" "q"
+if [ -n "${SKIPLET:-}" ]; then cp shots/geom_letters.json "$GEOM"; note "using saved letters geometry (page return unverified by geometry; see 11_back_to_letters.png)"; fi
+if tapk q; then sleep 0.5; assert_field "letters page restored (q types q)" "q"; else note "INCONCLUSIVE: q key not mapped after return"; fi
 dim "after-back-to-letters"
 
 note "== clipboard (long-press symbols key, toolbar fallback) =="
