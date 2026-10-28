@@ -10,13 +10,13 @@ APP=com.wrenboard.keyboard; APPDIR=/data/data/$APP; EXT=/sdcard/Android/data/$AP
 UID_K=$(adb shell stat -c %u $APPDIR | tr -d '\r')
 md() { adb shell "md5sum '$1' 2>/dev/null" | awk '{print $1}' | tr -d '\r'; }
 # 1. seed data across the physical locations the exporter reads
-adb shell "mkdir -p $APPDIR/files/themes $APPDIR/files/clipboardfiles $APPDIR/files/UserHistoryDictionary.en_US.seed $EXT/rime && \
+adb shell "mkdir -p $APPDIR/files/themes $APPDIR/files/clipboardfiles $EXT/rime && \
   echo -n SEED-THEME > $APPDIR/files/themes/e2etheme.zip && echo -n SEED-CLIPIMG > $APPDIR/files/clipboardfiles/e2eclip.bin && \
-  echo -n '[]' > $APPDIR/files/clipboard.json && echo -n SEED-LEARNED > $APPDIR/files/UserHistoryDictionary.en_US.seed/e2e.dict && \
+  echo -n '[]' > $APPDIR/files/clipboard.json && echo -n SEED-LEARNED > $APPDIR/files/UserHistoryDictionary.en_US.dict && \
   echo -n SEED-EXTDICT > $EXT/e2e_user.dict && echo -n SEED-RIME > $EXT/rime/e2e.txt && \
   chown -R $UID_K:$UID_K $APPDIR/files/themes $APPDIR/files/clipboardfiles $APPDIR/files/clipboard.json $APPDIR/files/UserHistoryDictionary.en_US.seed $EXT"
 declare -A WANT
-for f in files/themes/e2etheme.zip files/clipboardfiles/e2eclip.bin files/clipboard.json files/UserHistoryDictionary.en_US.seed/e2e.dict; do WANT[$APPDIR/$f]=$(md $APPDIR/$f); done
+for f in files/themes/e2etheme.zip files/clipboardfiles/e2eclip.bin files/clipboard.json files/UserHistoryDictionary.en_US.dict; do WANT[$APPDIR/$f]=$(md $APPDIR/$f); done
 for f in e2e_user.dict rime/e2e.txt; do WANT[$EXT/$f]=$(md $EXT/$f); done
 # 2. export through the app UI
 adb shell rm -f /sdcard/Download/FUTOKeyboardSettings_* /sdcard/Documents/FUTOKeyboardSettings_* 2>/dev/null
