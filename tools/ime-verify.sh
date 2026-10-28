@@ -722,6 +722,28 @@ shot 22_keyboard_final_after_editor; geom_rebuild 22_keyboard_final_after_editor
 note "toolbar at end of editor tests: icons=$(jq -r '.toolbar.n // 0' "$GEOM")"
 dim "after-editor-2"
 
+note "== update check: manifest permission and real network behavior =="
+PERMS=$(adb shell dumpsys package com.wrenboard.keyboard | tr -d '\r' | grep -E "android.permission.INTERNET" | head -3 | tr '\n' ' ')
+note "dumpsys INTERNET lines: ${PERMS:-none}"
+echo "$PERMS" | grep -q INTERNET && note "PASS: INTERNET permission present in installed app" || note "FAIL: INTERNET permission missing in installed app"
+adb shell input keyevent KEYCODE_HOME; sleep 1
+adb shell am start -n "$SETTINGS_ACT" --es navDest home >/dev/null 2>&1; sleep 5
+shot 23_settings_home; xdump 23_settings_home
+if UN=$(python3 tools/xml_node.py shots/23_settings_home.xml 'Check for updates manually'); then
+  read -r UX UY _ <<< "$UN"
+  adb shell input tap $UX $UY; sleep 12
+  shot 23b_after_update_check; xdump 23b_after_update_check
+  adb logcat -d -s UpdateChecking:* System.err:* 2>/dev/null | tr -d '\r' | tail -12 > shots/update_check_log.txt
+  note "update check log tail:"; sed 's/^/    /' shots/update_check_log.txt | tee -a "$R"
+  sed 's/>/>\n/g' shots/23b_after_update_check.xml | sed -n 's/.*text="\([^"]\+\)".*/\1/p' | head -14 | tr '\n' '|' | sed 's/^/screen texts after check: /' | tee -a "$R"; echo | tee -a "$R"
+else
+  note "INCONCLUSIVE(harness): 'Check for updates manually' node not on Settings home (see 23_settings_home.png)"
+fi
+adb shell input keyevent KEYCODE_BACK; sleep 1; adb shell input keyevent KEYCODE_HOME; sleep 1
+adb shell am start -n com.wrenboard.imetarget/.TestInput >/dev/null 2>&1; sleep 2
+B=$(edit_bounds); [ -n "$B" ] && tap_bounds "$B"; sleep 2
+dim "after-update-check"
+
 note "== cold session 2 (force-stop -> second cold sample) =="
 adb shell am force-stop $PKG
 sleep 2
