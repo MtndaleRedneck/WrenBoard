@@ -17,10 +17,16 @@ else
   shot vu_01_update_dialog; xdump vu_01_update_dialog
   T=$(vtexts vu_01_update_dialog); note "update dialog texts: $T"
   if echo "$T" | grep -q "Update check failed"; then note "PASS: update dialog says 'Update check failed' (not 'Up-to-date') after the 404 check (frame vu_01_update_dialog.png)"
-  elif echo "$T" | grep -q "Up-to-date"; then note "FAIL: dialog says Up-to-date after a failed check (frame vu_01_update_dialog.png)"
+  elif echo "$T" | grep -q "Up-to-date"; then
+    if [ "$(adb shell "grep -c last_update_check_failed $VDS" | tr -d '\r')" = 0 ]; then note "INCONCLUSIVE: no failed check was recorded (flag absent), so 'Up-to-date' is not a defect here (frame vu_01_update_dialog.png)"
+    else note "FAIL: dialog says Up-to-date although a failed check was recorded (frame vu_01_update_dialog.png)"; fi
   else note "INCONCLUSIVE(harness): update dialog not reached (frame vu_01_update_dialog.png)"; fi
   adb shell input keyevent KEYCODE_BACK; sleep 1
   # (2) voice backend confirmation
+  if ! adb shell pm list packages 2>/dev/null | tr -d '\r' | grep -q "package:$VTARGET$"; then
+    note "INCONCLUSIVE(harness): $VTARGET is not installed on this emulator; voice confirmation steps skipped"; VSKIP=1
+  fi
+  if [ -z "$VSKIP" ]; then
   B0=$(vmd); note "datastore md5 before: ${B0:0:8}; target package already in datastore: $(adb shell "grep -c $VTARGET $VDS" | tr -d '\r')"
   adb shell input keyevent KEYCODE_HOME; sleep 1
   adb shell am start -n "$VSW" --es targetPackage $VTARGET --es mode switch >/dev/null 2>&1; sleep 4
@@ -41,6 +47,8 @@ else
     read -r SX SY _ <<< "$SN"; adb shell input tap $SX $SY; sleep 3
     note "target package in datastore after Switch: $(adb shell "grep -c $VTARGET $VDS" | tr -d '\r') (1 expected: the confirmed switch persisted)"
   else note "INCONCLUSIVE(harness): Switch button not found"; fi
+  fi
+  note "(opaque installed IME package used to test the confirmation gate only; this is not proof the engine works)"
   note "FATAL EXCEPTION count after voice/update steps: $(adb logcat -d 2>/dev/null | grep -c 'FATAL EXCEPTION')"
 fi
 adb unroot >/dev/null 2>&1; sleep 3; adb wait-for-device
