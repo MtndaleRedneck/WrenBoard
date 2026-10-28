@@ -17,7 +17,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    <!-- Only used for the GitHub release check (update checking); no analytics or crash reporting -->
+    <!-- Used for the GitHub release check and the user-started update download. No analytics or crash reporting. -->
     <uses-permission android:name="android.permission.INTERNET"/>
     <!--<uses-permission android:name="android.permission.READ_PROFILE"/>--> <!-- ? -->
     <uses-permission android:name="android.permission.READ_USER_DICTIONARY"/>
@@ -42,6 +42,8 @@
          android:roundIcon="@mipmap/ic_launcher_round"
          android:supportsRtl="true"
          android:allowBackup="false"
+         android:dataExtractionRules="@xml/data_extraction_rules"
+         android:fullBackupContent="@xml/backup_rules"
          android:largeHeap="true"
          android:enableOnBackInvokedCallback="true"
          android:name=".CrashLoggingApplication">
