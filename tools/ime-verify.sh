@@ -230,7 +230,7 @@ clear_field
 type_letters h e l l o
 sleep 1.0
 EB=$(edit_bounds)
-if [ -n "$EB" ]; then nums=$(echo "$EB" | grep -o '[0-9]*' | tr '\n' ' '); set -- $nums; adb shell input tap $(( $3 - 30 )) $(( ($2+$4)/2 )); sleep 1.2; fi
+if [ -n "$EB" ]; then nums=$(echo "$EB" | grep -o '[0-9]*' | tr '\n' ' '); set -- $nums; adb shell input tap $(( $3 - 30 )) $(( $(jq -r ".keyboard_top" "$GEOM") - 120 )); sleep 1.2; fi
 shot 07f_caseB_before_tap
 adb shell log -t IMETARGET "CASEMARK-B"
 tapk shift; sleep 0.8; D1=$(edit_text); shot 07g_caseB_tap1
@@ -238,6 +238,12 @@ tapk shift; sleep 0.8; D2=$(edit_text); shot 07h_caseB_tap2
 tapk shift; sleep 0.8; D3=$(edit_text); shot 07i_caseB_tap3
 note "word-case cycle (variant B, cursor moved first) observed: hello -> '$D1' -> '$D2' -> '$D3'"
 if [ "$D1" = "Hello" ] && [ "$D2" = "HELLO" ]; then note "PASS: word-case cycling variant B (Hello then HELLO; third tap -> '$D3')"; else note "FAIL: word-case cycling variant B (see 07f-07i)"; fi
+# make sure the target app is foreground again before later sections (a stray tap must not strand the run)
+case "$(adb shell dumpsys window | grep mCurrentFocus)" in *imetarget*) ;; *)
+  note "NOTE: target app not focused after variant B (harness tap), relaunching"
+  adb shell am start -n com.wrenboard.imetarget/.TestInput >/dev/null 2>&1; sleep 2
+  B=$(edit_bounds); [ -n "$B" ] && tap_bounds "$B"; sleep 1.5;;
+esac
 adb logcat -d > shots/logcat_after_case.txt 2>&1
 dim "after-case-cycle"
 
