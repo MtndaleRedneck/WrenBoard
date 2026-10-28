@@ -28,14 +28,10 @@ shot s0_home
 texts() { sed 's/>/>\n/g' "$D/$1.xml" | sed -n 's/.*text="\([^"]\+\)".*bounds="\[\([0-9]*\),\([0-9]*\)\]\[\([0-9]*\),\([0-9]*\)\]".*/\1|\2 \3 \4 \5/p'; }
 note "TOP ACTIVITY:"; adb shell dumpsys activity activities | grep -m1 topResumedActivity | tee -a "$R"
 note "TEXTS[s0_home]:"; texts s0_home | tee -a "$R"
-# exploratory: tap each text node of s0 (max 8 below y=250), shot, back
-i=1
-texts s0_home | awk -F'|' 'NR>0' | head -12 | while IFS='|' read -r t b; do
-  set -- $b; cy=$(( ($2+$4)/2 )); [ "$cy" -lt 250 ] && continue
-  adb shell input tap $(( ($1+$3)/2 )) $cy; sleep 2
-  nm="s${i}_$(echo "$t" | tr -c 'A-Za-z0-9' _ | cut -c1-24)"
-  shot "$nm"; note "TAPPED '$t' -> $nm; TEXTS:"; texts "$nm" | tee -a "$R"
-  adb shell input keyevent KEYCODE_BACK; sleep 2
-  i=$((i+1)); [ $i -gt 8 ] && break
+for dest in home actionEdit keyboardAndTyping; do
+  adb shell am start -n "$PKG/org.futo.inputmethod.latin.uix.settings.SettingsActivity" --es navDest "$dest" >> "$R" 2>&1; sleep 5
+  nm="n_$dest"; shot "$nm"; note "TEXTS[$nm]:"; texts "$nm" | tee -a "$R"
+  note "DESCS[$nm]:"; sed 's/>/>\n/g' "$D/$nm.xml" | sed -n 's/.*content-desc="\([^"]\+\)".*bounds="\(\[[0-9,]*\]\[[0-9,]*\]\)".*/\1 \2/p' | tee -a "$R"
+  adb shell input swipe 720 2000 720 700 400; sleep 2; shot "${nm}_scrolled"; note "TEXTS[${nm}_scrolled]:"; texts "${nm}_scrolled" | tee -a "$R"
 done
 note "== done =="
