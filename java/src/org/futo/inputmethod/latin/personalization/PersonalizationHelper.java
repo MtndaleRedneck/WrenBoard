@@ -68,33 +68,37 @@ public class PersonalizationHelper {
     }
 
     /** Waits until every task queued so far on the keyboard executor has run (it is single threaded). */
-    private static void awaitKeyboardExecutor() {
+    private static boolean awaitKeyboardExecutor() {
         try {
             org.futo.inputmethod.latin.utils.ExecutorUtils
                     .getBackgroundExecutor(org.futo.inputmethod.latin.utils.ExecutorUtils.KEYBOARD)
                     .submit(new Runnable() { @Override public void run() {} })
                     .get(10, java.util.concurrent.TimeUnit.SECONDS);
+            return true;
         } catch (final Exception e) {
             Log.w(TAG, "Timed out or failed waiting for dictionary tasks", e);
+            return false;
         }
     }
 
     /** Writes pending learned words to their files and waits for it, so an export copies current data. */
-    public static void flushAllAndWait() {
+    public static boolean flushAllAndWait() {
         synchronized (sLangUserHistoryDictCache) {
             for (final SoftReference<UserHistoryDictionary> ref : sLangUserHistoryDictCache.values()) {
                 final UserHistoryDictionary dict = ref == null ? null : ref.get();
                 if (dict != null) dict.asyncFlushBinaryDictionary();
             }
         }
-        awaitKeyboardExecutor();
+        return awaitKeyboardExecutor();
     }
 
     /**
      * Before a restore replaces the files: close the live dictionaries WITHOUT flushing and wait until
      * every queued task has run, so no stale in-memory data is written over the restored files later.
      */
-    public static void quiesceForRestore() {
+    public static boolean quiesceForRestore() {
+        // Pending words are flushed first, so aborting a restore after this loses nothing.
+        if (!flushAllAndWait()) return false;
         synchronized (sLangUserHistoryDictCache) {
             UserHistoryDictionary.forceUncleanClose = true;
             try {
@@ -102,7 +106,7 @@ public class PersonalizationHelper {
                     final UserHistoryDictionary dict = ref == null ? null : ref.get();
                     if (dict != null) dict.close();
                 }
-                awaitKeyboardExecutor();
+                return awaitKeyboardExecutor();
             } finally {
                 UserHistoryDictionary.forceUncleanClose = false;
             }

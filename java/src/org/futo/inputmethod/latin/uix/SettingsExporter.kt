@@ -456,7 +456,11 @@ object SettingsExporter {
         val clipboardFile = context.clipboardFile
         val transformersDir = dirs.transformers
         val extFilesDir = dirs.ext
-        if(destructive) org.futo.inputmethod.latin.personalization.PersonalizationHelper.quiesceForRestore()
+        if(destructive && !org.futo.inputmethod.latin.personalization.PersonalizationHelper.quiesceForRestore()) {
+            // Nothing has been deleted or written yet. Make the keyboard reload its dictionaries and stop.
+            GlobalIMEMessage.tryEmit(IMEMessage.ReloadResources)
+            throw java.io.IOException("Could not pause learned-word saving; restore aborted, existing data unchanged")
+        }
         if (destructive) {
             // delete old clipboard
             if (clipboardFile.exists()) {
