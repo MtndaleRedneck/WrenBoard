@@ -278,7 +278,12 @@ object SettingsExporter {
 
         // Collect UserHistoryDictionaries
         context.filesDir.listFiles()?.forEach { resourceFile ->
-            if(resourceFile.name.startsWith("UserHistoryDictionary")
+            // WrenBoard: learned words are plain FILES (UserHistoryDictionary.<locale>.dict) in filesDir.
+            if(resourceFile.name.startsWith("UserHistoryDictionary") && resourceFile.isFile) {
+                zipOut.putNextEntry(ZipEntry("userdict/${resourceFile.name}"))
+                resourceFile.inputStream().use { it.copyTo(zipOut) }
+                zipOut.closeEntry()
+            } else if(resourceFile.name.startsWith("UserHistoryDictionary")
                 && resourceFile.isDirectory
             ) {
                 resourceFile.listFiles()!!.forEach { subfile ->
@@ -353,10 +358,11 @@ object SettingsExporter {
             name.startsWith("transformers/") -> SafeFiles.resolveContained(dirs.transformers, rest)
             name.startsWith("userdict/") -> {
                 val names = name.split("/")
-                if(names.size != 3 || !names[1].startsWith("UserHistoryDictionary")) {
+                // 2 parts = learned-words file (current layout); 3 parts = directory form of older backups
+                if((names.size != 2 && names.size != 3) || !names[1].startsWith("UserHistoryDictionary")) {
                     throw SecurityException("Unexpected user dictionary entry: $name")
                 }
-                SafeFiles.resolveContained(dirs.files, "${names[1]}/${names[2]}")
+                SafeFiles.resolveContained(dirs.files, names.drop(1).joinToString("/"))
             }
             name.startsWith("clipboard/") -> {
                 if(rest.contains('/')) throw SecurityException("Unexpected clipboard entry: $name")
@@ -466,7 +472,7 @@ object SettingsExporter {
 
             // delete all user dictionaries
             context.filesDir.listFiles()?.forEach {
-                if(it.isDirectory && it.name.startsWith("UserHistoryDictionary")) {
+                if(it.name.startsWith("UserHistoryDictionary")) {
                     it.deleteRecursively()
                 }
             }
