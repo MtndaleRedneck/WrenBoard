@@ -12,7 +12,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        variant: [upstream, wren]
+        variant: [wren-none, wren-grant, wren-wizard, wren-back, wren-poller, wren-all]
     steps:
       - uses: actions/checkout@v4
       - name: Build ime-target APK
@@ -21,7 +21,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          if [ "${{ matrix.variant }}" = "upstream" ]; then
+          if false; then
             curl -sSL -o /tmp/ime.apk https://github.com/futo-org/android-keyboard/releases/download/0.1.30/keyboard-0.1.30.apk
             echo org.futo.inputmethod.latin > /tmp/pkg
           else
@@ -43,7 +43,7 @@ jobs:
           arch: x86_64
           profile: Nexus 6
           disable-animations: true
-          script: bash tools/ime-control.sh /tmp/ime.apk $(cat /tmp/pkg) tools/ime-target/out/imetarget.apk ${{ matrix.variant }}
+          script: FACTORS=$(echo ${{ matrix.variant }} | sed s#wren-##) bash tools/ime-control.sh /tmp/ime.apk $(cat /tmp/pkg) tools/ime-target/out/imetarget.apk ${{ matrix.variant }}
       - uses: actions/upload-artifact@v4
         if: always()
         with:

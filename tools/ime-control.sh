@@ -11,6 +11,15 @@ R="$D/results.txt"; : > "$R"
 note() { echo "$1" | tee -a "$R"; }
 note "== control variant: $LABEL pkg=$PKGX =="
 adb install -r "$APK" >> "$R" 2>&1 || { note "CONTROL-RESULT: install failed"; exit 0; }
+FACTORS="${FACTORS:-}"
+note "FACTORS=$FACTORS"
+has() { echo ",$FACTORS," | grep -q ",$1,"; }
+if has grant || has all; then adb shell pm grant "$PKGX" android.permission.RECORD_AUDIO 2>/dev/null; note "factor: RECORD_AUDIO grant"; fi
+if has wizard || has all; then
+  adb shell monkey -p "$PKGX" -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1; sleep 5
+  adb shell uiautomator dump /sdcard/w.xml >/dev/null 2>&1
+  adb shell am force-stop "$PKGX"; note "factor: wizard launch+dump+force-stop"
+fi
 IME=""
 for i in $(seq 1 30); do
   IME=$(adb shell ime list -a -s 2>/dev/null | tr -d '\r' | grep "^$PKGX/" | head -1)
@@ -28,6 +37,11 @@ for i in 1 2 3; do
 done
 note "NORMAL-REGISTRATION: $REG ($IME)"
 [ "$REG" = yes ] || exit 0
+if has back || has all; then adb shell input keyevent KEYCODE_BACK; note "factor: BACK key"; fi
+if has poller || has all; then
+  ( while true; do adb shell settings get secure default_input_method >/dev/null 2>&1; sleep 0.4; done ) &
+  POLLPID=$!; trap "kill $POLLPID 2>/dev/null" EXIT; note "factor: 0.4s settings poller"
+fi
 adb shell dumpsys input_method > "$D/dumpsys_ime_pre.txt" 2>&1
 adb shell settings get secure enabled_input_methods > "$D/enabled_pre.txt" 2>&1
 sample() { # sample <tag> <seconds>
@@ -49,7 +63,7 @@ sample() { # sample <tag> <seconds>
   note "NO FLIP in $1 (held $2 s)"; return 0
 }
 : > "$D/timeline.txt"
-for c in 1 2 3; do
+for c in 1 2 3 4; do
   adb uninstall "$TPKG" >/dev/null 2>&1
   adb install -r "$TARGET_APK" >> "$R" 2>&1
   adb shell am start -n "$TPKG/.TestInput" >/dev/null 2>&1
