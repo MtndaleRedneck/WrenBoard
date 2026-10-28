@@ -30,6 +30,11 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.navigation.NavHostController
 import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
+import android.os.Build
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.navigation.compose.rememberNavController
 import org.futo.inputmethod.latin.BuildConfig
 import org.futo.inputmethod.latin.R
@@ -229,9 +234,18 @@ fun UpdatesCard(navController: NavHostController) {
     }
 }
 
+// Private Google Form route, wired in once the form exists.
+const val WRENBOARD_FEEDBACK_FORM_URL = ""
+
 @Composable
 fun FeedbackCard() {
     val context = LocalContext.current
+    val showPreview = remember { mutableStateOf(false) }
+
+    val deviceInfo = "App version: ${BuildConfig.VERSION_NAME}\n" +
+        "Android: ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})\n" +
+        "Device: ${Build.MANUFACTURER} ${Build.MODEL}"
+
     PaymentSurface(isPrimary = true) {
         PaymentSurfaceHeading(stringResource(R.string.feedback_card_title))
 
@@ -239,10 +253,43 @@ fun FeedbackCard() {
 
         Row(modifier = Modifier.fillMaxWidth()) {
             Button(onClick = {
-                context.openURI("https://github.com/MtndaleRedneck/WrenBoard/issues", newTask = true)
+                showPreview.value = true
             }, modifier = Modifier.align(Alignment.CenterVertically)) {
                 Text(stringResource(R.string.feedback_card_button))
             }
         }
+    }
+
+    if(showPreview.value) {
+        AlertDialog(
+            onDismissRequest = { showPreview.value = false },
+            title = { Text(stringResource(R.string.feedback_preview_title)) },
+            text = { Text(stringResource(R.string.feedback_preview_body, deviceInfo)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    showPreview.value = false
+                    val url = "https://github.com/MtndaleRedneck/WrenBoard/issues/new?body=" +
+                        Uri.encode(deviceInfo + "\n\n")
+                    context.openURI(url, newTask = true)
+                }) {
+                    Text(stringResource(R.string.feedback_route_github))
+                }
+            },
+            dismissButton = {
+                Row {
+                    if(WRENBOARD_FEEDBACK_FORM_URL.isNotEmpty()) {
+                        TextButton(onClick = {
+                            showPreview.value = false
+                            context.openURI(WRENBOARD_FEEDBACK_FORM_URL, newTask = true)
+                        }) {
+                            Text(stringResource(R.string.feedback_route_form))
+                        }
+                    }
+                    TextButton(onClick = { showPreview.value = false }) {
+                        Text(stringResource(R.string.feedback_route_cancel))
+                    }
+                }
+            }
+        )
     }
 }

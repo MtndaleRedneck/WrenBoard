@@ -39,6 +39,11 @@ import org.futo.inputmethod.latin.uix.TextEditPopupActivity
 import org.futo.inputmethod.latin.uix.USE_SYSTEM_VOICE_INPUT
 import org.futo.inputmethod.latin.uix.settings.NavigationItem
 import org.futo.inputmethod.latin.uix.settings.useDataStore
+
+import androidx.datastore.preferences.core.booleanPreferencesKey
+import org.futo.inputmethod.latin.uix.SettingsKey
+
+val DictionaryOnboardingDone = SettingsKey(booleanPreferencesKey("dictionary_onboarding_done"), false)
 import org.futo.inputmethod.latin.uix.settings.NavigationItemStyle
 import org.futo.inputmethod.latin.uix.settings.UserSetting
 import org.futo.inputmethod.latin.uix.settings.UserSettingsMenu
@@ -193,6 +198,17 @@ fun HomeScreen(navController: NavHostController = rememberNavController()) {
     val scrollState = rememberScrollState()
     val isDeveloper = useDataStoreValue(IS_DEVELOPER)
     val isPaid = useDataStoreValue(IS_ALREADY_PAID)
+
+    // Upfront dictionary: offer the personal dictionary once, on first entry
+    val (dictOnboardingDone, setDictOnboardingDone) = useDataStore(
+        key = DictionaryOnboardingDone.key, default = DictionaryOnboardingDone.default
+    )
+    LaunchedEffect(Unit) {
+        if(!dictOnboardingDone) {
+            setDictOnboardingDone(true)
+            navController.navigate("pdict")
+        }
+    }
 
     // Prompt on entry when a newer version is known and not skipped
     val (updateInfo, _) = useDataStore(key = LAST_UPDATE_CHECK_RESULT, default = "")

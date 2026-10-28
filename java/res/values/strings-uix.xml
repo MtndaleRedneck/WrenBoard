@@ -172,8 +172,13 @@
     <string name="updates_card_check_now">Check now</string>
     <string name="updates_card_skip">Skip this version</string>
     <string name="feedback_card_title">Feedback</string>
-    <string name="feedback_card_body">Report a problem or suggest an idea.</string>
-    <string name="feedback_card_button">Open feedback page</string>
+    <string name="feedback_card_body">Report a problem or suggest an idea. Nothing is sent without your review.</string>
+    <string name="feedback_card_button">Write feedback</string>
+    <string name="feedback_preview_title">What gets shared</string>
+    <string name="feedback_preview_body">Only this is attached, and you can edit it before sending:\n\n%1$s</string>
+    <string name="feedback_route_github">GitHub issue (public)</string>
+    <string name="feedback_route_form">Private form</string>
+    <string name="feedback_route_cancel">Cancel</string>
     <string name="theme_sunflower">Sunflower</string>
     <string name="theme_cotton_candy">Cotton Candy</string>
     <string name="theme_hotdog">Hot Dog</string>

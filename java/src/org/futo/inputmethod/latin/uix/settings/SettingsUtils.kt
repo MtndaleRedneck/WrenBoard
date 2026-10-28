@@ -24,7 +24,7 @@ fun SetupOrMain(inputMethodEnabled: Boolean, inputMethodSelected: Boolean, doubl
             AccessibilityUtils.init(context)
             if(AccessibilityUtils.getInstance().isAccessibilityEnabled) {
                 AccessibilityUtils.getInstance()
-                    .announceForAccessibility(view, "FUTO Keyboard has been activated")
+                    .announceForAccessibility(view, "WrenBoard has been activated")
             }
         }
     }
