@@ -37,7 +37,15 @@ jobs:
           arch: x86_64
           profile: Nexus 6
           disable-animations: true
-          script: bash tools/ime-verify.sh apk/*.apk
+          script: |
+            mkdir -p shots
+            echo "== control: official upstream FUTO APK on same emulator ==" | tee shots/results.txt
+            curl -sSL -o /tmp/control.apk https://github.com/futo-org/android-keyboard/releases/download/0.1.30/keyboard-0.1.30.apk
+            bash tools/ime-diagnose.sh /tmp/control.apk org.futo.inputmethod.latin
+            cat shots/diagnose-org_futo_inputmethod_latin.txt >> shots/results.txt
+            adb uninstall org.futo.inputmethod.latin || true
+            echo "== subject: WrenBoard APK ==" | tee -a shots/results.txt
+            bash tools/ime-verify.sh apk/*.apk
       - uses: actions/upload-artifact@v4
         if: always()
         with:
