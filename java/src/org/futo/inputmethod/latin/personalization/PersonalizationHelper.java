@@ -105,24 +105,38 @@ public class PersonalizationHelper {
                         return task.call();
                     }
                 });
+        boolean interrupted = false;
         try {
             try {
                 return f.get(30, java.util.concurrent.TimeUnit.SECONDS);
-            } catch (final java.util.concurrent.TimeoutException e) {
+            } catch (final java.util.concurrent.TimeoutException | InterruptedException e) {
+                interrupted = e instanceof InterruptedException;
                 synchronized (lock) {
                     if (!state[0]) {
                         state[1] = true;
                         f.cancel(false);
-                        throw new java.io.IOException("Timed out waiting for the dictionary task queue", e);
+                        if (interrupted) Thread.currentThread().interrupt();
+                        throw new java.io.IOException(interrupted
+                                ? "Interrupted while waiting for the dictionary task queue"
+                                : "Timed out waiting for the dictionary task queue", e);
                     }
                 }
-                // Already running: let the file IO finish rather than abandon it half done.
-                return f.get();
+                // Already running: let the file IO finish rather than abandon it half done. Waiting
+                // is not abortable by interrupts; the interrupt flag is restored afterwards.
+                while (true) {
+                    try {
+                        return f.get();
+                    } catch (final InterruptedException ie) {
+                        interrupted = true;
+                    }
+                }
             }
         } catch (final java.util.concurrent.ExecutionException e) {
             final Throwable c = e.getCause();
             if (c instanceof Exception) throw (Exception) c;
             throw e;
+        } finally {
+            if (interrupted) Thread.currentThread().interrupt();
         }
     }
 
