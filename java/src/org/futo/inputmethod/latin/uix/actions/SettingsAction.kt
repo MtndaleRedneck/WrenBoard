@@ -6,7 +6,7 @@ import org.futo.inputmethod.latin.uix.Action
 import org.futo.inputmethod.latin.uix.settings.SettingsActivity
 
 val SettingsAction = Action(
-    icon = R.drawable.settings,
+    icon = R.drawable.settings_sun,
     name = R.string.go_to_settings,
     simplePressImpl = { manager, _ ->
         val intent = Intent()

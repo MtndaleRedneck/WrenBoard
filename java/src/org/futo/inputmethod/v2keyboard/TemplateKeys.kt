@@ -95,6 +95,7 @@ data class SymbolsKey(val attributes: KeyAttributes = KeyAttributes()) : Templat
     override val templateKey: Key = BaseKey(
         spec = "!text/keylabel_to_symbol|!code/key_switch_alpha_symbol",
         moreKeys = SymbolsMoreKeys,
+        hint = " ",
         attributes = attributes + FunctionalAttributes
     )
 }

@@ -67,6 +67,9 @@ import androidx.compose.ui.Alignment.Companion.CenterVertically
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.border
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.geometry.Offset
@@ -355,6 +358,16 @@ fun RowScope.SuggestionItem(words: SuggestedWords, idx: Int, isPrimary: Boolean,
         modifier = textButtonModifier
             .weight(1.0f)
             .fillMaxHeight()
+            .then(if(isKeyStyledTheme()) {
+                Modifier
+                    .padding(vertical = 4.dp)
+                    .clip(WrenSuggestionShape)
+                    .background(
+                        Brush.verticalGradient(listOf(Color(0xFF3E3E3E), Color(0xFF060606))),
+                        WrenSuggestionShape
+                    )
+                    .border(1.dp, Color(0xFF0E0E0E), WrenSuggestionShape)
+            } else Modifier)
             .combinedClickable(
                 enabled = word != null,
                 onClick = onClick,
@@ -378,7 +391,17 @@ fun RowScope.SuggestionItem(words: SuggestedWords, idx: Int, isPrimary: Boolean,
     }
 }
 
+@Composable
+fun isKeyStyledTheme(): Boolean =
+    LocalKeyboardScheme.current.extended.advancedThemeOptions.keyBackgrounds != null
+
+private val WrenSuggestionShape = RoundedCornerShape(7.dp)
+
 @Composable fun RowScope.SuggestionSeparator() {
+    if(isKeyStyledTheme()) {
+        Spacer(Modifier.width(6.dp))
+        return
+    }
     Box(
         modifier = Modifier
             .fillMaxHeight(0.66f)
@@ -737,13 +760,15 @@ fun ExpandActionsButton(isActionsOpen: Boolean, onClick: () -> Unit) {
         16.dp.toPx()
     }
 
+    val styled = isKeyStyledTheme()
+    val strokePx = with(LocalDensity.current) { 1.5.dp.toPx() }
     IconButton(
         onClick = onClick,
         modifier = Modifier
             .width(42.dp)
             .rotate(
                 if (isActionsOpen) {
-                    -90.0f
+                    if(styled) 90.0f else -90.0f
                 } else {
                     0.0f
                 }
@@ -751,10 +776,17 @@ fun ExpandActionsButton(isActionsOpen: Boolean, onClick: () -> Unit) {
             .fillMaxHeight()
             .drawBehind {
                 drawCircle(
-                    color = bgCol,
+                    color = if(styled) Color(0xFF4A3B2C) else bgCol,
                     radius = circleRadius,
                     style = Fill
                 )
+                if(styled) {
+                    drawCircle(
+                        color = fgCol,
+                        radius = circleRadius - strokePx / 2f,
+                        style = Stroke(width = strokePx)
+                    )
+                }
             },
 
         colors = IconButtonDefaults.iconButtonColors(contentColor = fgCol)
