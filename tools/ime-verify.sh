@@ -805,6 +805,7 @@ note "== final =="
 dim "final"
 CUR=$(adb shell settings get secure default_input_method)
 check "default IME still WrenBoard at end" "$PKG" "$CUR"
+source tools/ime-learn-restore.sh
 source tools/ime-import-regress.sh
 source tools/ime-export-e2e.sh
 note "== done =="
