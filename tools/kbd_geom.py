@@ -62,7 +62,7 @@ def main():
         for x in xs:
             p = px[x, y]
             b = (p[0] + p[1] + p[2]) / 3.0
-            if b < bg - 12 or b > 200:
+            if b < bg - 12 or max(p) > 200:
                 n += 1
         return n / len(xs)
 
@@ -90,7 +90,7 @@ def main():
             for x in range(0, W, 8):
                 p = px[x, y]
                 tot += 1
-                if (p[0] + p[1] + p[2]) / 3.0 > 200:
+                if max(p) > 200:
                     n += 1
         return tot > 0 and n / tot > 0.005
     # Only trailing glyph-less bands are dropped: a uniform-dark nav area is
@@ -112,7 +112,7 @@ def main():
             for y in range(y1, y2 + 1, 3):
                 p = px[x, y]
                 b = (p[0] + p[1] + p[2]) / 3.0
-                if b < bg - 10 or b > 200:
+                if b < bg - 10 or max(p) > 200:
                     n += 1
             score.append(n / max(len(range(y1, y2 + 1, 3)), 1))
         need = 0.45
@@ -189,6 +189,71 @@ def main():
                      "last": [(clusters[-1][0] + clusters[-1][1]) // 2,
                               cluster_cy(clusters[-1])]}
 
+    # Two-row strip (approved layout): toolbar icons on the upper row (orange glyphs),
+    # chevron circle + suggestions on the lower row. Measured separately.
+    toolbar = None
+    if z2 - z1 >= 60:
+        mid = z1 + (z2 - z1) // 2
+        def is_orange(p):
+            return (p[0] > 180 and 70 < p[1] < 190 and p[2] < 90 and p[0] - p[2] > 110) or (p[0] + p[1] + p[2]) / 3.0 > 170
+        ocol = []
+        for x in range(0, W, 2):
+            n = 0
+            ys = list(range(z1, mid, 2))
+            for y in ys:
+                if is_orange(px[x, y]):
+                    n += 1
+            ocol.append(n)
+        cl = []
+        i = 0
+        while i < len(ocol):
+            if ocol[i] >= 2:
+                x1 = i
+                gap = 0
+                while i < len(ocol) and gap < 12:
+                    gap = 0 if ocol[i] >= 2 else gap + 1
+                    i += 1
+                x2 = i - 1 - gap
+                if x2 - x1 >= 6:
+                    cl.append((x1 * 2, x2 * 2))
+            i += 1
+        items = []
+        for c in cl:
+            ys_ = [y for y in range(z1, mid) for x in range(c[0], c[1] + 1, 2) if is_orange(px[x, y])]
+            cy = sum(ys_) // len(ys_) if ys_ else (z1 + mid) // 2
+            items.append([(c[0] + c[1]) // 2, cy])
+        if items:
+            toolbar = {"n": len(items), "items": items, "y1": z1, "y2": mid}
+        # lower row: first dark cluster = chevron circle
+        lo1 = (items[0][1] + 75) if items else mid + 4
+        lo2 = min(z2, lo1 + 130) if items else z2
+        lowc = []
+        for x in range(0, W, 2):
+            n = 0
+            rows_ = list(range(lo1, lo2 + 1, 3))
+            for y in rows_:
+                p = px[x, y]
+                if (p[0] + p[1] + p[2]) / 3.0 < bg - 16:
+                    n += 1
+            lowc.append(n / max(len(rows_), 1))
+        i = 0
+        chev = None
+        while i < len(lowc):
+            if lowc[i] > 0.25:
+                x1 = i
+                while i < len(lowc) and lowc[i] > 0.15:
+                    i += 1
+                if (i - 1 - x1) >= 8:
+                    chev = (x1 * 2, (i - 1) * 2)
+                    break
+            i += 1
+        if chev:
+            cyy = (lo1 + lo2) // 2
+            strip = dict(strip or {})
+            strip["first"] = [(chev[0] + chev[1]) // 2, cyy]
+            strip["cy"] = cyy
+            strip["chevron"] = True
+
     # Positional mapping with arrow-row awareness:
     #   bands[-1] with 4 wide cells = arrow row; bands[-2] = bottom row.
     keys = {}
@@ -234,7 +299,11 @@ def main():
             keys["backspace"] = [zrow["cells"][-1]["cx"], zrow["cells"][-1]["cy"]]
     if strip:
         keys["strip_expand"] = strip["first"]
-        keys["strip_mic"] = strip["last"]
+        keys["strip_mic"] = strip.get("last", strip["first"])
+    if toolbar:
+        keys["toolbar_voice"] = toolbar["items"][0]
+        if len(toolbar["items"]) >= 5:
+            keys["toolbar_clipboard"] = toolbar["items"][4]
 
     # Overlay for visual verification.
     ov = im.copy()
@@ -258,7 +327,7 @@ def main():
     ov.save(overlay_path)
 
     print(json.dumps({"keyboard_top": top, "bg": bg, "bands": out_bands,
-                      "strip": strip, "keys": keys}))
+                      "strip": strip, "toolbar": toolbar, "keys": keys}))
     if "q" not in keys or "space" not in keys:
         sys.exit(4)
 

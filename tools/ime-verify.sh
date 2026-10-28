@@ -510,10 +510,9 @@ else
     if echo "$CB1" | grep -q "clipboard-probe-42"; then note "PASS: clipboard paste via strip clipboard item ('$CB1')"; CB="$CB1"; fi
   fi
   if ! echo "$CB" | grep -q "clipboard-probe-42"; then
-  TC=$(jq -r '.strip.clusters // 0' "$GEOM")
+  TC=$(jq -r '.toolbar.n // 0' "$GEOM")
   if [ "$TC" -ge 5 ]; then
-    TY=$(jq -r '.strip.cy' "$GEOM")
-    adb shell input tap $(( W / (2 * TC) + 4 * W / TC )) $TY
+    adb shell input tap $(jq -r '.keys.toolbar_clipboard | "\(.[0]) \(.[1])"' "$GEOM")
     sleep 1.2
     shot 12b_clipboard_toolbar
     adb shell input tap $(( W / 2 )) $(( KTOP + 150 ))
@@ -536,8 +535,8 @@ else
   sleep 1.0
   shot 13_toolbar
   geom_rebuild 13_toolbar 13_toolbar_overlay && {
-    TC=$(jq -r '.strip.clusters // 0' "$GEOM")
-    note "expanded strip clusters: $TC"
+    TC=$(jq -r '.toolbar.n // 0' "$GEOM")
+    note "toolbar icon count (measured on 13_toolbar from pixels): $TC"
     [ "$TC" -eq 7 ] && note "PASS: toolbar shows 7 items" || note "FAIL: toolbar item count $TC (wanted 7; see 13_toolbar + overlay)"
   } || note "FAIL: geometry after toolbar expand"
   # collapse then re-expand via the chevron, capturing both states
@@ -553,7 +552,10 @@ dim "after-toolbar"
 note "== dictation listening state =="
 # strip is already expanded from the toolbar section; first item is voice
 # (settled toolbar order: voice/emoji/undo/redo/clipboard/theme/settings)
-VOICE=$(jq -r '.keys.strip_mic // empty | "\(.[0]) \(.[1])"' "$GEOM")
+VOICE=$(jq -r '.keys.toolbar_voice // empty | "\(.[0]) \(.[1])"' "$GEOM")
+if [ -z "$VOICE" ]; then
+  VOICE=$(jq -r '.keys.strip_mic // empty | "\(.[0]) \(.[1])"' "$GEOM")
+fi
 if [ -z "$VOICE" ]; then
   VOICE=$(jq -r '.strip.first // empty | "\(.[0]) \(.[1])"' "$GEOM")
 fi

@@ -133,9 +133,15 @@ val WrenBoardTheme = ThemeOption(
     available = { true }
 ) { context ->
     darkScheme.copy(
+        base = darkScheme.base.copy(
+            onBackground = AccentOrange,
+            onSurface = AccentOrange,
+            onSurfaceVariant = AccentOrange.copy(alpha = 0.78f)
+        ),
         extended = darkScheme.extended.copy(
             advancedThemeOptions = AdvancedThemeOptions(
                 keyRoundness = 0.78f,
+                textSizeMultiplier = 0.88f,
                 keyBorders = true,
                 keyBackgrounds = wrenKeyBackgrounds(context)
             )
