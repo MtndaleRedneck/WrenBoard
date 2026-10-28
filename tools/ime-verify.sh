@@ -34,6 +34,14 @@ field_text() { dump | tr '>' '>\n' | grep -o 'text="[^"]*"' | sed 's/text="//;s/
 note "== install =="
 adb install -r "$APK" >> "$R" 2>&1 || { note "FAIL: install"; exit 1; }
 adb shell pm grant "$PKG" android.permission.RECORD_AUDIO 2>/dev/null
+
+note "== first run / setup screen (pre-enable, wizard expected) =="
+adb shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1
+sleep 5
+shot 01_first_run
+FT=$(field_text)
+check "first-run shows setup wizard" "WrenBoard\|setup\|enable" "$FT"
+adb shell am force-stop "$PKG"
 # resolve the real IME component from the device (service is .LatinIME under the app package)
 IME=$(adb shell ime list -a -s 2>/dev/null | grep "^$PKG/" | head -1)
 [ -z "$IME" ] && IME="$PKG/$PKG.LatinIME"
@@ -85,36 +93,59 @@ check "IME selected as default" "$PKG" "$CUR"
 # dismiss any IME picker that popped up
 adb shell input keyevent KEYCODE_BACK
 
-note "== first run / setup screen =="
-adb shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1
+note "== open deterministic EditText (system user dictionary) =="
+# Primary target: AOSP user-dictionary add-word dialog - no first-run screens,
+# always present on google_apis images, single EditText. Released app untouched.
+adb shell am start -a android.settings.USER_DICTIONARY_SETTINGS >/dev/null 2>&1
 sleep 4
-shot 01_first_run
-FT=$(field_text)
-check "first-run shows setup content" "keyboard\|setup\|enable\|WrenBoard" "$FT"
-adb shell am force-stop "$PKG"
-
-note "== open Chrome url bar for typing =="
-adb shell am start -a android.intent.action.VIEW -d "https://example.com" >/dev/null 2>&1
-sleep 6
-# dismiss Chrome first-run welcome if present
-if dump | grep -qi "Use without an account"; then
-  tap_key "Use without an account"
-  sleep 2
-fi
-if dump | grep -qi "Accept &amp; continue\|Accept & continue"; then
-  tap_key "Accept & continue"
-  sleep 2
-fi
-adb shell input keyevent KEYCODE_TAB 2>/dev/null
-# tap the url bar
-dump | tr '>' '>\n' | grep -i 'url_bar\|Search or type' | grep -o 'bounds="\[[0-9]*,[0-9]*\]\[[0-9]*,[0-9]*\]"' | head -1 > /tmp/ub.txt
-if [ -s /tmp/ub.txt ]; then
-  nums=$(grep -o '[0-9]*' /tmp/ub.txt | tr '\n' ' '); read -r x1 y1 x2 y2 <<< "$nums"
-  adb shell input tap $(( (x1+x2)/2 )) $(( (y1+y2)/2 ))
-fi
+tap_key "English (United States)" || tap_key "For all languages"
 sleep 2
+D=$(dump)
+ADDB=$(echo "$D" | tr '>' '>\n' | grep -i 'content-desc="[^"]*[Aa]dd[^"]*"' | grep -o 'bounds="\[[0-9]*,[0-9]*\]\[[0-9]*,[0-9]*\]"' | head -1)
+if [ -n "$ADDB" ]; then
+  nums=$(echo "$ADDB" | grep -o '[0-9]*' | tr '\n' ' '); read -r x1 y1 x2 y2 <<< "$nums"
+  adb shell input tap $(( (x1+x2)/2 )) $(( (y1+y2)/2 ))
+  sleep 2
+  # the add-word dialog's EditText may need an explicit tap to summon the IME
+  tap_key "Type a word" 2>/dev/null
+  sleep 1
+fi
+FOCUSED=no
+if dump | grep -q "package=\"$PKG\""; then FOCUSED=yes; fi
+INPUTSRC=user-dictionary
+if [ "$FOCUSED" = no ]; then
+  note "dictionary field not focused; falling back to Chrome url bar (with first-run retry dismissal)"
+  INPUTSRC=chrome-fallback
+  adb shell am start -a android.intent.action.VIEW -d "https://example.com" >/dev/null 2>&1
+  for i in 1 2 3 4 5 6; do
+    sleep 3
+    D=$(dump)
+    if echo "$D" | grep -qi "Use without an account"; then
+      tap_key "Use without an account"; sleep 2; continue
+    fi
+    if echo "$D" | grep -qi "Accept &amp; continue\|Accept & continue"; then
+      tap_key "Accept & continue"; sleep 2; continue
+    fi
+    if echo "$D" | grep -qi "No thanks"; then
+      tap_key "No thanks"; sleep 2; continue
+    fi
+    if echo "$D" | grep -qi 'Search or type\|url_bar'; then break; fi
+  done
+  for i in 1 2 3 4; do
+    B=$(dump | tr '>' '>\n' | grep -i 'url_bar\|Search or type' | grep -o 'bounds="\[[0-9]*,[0-9]*\]\[[0-9]*,[0-9]*\]"' | head -1)
+    if [ -n "$B" ]; then
+      nums=$(echo "$B" | grep -o '[0-9]*' | tr '\n' ' '); read -r x1 y1 x2 y2 <<< "$nums"
+      adb shell input tap $(( (x1+x2)/2 )) $(( (y1+y2)/2 ))
+    fi
+    sleep 2
+    if dump | grep -q "package=\"$PKG\""; then FOCUSED=yes; break; fi
+  done
+fi
+note "input target: $INPUTSRC; keyboard window present after focus: $FOCUSED"
 shot 02_keyboard_visible
-dump > shots/ui_letters.xml 2>/dev/null
+dump > shots/ui_keyboard.xml 2>/dev/null
+KBDNODES=$(grep -c "package=\"$PKG\"" shots/ui_keyboard.xml 2>/dev/null || echo 0)
+note "KBD-NODES-PRESENT: $KBDNODES (0 = keys not in hierarchy, v5 taps must use pixel-measured coordinates)"
 
 note "== lowercase typing =="
 for k in h e l l o; do adb shell input keyevent KEYCODE_${k^^}; sleep 0.15; done
