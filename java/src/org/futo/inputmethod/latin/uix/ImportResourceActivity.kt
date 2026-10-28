@@ -722,14 +722,8 @@ class ImportResourceActivity : ComponentActivity() {
                     val contentResolver = applicationContext.contentResolver
                     val outDirectory = ModelPaths.getModelDirectory(applicationContext)
                     val outputFile = File(outDirectory, outputFileName)
-                    if (outputFile.exists()) {
-                        outputFile.delete()
-                    }
-
                     contentResolver.openInputStream(uri!!)!!.use { inputStream ->
-                        outputFile.outputStream().use { outputStream ->
-                            inputStream.copyTo(outputStream, 1024)
-                        }
+                        org.futo.inputmethod.latin.utils.SafeFiles.copyToFileAtomic(inputStream, outputFile)
                     }
 
                     // 2. Update reference
@@ -741,11 +735,7 @@ class ImportResourceActivity : ComponentActivity() {
                     contentResolver.openInputStream(uri!!)!!.use { inputStream ->
                         val outputFile =
                             File(applicationContext.getExternalFilesDir(null), outputFileName)
-                        if(outputFile.exists()) { outputFile.delete() }
-
-                        outputFile.outputStream().use { outputStream ->
-                            inputStream.copyTo(outputStream, 1024)
-                        }
+                        org.futo.inputmethod.latin.utils.SafeFiles.copyToFileAtomic(inputStream, outputFile)
                     }
 
                     // 2. Update reference
@@ -809,8 +799,12 @@ class ImportResourceActivity : ComponentActivity() {
                     )
 
                     Button(onClick = {
-                        getInputStream()?.use {
-                            ZipThemes.importTheme(applicationContext, it, item.v)
+                        try {
+                            getInputStream()?.use {
+                                ZipThemes.importTheme(applicationContext, it, item.v)
+                            }
+                        } catch(e: Exception) {
+                            android.widget.Toast.makeText(applicationContext, "Import failed: ${e.message}", android.widget.Toast.LENGTH_LONG).show()
                         }
                         finish()
                     }) {
@@ -837,12 +831,19 @@ class ImportResourceActivity : ComponentActivity() {
                 onApply = {
                     lifecycleScope.launch {
                         withContext(Dispatchers.IO) {
-                            contentResolver.openInputStream(uri!!)!!.use {
-                                SettingsExporter.loadSettings(
-                                    this@ImportResourceActivity,
-                                    it,
-                                    true
-                                )
+                            try {
+                                contentResolver.openInputStream(uri!!)!!.use {
+                                    SettingsExporter.loadSettings(
+                                        this@ImportResourceActivity,
+                                        it,
+                                        true
+                                    )
+                                }
+                            } catch(e: Exception) {
+                                Log.w("ImportResourceActivity", "Restore failed", e)
+                                withContext(Dispatchers.Main) {
+                                    android.widget.Toast.makeText(applicationContext, "Restore failed, existing data was not changed unless this message says otherwise: ${e.message}", android.widget.Toast.LENGTH_LONG).show()
+                                }
                             }
                         }
                         withContext(Dispatchers.Main) {
@@ -964,8 +965,12 @@ class ImportResourceActivity : ComponentActivity() {
                 ))
                 BugViewerState.triggerOpen()
             } else {
-                getInputStream()?.use {
-                    ZipThemes.importTheme(applicationContext, it, item.v)
+                try {
+                    getInputStream()?.use {
+                        ZipThemes.importTheme(applicationContext, it, item.v)
+                    }
+                } catch(e: Exception) {
+                    android.widget.Toast.makeText(applicationContext, "Import failed: ${e.message}", android.widget.Toast.LENGTH_LONG).show()
                 }
             }
             finish()

@@ -194,8 +194,10 @@ fun InnerRecognize(
         Text(
             text,
             modifier = Modifier
-                .fillMaxWidth()
-                .offset(x = 0.dp, y = 48.dp),
+                .offset(x = 0.dp, y = 48.dp)
+                // WrenBoard: opaque backing so the prompt stays readable over the circle
+                .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(8.dp))
+                .padding(horizontal = 12.dp, vertical = 4.dp),
             textAlign = TextAlign.Center,
             color = MaterialTheme.colorScheme.onSurface
         )

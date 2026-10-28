@@ -52,6 +52,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.io.ByteArrayOutputStream
 import java.io.File
+import org.futo.inputmethod.latin.utils.SafeFiles
 import java.io.InputStream
 import java.io.OutputStream
 import java.nio.ByteBuffer
@@ -307,17 +308,98 @@ object SettingsExporter {
 
     private fun String.splitSlash(): String = split("/", limit = 2)[1]
 
+    private class RestoreDirs(context: Context) {
+        val transformers = ModelPaths.getModelDirectory(context)
+        val ext = context.getExternalFilesDir(null)!!
+        val themes = ZipThemes.customThemesDir(context)
+        val files = context.filesDir
+        val clipboard = context.clipboardDir
+        val mozc = mozcUserProfileDir(context)
+        val rime = ChineseIME.getRimeDir(context)
+    }
+
+    /**
+     * Maps an archive entry name to its destination, or null for entries that are not plain files
+     * written to disk. Throws SecurityException for any name that would land outside its directory.
+     */
+    private fun destinationFor(name: String, dirs: RestoreDirs): File? {
+        val rest = name.substringAfter('/', "")
+        return when {
+            name.endsWith("/") -> null
+            name.startsWith("ext/") -> SafeFiles.resolveContained(dirs.ext, rest)
+            name.startsWith("transformers/") -> SafeFiles.resolveContained(dirs.transformers, rest)
+            name.startsWith("userdict/") -> {
+                val names = name.split("/")
+                if(names.size != 3 || !names[1].startsWith("UserHistoryDictionary")) {
+                    throw SecurityException("Unexpected user dictionary entry: $name")
+                }
+                SafeFiles.resolveContained(dirs.files, "${names[1]}/${names[2]}")
+            }
+            name.startsWith("clipboard/") -> {
+                if(rest.contains('/')) throw SecurityException("Unexpected clipboard entry: $name")
+                SafeFiles.resolveContained(dirs.clipboard, rest)
+            }
+            name.startsWith("mozc/") -> {
+                if(rest.contains('/')) throw SecurityException("Unexpected mozc entry: $name")
+                SafeFiles.resolveContained(dirs.mozc, rest)
+            }
+            name.startsWith("rime/") -> SafeFiles.resolveContained(dirs.rime, rest)
+            name.startsWith("themes/") -> {
+                if(rest.contains('/')) throw SecurityException("Unexpected theme entry: $name")
+                SafeFiles.resolveContained(dirs.themes, rest)
+            }
+            else -> null
+        }
+    }
+
+    /** Reads the whole staged archive without writing anything: checks names and integrity, returns uncompressed bytes. */
+    private fun validateArchive(staged: File, dirs: RestoreDirs): Long {
+        var total = 0L
+        val buf = ByteArray(16384)
+        ZipInputStream(staged.inputStream().buffered()).use { zin ->
+            var e = zin.nextEntry
+            while(e != null) {
+                destinationFor(e.name, dirs)
+                var n = zin.read(buf)
+                while(n >= 0) { total += n; n = zin.read(buf) }
+                zin.closeEntry()
+                e = zin.nextEntry
+            }
+        }
+        return total
+    }
+
     suspend fun loadSettings(
         context: Context,
         inputStream: InputStream,
         destructive: Boolean
+    ) {
+        val dirs = RestoreDirs(context)
+        // Stage the archive so it can be validated completely before anything is deleted or written.
+        val staged = File.createTempFile("restore", ".zip", context.cacheDir)
+        try {
+            staged.outputStream().use { SafeFiles.copyBounded(inputStream, it, context.cacheDir) }
+            val total = validateArchive(staged, dirs)
+            if(context.filesDir.usableSpace < total + SafeFiles.FREE_SPACE_FLOOR_BYTES) {
+                throw java.io.IOException("Not enough free storage space to restore this backup")
+            }
+            staged.inputStream().buffered().use { loadSettingsValidated(context, it, destructive, dirs) }
+        } finally {
+            staged.delete()
+        }
+    }
+
+    private suspend fun loadSettingsValidated(
+        context: Context,
+        inputStream: InputStream,
+        destructive: Boolean,
+        dirs: RestoreDirs
     ) = ZipInputStream(inputStream).use { zipIn ->
         var entry = zipIn.nextEntry
 
         val clipboardFile = context.clipboardFile
-        val transformersDir = ModelPaths.getModelDirectory(context)
-        val extFilesDir = context.getExternalFilesDir(null)!!
-        val themesDir = ZipThemes.customThemesDir(context)
+        val transformersDir = dirs.transformers
+        val extFilesDir = dirs.ext
         if (destructive) {
             // delete old clipboard
             if (clipboardFile.exists()) {
@@ -377,75 +459,10 @@ object SettingsExporter {
                     onClipboardImportedFlow.emit(clipboardFile)
                 }
 
-                entry.name.startsWith("ext/") -> {
-                    File(extFilesDir, entry.name.splitSlash()).outputStream().use {
-                        zipIn.copyTo(it)
-                    }
-                }
-
-                entry.name.startsWith("transformers/") -> {
-                    File(transformersDir, entry.name.splitSlash()).outputStream().use {
-                        zipIn.copyTo(it)
-                    }
-                }
-
-                entry.name.startsWith("userdict/") -> {
-                    val names = entry.name.split("/")
-                    assert(names.size == 3)
-
-                    val subdirName = names[1]
-                    val fileName = names[2]
-
-                    val subdir = File(context.filesDir, subdirName)
-                    subdir.mkdirs()
-
-                    File(subdir, fileName).outputStream().use {
-                        zipIn.copyTo(it)
-                    }
-                }
-
-                entry.name.startsWith("clipboard/") -> {
-                    val relDir = entry.name.splitSlash()
-                    assert(!relDir.contains('/'))
-
-                    val clipboardDir = context.clipboardDir
-                    clipboardDir.mkdirs()
-                    File(clipboardDir, relDir).outputStream().use {
-                        zipIn.copyTo(it)
-                    }
-                }
-
-
-                entry.name.startsWith("mozc/") -> {
-                    val relDir = entry.name.splitSlash()
-
-                    assert(!relDir.contains('/'))
-
-                    val userProfileDir = mozcUserProfileDir(context)
-                    userProfileDir.mkdirs()
-                    File(userProfileDir, relDir).outputStream().use {
-                        zipIn.copyTo(it)
-                    }
-                }
-
-                entry.name.startsWith("rime/") -> {
-                    val relDir = entry.name.splitSlash()
-                    val rimeDir = ChineseIME.getRimeDir(context)
-
-                    val targetFile = File(rimeDir, relDir)
-                    targetFile.parentFile!!.mkdirs()
-
-                    targetFile.outputStream().use {
-                        zipIn.copyTo(it)
-                    }
-                }
-
-                entry.name.startsWith("themes/") -> {
-                    themesDir.mkdirs()
-
-                    File(themesDir, entry.name.splitSlash()).outputStream().use {
-                        zipIn.copyTo(it)
-                    }
+                destinationFor(entry.name, dirs) != null -> {
+                    val dest = destinationFor(entry.name, dirs)!!
+                    dest.parentFile?.mkdirs()
+                    dest.outputStream().use { SafeFiles.copyBounded(zipIn, it, dest.parentFile!!) }
                 }
 
                 else -> {

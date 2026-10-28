@@ -18,6 +18,7 @@ import org.futo.inputmethod.latin.uix.theme.serialization.SerializableJsonTheme
 import org.futo.inputmethod.latin.uix.theme.serialization.SerializableTheme
 import org.futo.inputmethod.latin.uix.theme.serialization.TomlZipTheme
 import org.futo.inputmethod.latin.uix.theme.serialization.themeJson
+import org.futo.inputmethod.latin.utils.SafeFiles
 import org.futo.inputmethod.latin.utils.ZipFileHelper
 import org.futo.inputmethod.latin.utils.readAllBytesCompat
 import java.io.BufferedOutputStream
@@ -66,7 +67,7 @@ object ZipThemes {
 
     fun customThemesDir(context: Context) = File(context.filesDir, "themes").also { it.mkdirs() }
 
-    fun listCustom(context: Context): List<ThemeFileName> = customThemesDir(context).listFiles()?.map { custom(it.nameWithoutExtension) } ?: emptyList()
+    fun listCustom(context: Context): List<ThemeFileName> = customThemesDir(context).listFiles()?.filter { it.isFile && it.name.endsWith(".zip") }?.map { custom(it.nameWithoutExtension) } ?: emptyList()
     fun listAssets(context: Context): List<ThemeFileName> =
         context.assets.list("themes/")?.filter {
             it != null && it.endsWith(".zip")
@@ -180,6 +181,10 @@ object ZipThemes {
             if(config == null) throw Exception("Config not found")
             if(config?.id == null || (config?.id?.length ?: 0) < 3) throw Exception("ID must be at least 3 characters for a custom theme")
             if(config?.id?.endsWith('_') == true) throw Exception("ID must not end with underscores")
+            if(!SafeFiles.isValidThemeId(config?.id)) {
+                config = null
+                throw Exception("ID may only contain letters, digits, '.', '_' and '-', and must start with a letter or digit")
+            }
         } catch(e: Exception) {
             error += "Cause: ${e.message}\n\nStack trace: ${e.stackTrace.map { it.toString() }}"
             e.printStackTrace()
@@ -196,11 +201,10 @@ object ZipThemes {
         }
 
         val id = metadata.config.id!!
-        val file = File(customThemesDir(context), "${id}.zip")
+        if(!SafeFiles.isValidThemeId(id)) throw SecurityException("Invalid theme ID")
+        val file = SafeFiles.resolveContained(customThemesDir(context), "${id}.zip")
 
-        file.outputStream().use { outputStream ->
-            inputStream.copyTo(outputStream)
-        }
+        SafeFiles.copyToFileAtomic(inputStream, file)
 
         invalidateCache(custom(id))
 
@@ -331,7 +335,7 @@ object ZipThemes {
 
     fun delete(context: Context, name: ThemeFileName) {
         if(name.location != ThemeLocation.Custom) throw IllegalArgumentException("Cannot delete non-custom themes")
-        val file = File(customThemesDir(context), "${name.name}.zip")
+        val file = try { SafeFiles.resolveContained(customThemesDir(context), "${name.name}.zip") } catch(e: Exception) { return }
         if(!file.isFile) return
 
         // Don't stay on a theme being deleted!
