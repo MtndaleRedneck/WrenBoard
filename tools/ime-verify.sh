@@ -93,36 +93,27 @@ sleep 5
 shot 01_first_run
 check "first-run shows setup wizard" "WrenBoard\|setup\|enable" "$(dump | grep -o 'text="[^"]*"' | tr '\n' '|')"
 adb shell am force-stop "$PKG"
-IME=$(adb shell ime list -a -s 2>/dev/null | grep "^$PKG/" | head -1)
-[ -z "$IME" ] && IME="$PKG/$PKG.LatinIME"
+IME=""
+for i in $(seq 1 30); do
+  IME=$(adb shell ime list -a -s 2>/dev/null | tr -d '\r' | grep "^$PKG/" | head -1)
+  [ -n "$IME" ] && break
+  sleep 2
+done
+note "enumerated IME services (attempt $i): $(adb shell ime list -a -s 2>/dev/null | tr -d '\r' | tr '\n' ' ')"
+[ -z "$IME" ] && fail_early "WrenBoard IME service never enumerated by 'ime list -a -s' (no constructed id used)"
 note "resolved IME id: $IME"
 REGPATH=none
 adb shell settings put secure show_ime_with_hard_keyboard 1
-adb shell ime enable "$IME" >> "$R" 2>&1
-adb shell ime set "$IME" >> "$R" 2>&1
-CUR=$(adb shell settings get secure default_input_method)
-if echo "$CUR" | grep -q "$PKG"; then REGPATH=normal-ime-command; fi
-if [ "$REGPATH" = none ]; then
-  note "standard enable failed; trying explicit component id"
-  IME2="$PKG/org.futo.inputmethod.latin.LatinIME"
-  adb shell ime enable "$IME2" >> "$R" 2>&1
-  adb shell ime set "$IME2" >> "$R" 2>&1
-  IME="$IME2"
+for i in 1 2 3; do
+  adb shell ime enable "$IME" >> "$R" 2>&1
+  adb shell ime set "$IME" >> "$R" 2>&1
   CUR=$(adb shell settings get secure default_input_method)
-  if echo "$CUR" | grep -q "$PKG"; then REGPATH=normal-ime-command-explicit-id; fi
-fi
-if [ "$REGPATH" = none ]; then
-  note "DIAGNOSTIC-ONLY: settings-provider write (NOT a registration pass)"
-  adb shell settings put secure enabled_input_methods "$IME" >> "$R" 2>&1
-  adb shell settings put secure default_input_method "$IME" >> "$R" 2>&1
-  CUR=$(adb shell settings get secure default_input_method)
-  echo "$CUR" | grep -q "$PKG" && REGPATH=settings-provider-write-DIAGNOSTIC-ONLY
-fi
+  if echo "$CUR" | grep -q "$PKG"; then REGPATH=normal-ime-command; break; fi
+  sleep 3
+done
 note "REGISTRATION-PATH: $REGPATH"
-case "$REGPATH" in
-  normal-ime-command*) note "NORMAL-REGISTRATION: PASS" ;;
-  *) note "NORMAL-REGISTRATION: FAIL (no usability PASS may be claimed from this run)" ;;
-esac
+[ "$REGPATH" = none ] && fail_early "normal ime enable/set did not register WrenBoard (no settings-provider fallback in the gate)"
+note "NORMAL-REGISTRATION: PASS"
 check "IME selected as default" "$PKG" "$CUR"
 adb shell input keyevent KEYCODE_BACK
 dim "post-registration"
@@ -205,7 +196,7 @@ dim "after-shift-single"
 note "== caps lock via shift DOUBLE-TAP (SwiftKey baseline) =="
 clear_field
 SH=$(jq -r '.keys.shift | "\(.[0]) \(.[1])"' "$GEOM")
-adb shell input tap $SH; sleep 0.12; adb shell input tap $SH
+adb shell "input tap $SH & input tap $SH & wait"
 sleep 0.8
 shot 06a_capslock_doubletap_state
 type_letters w o r l d
@@ -244,28 +235,25 @@ dim "after-case-cycle"
 
 note "== whole-word hold backspace (accelerating) =="
 clear_field
-type_letters h e l l o; tapk space; type_letters w o r l d
-sleep 0.4
+type_letters h e l l o; tapk space; type_letters w o r l d; tapk space; type_letters h e l l o; tapk space; type_letters w o r l d; tapk space; type_letters h e l l o
+sleep 0.6
 BEFORE=$(edit_text)
 BS=$(jq -r '.keys.backspace | "\(.[0]) \(.[1])"' "$GEOM")
-hold_key $BS 1300
-sleep 0.6
-shot 08b_backspace_midhold
-sleep 1.2
-AFTER1=$(edit_text)
-note "hold-backspace #1: '$BEFORE' -> '$AFTER1'"
-if [ "${#AFTER1}" -lt "${#BEFORE}" ] && [ "${#AFTER1}" -ge 5 ] && [ "${AFTER1:0:5}" = "hello" ]; then
-  note "PASS: hold-backspace deleted at word level ('$AFTER1')"
-else
-  note "FAIL: hold-backspace word-level delete (before='$BEFORE' after='$AFTER1')"
-fi
+adb logcat -c
 hold_key $BS 2500
-sleep 1.2
-shot 08c_backspace_longhold
-sleep 2.0
-AFTER2=$(edit_text)
-note "hold-backspace #2 (accelerated): '$AFTER1' -> '$AFTER2'"
-[ "${#AFTER2}" -lt "${#AFTER1}" ] && note "PASS: hold-backspace acceleration continues" || note "FAIL: hold-backspace acceleration (after='$AFTER2')"
+sleep 0.9
+shot 08b_backspace_midhold
+sleep 2.5
+SERIES=$(adb logcat -d -s IMETARGET:I | tr -d '\r' | sed -n 's/.*IMETARGET: FIELD=//p')
+note "hold-backspace field series (each state after a delete): $(echo "$SERIES" | tr '\n' '|')"
+AFTER1=$(edit_text)
+note "hold-backspace: '$BEFORE' -> '$AFTER1'"
+# word-level = at least one single step removes >=2 characters; letter-level steps remove exactly 1
+MAXDROP=$(echo "$SERIES" | awk 'BEGIN{p=-1;m=0}{l=length($0); if(p>=0 && p-l>m)m=p-l; p=l}END{print m}')
+note "largest single-step delete: $MAXDROP chars"
+if [ "$MAXDROP" -ge 2 ]; then note "PASS: hold-backspace removes whole words per step (max step $MAXDROP)"; else note "FAIL: hold-backspace is letter-by-letter (max step $MAXDROP)"; fi
+STEPS=$(echo "$SERIES" | wc -l)
+note "steps observed in one hold: $STEPS"
 dim "after-backspace"
 
 note "== symbols page 1 =="

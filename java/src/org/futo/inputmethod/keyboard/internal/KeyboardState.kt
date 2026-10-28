@@ -393,8 +393,15 @@ class KeyboardState(private val switchActions: SwitchActions) {
         when (code) {
             Constants.CODE_SHIFT -> {
                 shiftKeyState.onPress()
-                toggleShift(manually = true)
-                onShiftTapForShiftLockTimer()
+                // SwiftKey-style three states: off -> shift (one letter) -> caps lock -> off
+                when {
+                    isAlphabet && currentLayout.page == KeyboardLayoutPage.ShiftLocked -> {
+                        alphabetShiftState.isShiftLocked = false
+                        toggleShift(false)
+                    }
+                    isAlphabet && currentLayout.page == KeyboardLayoutPage.ManuallyShifted -> lockShift()
+                    else -> toggleShift(manually = true)
+                }
             }
             Constants.CODE_CAPSLOCK -> {
                 // only in onReleaseKey?

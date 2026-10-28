@@ -266,7 +266,13 @@ val DefaultActionSettings = mapOf(
     ActionCategory.PinnedKey to listOf(VoiceInputAction),
     ActionCategory.Favorites to listOf(UndoAction, RedoAction, ClipboardHistoryAction, ThemeAction, SettingsAction),
     ActionCategory.More to listOf(), // Remaining actions get populated automatically by ensureWellFormed
-    ActionCategory.Disabled to listOf(MemoryDebugAction, SystemVoiceInputAction, BugViewerAction)
+    // Crossed out in the approved action list: stored in Settings (re-enable via the action editor)
+    ActionCategory.Disabled to listOf(
+        MemoryDebugAction, SystemVoiceInputAction, BugViewerAction,
+        CopyAction, CutAction, PasteAction, SelectAllAction, TextEditAction,
+        KeyboardModeAction, FontTyperAction, SwitchLanguageAction,
+        ArrowUpAction, ArrowDownAction, ArrowRightAction
+    )
 )
 
 val DefaultActionKey = DefaultActionSettings[ActionCategory.ActionKey]!!.firstOrNull()?.let {

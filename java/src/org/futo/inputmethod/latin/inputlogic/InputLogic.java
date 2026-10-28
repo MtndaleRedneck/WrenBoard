@@ -2022,7 +2022,9 @@ public final class InputLogic {
      */
     private void selectWordBeforeCursorForRecapitalization(final SettingsValues settingsValues) {
         if (mWordComposer.isComposingWord()) {
-            return;
+            // Commit the word as typed so it can be selected and recapitalized.
+            mConnection.finishComposingText();
+            mWordComposer.reset(false);
         }
         final int cursorPosition = mConnection.getExpectedSelectionEnd();
         final CharSequence textBeforeCursor = mConnection.getTextBeforeCursor(
