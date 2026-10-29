@@ -23,7 +23,8 @@ run_case() { # run_case <label> <KB>
   note "=== case $1: snapshot ${2} KB ==="; seed "$2"
   adb logcat -c
   OUT=$(adb shell bmgr backupnow $P 2>&1 | tr -d '\r'); note "backupnow: $(echo "$OUT" | tr '\n' ' ' | cut -c1-300)"
-  adb logcat -d 2>/dev/null | tr -d '\r' | grep -iE "FullBackup|BackupManager|quota|LocalTransport" | tail -12 | cut -c1-220 >> "$R"
+  adb logcat -d 2>/dev/null | tr -d '\r' | grep -iE "FullBackup|BackupManager|quota|LocalTransport|bkproto|PFTBT|BackupTransport" | cut -c1-260 > "out/log_$1.txt"
+  note "full filtered backup log for this case: out/log_$1.txt ($(wc -l < out/log_$1.txt) lines); quota/size lines: $(grep -iE 'quota|exceed|too large|rejected' out/log_$1.txt | head -3 | tr '\n' '|' | cut -c1-300)"
   TOKEN=$(adb shell bmgr list sets 2>/dev/null | tr -d '\r' | awk '{print $1}' | head -1); note "restore set token: $TOKEN"
   adb uninstall $P >/dev/null 2>&1; note "after uninstall dir present: $(adb shell "[ -e /data/data/$P ] && echo yes || echo no" | tr -d '\r')"
   adb install -r "$APK" 2>&1 | tail -1 | tee -a "$R"; sleep 3
@@ -36,8 +37,11 @@ run_case() { # run_case <label> <KB>
   note "RESULT $1: excluded clip_history.json present after restore=$(adb shell "[ -e $D/clip_history.json ] && echo YES-UNEXPECTED || echo no" | tr -d '\r'); other.txt present=$(adb shell "[ -e $D/other.txt ] && echo YES-UNEXPECTED || echo no" | tr -d '\r')"
   adb shell am start -n $P/.Main >/dev/null 2>&1; sleep 2
 }
+# order varied on purpose: the first run showed mid (12 MB) not captured after a small case; repeat mid first and again later to separate size from order
+run_case mid_first 12288
 run_case small 512
-run_case mid 12288
+run_case mid_again 12288
 run_case under_quota 24000
+run_case mid_after_under 12288
 run_case over_quota 27000
 note "== done =="
