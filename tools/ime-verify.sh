@@ -811,9 +811,13 @@ note "== final =="
 dim "final"
 CUR=$(adb shell settings get secure default_input_method)
 check "default IME still WrenBoard at end" "$PKG" "$CUR"
+LDC() { note "LEARNED-DIR checkpoint [$1]: $(adb shell 'ls -l /data/data/com.wrenboard.keyboard/files/UserHistoryDictionary.en_US.dict 2>&1' | tr -d '\r' | tr '\n' ';' | cut -c1-260)"; }
 source tools/ime-learn-restore.sh
+LDC after-learn-restore
 source tools/ime-import-regress.sh
+LDC after-import-regress
 source tools/ime-voice-update.sh   # before e2e: e2e uninstalls and reinstalls the app
+LDC after-voice-update
 source tools/ime-export-e2e.sh
 source tools/ime-launcher-icon.sh
 note "== done =="

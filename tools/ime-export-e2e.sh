@@ -18,6 +18,7 @@ declare -A WANT
 for f in files/themes/e2etheme.zip files/clipboardfiles/e2eclip.bin files/clipboard.json ; do WANT[$APPDIR/$f]=$(md $APPDIR/$f); done
 for f in e2e_user.dict rime/e2e.txt; do WANT[$EXT/$f]=$(md $EXT/$f); done
 # 2. export through the app UI
+LDC pre-export-e2e-seed
 adb shell rm -f /sdcard/Download/FUTOKeyboardSettings_* /sdcard/Documents/FUTOKeyboardSettings_* 2>/dev/null
 adb shell input keyevent KEYCODE_HOME; sleep 1
 adb shell am start -n "$SETTINGS_ACT" --es navDest exportingcfg >/dev/null 2>&1; sleep 6
