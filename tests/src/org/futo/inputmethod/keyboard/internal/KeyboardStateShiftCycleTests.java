@@ -51,6 +51,10 @@ public class KeyboardStateShiftCycleTests extends KeyboardStateTestsBase {
         mSwitcher.onCodeInput(Constants.CODE_CAPSLOCK);
         mSwitcher.onReleaseKey(Constants.CODE_CAPSLOCK, NOT_SLIDING);
         assertEquals("guard keeps the lock", ALPHABET_SHIFT_LOCKED, mSwitcher.getLayoutId());
+        // Force the internal lock flag onto the page: the symbols round trip rebuilds the alphabet
+        // page from the flag, so an unguarded (toggled-off) flag would come back unlocked.
+        pressAndReleaseKey(CODE_SYMBOL, SYMBOLS_UNSHIFTED, SYMBOLS_UNSHIFTED);
+        pressAndReleaseKey(CODE_SYMBOL, ALPHABET_SHIFT_LOCKED, ALPHABET_SHIFT_LOCKED);
     }
 
     public void testAutoCapitalisedShiftBehavesLikeUpstreamMode() {
