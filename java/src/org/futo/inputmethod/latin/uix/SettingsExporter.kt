@@ -611,7 +611,9 @@ object SettingsExporter {
                 }
             }
             null
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            // Exception type only: no message, entry names or paths.
+            android.util.Log.w("SettingsExporter", "getCfgFileMetadata failed: ${e.javaClass.simpleName}")
             null
         }
     }

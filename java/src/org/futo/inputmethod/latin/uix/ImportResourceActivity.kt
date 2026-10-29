@@ -911,6 +911,8 @@ class ImportResourceActivity : ComponentActivity() {
     private fun getInputStream(): InputStream? = try {
         uri?.let { contentResolver.openInputStream(it) }
     } catch(e: Exception) {
+        // Exception type only: no message, path or URI, since those can hold private names.
+        Log.w("ImportResourceActivity", "openInputStream failed: ${e.javaClass.simpleName}" + (e.cause?.let { " (cause ${it.javaClass.simpleName})" } ?: ""))
         null
     }
 

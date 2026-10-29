@@ -25,7 +25,7 @@ precond learn || note "INCONCLUSIVE(harness): learn typing focus not reached"; c
 learn_word z o r b l a x
 sleep 8   # more than the 5 s delayed flush
 LPHASE=pre; predict_slots zorblax z o r b l; H=$PR
-if [ "$H" = BLOCKED ]; then note "INCONCLUSIVE(harness): pre-export prediction check blocked (focus/typing not verified)"; elif [ -n "$H" ]; then note "PASS: typed learned word 'zorblax' is offered as a prediction from 'zor' (slot:field = '$H')"; else note "FAIL-or-INCONCLUSIVE: no suggestion slot produced 'zorblax' after typing it 3 times (see shots learn_pred_zorblax_*; check frames to tell app from harness)"; fi
+if [ "$H" = BLOCKED ]; then note "INCONCLUSIVE(harness): pre-export prediction check blocked (focus/typing not verified)"; elif [ -n "$H" ]; then note "PASS: typed learned word 'zorblax' is offered as a prediction from 'zorbl' (slot:field = '$H')"; else note "FAIL-or-INCONCLUSIVE: no suggestion slot produced 'zorblax' after typing it 3 times (see shots learn_pred_zorblax_*; check frames to tell app from harness)"; fi
 adb root >/dev/null 2>&1; sleep 4; adb wait-for-device; sleep 2
 if adb shell id 2>/dev/null | grep -q "uid=0"; then
   note "learned dict dir after typing: $(adb shell ls -l $LDIR | tr -d '\r' | tr '\n' ';')"
