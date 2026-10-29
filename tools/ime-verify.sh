@@ -115,6 +115,8 @@ precond() { # precond <label>: target app focused and keyboard shown, else relau
 }
 screen_hash() { adb exec-out screencap -p | md5sum | cut -d' ' -f1; }
 
+# Harness only: the CI emulator sometimes shows "Pixel Launcher isn't responding" right after boot, which steals window focus from the target (seen in run 40814151119). Hide system error dialogs for the run.
+adb shell settings put global hide_error_dialogs 1 >/dev/null 2>&1; adb shell am broadcast -a android.intent.action.CLOSE_SYSTEM_DIALOGS >/dev/null 2>&1
 note "== install =="
 adb install -r "$APK" >> "$R" 2>&1 || fail_early "WrenBoard APK install"
 adb shell pm grant "$PKG" android.permission.RECORD_AUDIO 2>/dev/null
