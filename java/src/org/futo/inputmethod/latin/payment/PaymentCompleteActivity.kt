@@ -115,7 +115,7 @@ class PaymentCompleteActivity : ComponentActivity() {
         if((targetData?.startsWith("futo-keyboard://license/") == true) || (targetData?.startsWith("futo-voice-input://license/") == true)) {
             onPaid("activate")
         } else {
-            Log.e("PaymentCompleteActivity", "futo-keyboard launched with invalid targetData $targetData")
+            Log.e("PaymentCompleteActivity", "launched with an unsupported deep link")
             finish()
         }
     }
