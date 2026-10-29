@@ -68,19 +68,25 @@ typedef DictionaryHeaderStructurePolicy::AttributeMap AttributeMap;
     // other bytes below 0x20 start a 3 byte code point, anything else is a 1 byte code point.
     size_t pos = optionsPos;
     int terminators = 0;
+    bool endedOnTerminator = true; // An empty attribute area ends cleanly.
     while (pos < headerSize) {
         const uint8_t b = dictBuf[pos];
         if (b == 0x1F) {
             ++terminators;
             ++pos;
+            endedOnTerminator = true;
         } else if (b < 0x20) {
             pos += 3;
+            endedOnTerminator = false;
         } else {
             ++pos;
+            endedOnTerminator = false;
         }
     }
-    // Every attribute is a key string plus a value string, all terminated inside the header.
-    return pos == headerSize && (terminators % 2) == 0;
+    // Every attribute is a key string plus a value string, all terminated inside the header:
+    // the walk must end exactly at the header end on a terminator, one terminator per string,
+    // so the count is even. Otherwise the reader below runs past the header end.
+    return pos == headerSize && endedOnTerminator && (terminators % 2) == 0;
 }
 
 /* static */ HeaderReadWriteUtils::DictionaryFlags
@@ -95,6 +101,8 @@ typedef DictionaryHeaderStructurePolicy::AttributeMap AttributeMap;
     return NO_FLAGS;
 }
 
+// Reads every attribute string in the header. The buffer must have been accepted by
+// isHeaderValid() first: this reader trusts the framing and does no bounds checks of its own.
 /* static */ void HeaderReadWriteUtils::fetchAllHeaderAttributes(const uint8_t *const dictBuf,
         AttributeMap *const headerAttributes) {
     const int headerSize = getHeaderSize(dictBuf);

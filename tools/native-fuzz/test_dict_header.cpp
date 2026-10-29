@@ -28,6 +28,23 @@ int main() {
     { B a = attr("k", "v"); a.pop_back(); f += check("unterminated value string", hdr(12 + a.size(), a), false); }
     { B a = attr("k", "v"); B x = a; x.push_back(0x05); x.push_back(0x41); f += check("3-byte code point straddles header end", hdr(12 + x.size() - 1, x), false); }
     { B a = attr("k", "v"); a.push_back('x'); a.push_back(0x1F); f += check("odd number of strings (key without value)", hdr(12 + a.size(), a), false); }
+    // The writer never emits these: an even (or zero) terminator count and an exact-end walk,
+    // but the header does not end on a terminator. The attribute reader runs off the end of
+    // such a header, so the guard must reject them.
+    { B a; a.push_back('x'); f += check("no strings, one stray byte", hdr(12 + a.size(), a), false); }
+    { B a = attr("k", "v"); a.push_back('x'); f += check("complete pair then one stray byte", hdr(12 + a.size(), a), false); }
+    { B a = attr("k", "v"); a.push_back('a'); a.push_back('b'); f += check("complete pair then unterminated string", hdr(12 + a.size(), a), false); }
+    // The guard must reject before the attribute reader is reached: accepted here means the
+    // reader walks past the buffer (ASan reports it), so this fails loudly either way.
+    { B a; a.push_back('x'); B b = hdr(12 + a.size(), a);
+      if (HeaderReadWriteUtils::isHeaderValid(b.data(), b.size())) {
+          DictionaryHeaderStructurePolicy::AttributeMap m;
+          HeaderReadWriteUtils::fetchAllHeaderAttributes(b.data(), &m);
+          printf("FAIL guard let a non-terminated header reach the attribute reader\n");
+          ++f;
+      } else {
+          printf("PASS non-terminated header rejected before the attribute reader\n");
+      } }
     printf("%s: %d failing case(s)\n", f ? "RESULT FAIL" : "RESULT OK", f);
     return f ? 1 : 0;
 }
