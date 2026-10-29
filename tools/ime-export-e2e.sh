@@ -64,7 +64,14 @@ PY
 )"
       adb logcat -d -v threadtime 2>/dev/null | tr -d '\r' | grep -i -E "ImportResource|Documents|EACCES|FileNotFound|SecurityException|Permission Denial|Failed to find provider" | tail -40 > shots/logcat_e2e_realpicker.txt
       if IB=$(python3 tools/xml_node.py shots/e2e_p3_after_pick.xml 'Import'); then
-        read -r IX IY _ <<< "$IB"; adb shell input tap $IX $IY; sleep 12; shot e2e_p4_after_restore
+        PT=0; read -r IX IY _ <<< "$IB"; adb logcat -c; adb shell input tap $IX $IY
+        # timeline of the learned-dictionary files right after Import (does it land and then vanish, or never land?)
+        DD=$APPDIR/files/UserHistoryDictionary.en_US.dict
+        for t in 1 2 4 8 12; do sleep $([ $t = 1 ] && echo 1 || echo $(( t - PT ))); PT=$t
+          note "dict timeline +${t}s: $(adb shell "ls -l $DD 2>&1 | tr '\n' ';'; md5sum $DD/* 2>&1 | tr '\n' ';'" | tr -d '\r' | cut -c1-300)"; done
+        adb logcat -d -v threadtime 2>/dev/null | tr -d '\r' | grep -iE "UserHistory|Dictionary|ReloadResources|restore|corrupt|delete|BinaryDictionary|ImportResource" | grep -v "DownloadManager" | head -60 > shots/logcat_e2e_restore_dict.txt
+        note "restore-window dictionary logcat lines: $(wc -l < shots/logcat_e2e_restore_dict.txt)"
+        shot e2e_p4_after_restore
         ALLOK=1
         for k in "${!WANT[@]}"; do
           GOT=$(md "$k")
