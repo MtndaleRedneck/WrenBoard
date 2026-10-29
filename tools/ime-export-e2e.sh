@@ -46,6 +46,39 @@ else
   UID_K=$(adb shell stat -c %u $APPDIR | tr -d '\r')
   for k in "${!WANT[@]}"; do [ "$(adb shell "[ -e '$k' ] && echo y || echo n" | tr -d '\r')" = n ] && :; done
   note "fresh install has seeded data before restore: $(adb shell "[ -e $APPDIR/files/themes/e2etheme.zip ] && echo YES-UNEXPECTED || echo no" | tr -d '\r')"
+  # 3b. REAL path first: in-app Import -> system document picker (DocumentsUI) -> pick the real export file
+  adb shell am start -n "$SETTINGS_ACT" --es navDest misc >/dev/null 2>&1; sleep 5; shot e2e_p1_misc; xdump e2e_p1_misc
+  if IV=$(python3 tools/xml_node.py shots/e2e_p1_misc.xml 'Import configuration' || python3 tools/xml_node.py shots/e2e_p1_misc.xml 'Import Configuration'); then
+    read -r PX PY _ <<< "$IV"; adb shell input tap $PX $PY; sleep 4; shot e2e_p2_picker; xdump e2e_p2_picker
+    EXPB=$(basename "$EXPF")
+    if FV=$(python3 tools/xml_node.py shots/e2e_p2_picker.xml "$EXPB"); then
+      read -r FX FY _ <<< "$FV"; adb shell input tap $FX $FY; sleep 6; shot e2e_p3_after_pick; xdump e2e_p3_after_pick
+      note "REAL-PICKER importer texts: $(python3 - <<'PY'
+import re
+try:
+    s=open('shots/e2e_p3_after_pick.xml').read(); print('|'.join(re.findall(r'text="([^"]+)"',s))[:220])
+except Exception as e: print('xml missing',e)
+PY
+)"
+      adb logcat -d -v threadtime 2>/dev/null | tr -d '\r' | grep -i -E "ImportResource|Documents|EACCES|FileNotFound|SecurityException|Permission Denial|Failed to find provider" | tail -40 > shots/logcat_e2e_realpicker.txt
+      if IB=$(python3 tools/xml_node.py shots/e2e_p3_after_pick.xml 'Import'); then
+        read -r IX IY _ <<< "$IB"; adb shell input tap $IX $IY; sleep 12; shot e2e_p4_after_restore
+        ALLOK=1
+        for k in "${!WANT[@]}"; do
+          GOT=$(md "$k")
+          if [ -n "${WANT[$k]}" ] && [ "$GOT" = "${WANT[$k]}" ]; then note "PASS(real picker): restored byte-identical: ${k#/}"; else note "FAIL(real picker): not restored / differs: ${k#/} (want ${WANT[$k]:0:8} got ${GOT:0:8})"; ALLOK=0; fi
+        done
+        [ "$ALLOK" = 1 ] && note "PASS(real picker): export -> uninstall -> fresh install -> picker restore returned all seeded locations byte-identical" || note "FAIL(real picker): some seeded locations did not come back"
+      else
+        note "REAL-PICKER: no Import button after picking the file (see e2e_p3_after_pick.png; app or harness undecided)"
+      fi
+    else
+      note "INCONCLUSIVE(harness): real picker did not list $EXPB (see e2e_p2_picker.png)"
+    fi
+  else
+    note "INCONCLUSIVE(harness): Import configuration item not found on misc page (wizard or navDest, see e2e_p1_misc.png)"
+  fi
+  adb shell input keyevent KEYCODE_HOME; sleep 1
   # 4. import the export file
   adb shell am start -W -a android.intent.action.VIEW -d "content://com.wrenboard.imetarget.fix/exp.backup" -t application/octet-stream -n "$APP/org.futo.inputmethod.latin.uix.ImportResourceActivity" >/dev/null 2>&1
   sleep 4; shot e2e_03_importer; xdump e2e_03_importer
