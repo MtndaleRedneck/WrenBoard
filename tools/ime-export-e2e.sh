@@ -136,3 +136,5 @@ fi
 
 adb_ready unroot
 fi
+note "FATAL EXCEPTION count after the whole e2e scope (live logcat at end of fresh-install leg): $(adb logcat -d 2>/dev/null | grep -c 'FATAL EXCEPTION')"
+adb logcat -d > shots/logcat_after_e2e.txt 2>&1
