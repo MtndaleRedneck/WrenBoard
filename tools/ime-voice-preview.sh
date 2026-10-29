@@ -10,9 +10,10 @@ adb install -r "$APK" 2>&1 | tail -1 | tee -a "$R"
 note "device density: $(adb shell wm density | tr -d '\r') size: $(adb shell wm size | tr -d '\r')"
 for lv in 0 0.5 1.0; do
   for st in NOT_TALKED_YET TALKING; do
-    adb shell am force-stop $PKG; sleep 1
+    adb shell am force-stop $PKG; adb logcat -c; sleep 1
     adb shell am start -W -n "$ACT" --ef level $lv --es state $st >/dev/null 2>&1; sleep 4
     f="shots/vp_${st}_${lv}.png"; adb exec-out screencap -p > "$f"
+    adb logcat -d -s AndroidRuntime:E ActivityManager:E > "shots/vp_${st}_${lv}.log" 2>&1
     note "shot $f ($(stat -c %s "$f") bytes); focus: $(adb shell dumpsys window | tr -d '\r' | grep mCurrentFocus | head -1 | tr -s ' ')"
   done
 done
