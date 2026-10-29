@@ -815,5 +815,6 @@ source tools/ime-learn-restore.sh
 source tools/ime-import-regress.sh
 source tools/ime-voice-update.sh   # before e2e: e2e uninstalls and reinstalls the app
 source tools/ime-export-e2e.sh
+source tools/ime-launcher-icon.sh
 note "== done =="
 exit 0
