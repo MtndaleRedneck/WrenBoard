@@ -20,6 +20,8 @@ GEOM=shots/geom.json
 
 # adb root/unroot restarts adbd; the emulator can report "device offline" for a while afterwards. Wait until a shell command really works (up to ~60 s).
 adb_ready() { local i; [ -n "$1" ] && adb "$1" >/dev/null 2>&1; sleep 3; adb wait-for-device 2>/dev/null; for i in $(seq 1 30); do adb shell true >/dev/null 2>&1 && return 0; sleep 2; done; return 1; }
+SETTINGS_ACT="$PKG/org.futo.inputmethod.latin.uix.settings.SettingsActivity"
+xdump() { adb shell uiautomator dump /sdcard/e.xml >/dev/null 2>&1; adb exec-out cat /sdcard/e.xml > "shots/$1.xml"; }
 shot() { adb exec-out screencap -p > "shots/$1.png"; echo "shot $1" >> "$R"; }
 note() { echo "$1" | tee -a "$R"; }
 check() { if echo "$3" | grep -qi "$2"; then note "PASS: $1"; else note "FAIL: $1 (wanted '$2' in '${3:0:160}')"; fi; }
@@ -642,8 +644,6 @@ fi
 sleep 1
 
 note "== settings: toolbar action editor - edit, save, reload (navDest=actionEdit) =="
-SETTINGS_ACT="$PKG/org.futo.inputmethod.latin.uix.settings.SettingsActivity"
-xdump() { adb shell uiautomator dump /sdcard/e.xml >/dev/null 2>&1; adb exec-out cat /sdcard/e.xml > "shots/$1.xml"; }
 open_editor() { # open_editor <label>: open editor, assert Edit Actions title + Pinned/Favorite headers from the XML
   adb shell input keyevent KEYCODE_HOME; sleep 1
   adb shell am start -n "$SETTINGS_ACT" --es navDest actionEdit >/dev/null 2>&1; sleep 5
