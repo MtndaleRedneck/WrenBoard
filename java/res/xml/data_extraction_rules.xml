@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 12+: inherited default backup and device transfer, except the bundled language model
+     file in cloud backup. That file is recreated from the APK on demand, so it is not worth
+     backup quota. Imported models are not excluded. Device-to-device transfer is unchanged. -->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="file" path="transformer-models/ml4_q6_k.gguf"/>
+    </cloud-backup>
+</data-extraction-rules>

@@ -17,10 +17,12 @@
 #include "dictionary/structure/v4/ver4_dict_buffers.h"
 
 #include <cerrno>
+#include <cstdio>
 #include <cstring>
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <unistd.h>
 #include <vector>
 
 #include "dictionary/utils/byte_array_utils.h"
@@ -132,17 +134,19 @@ bool Ver4DictBuffers::flushHeaderAndDictBuffers(const char *const dictDirPath,
         fclose(file);
         return false;
     }
-    fclose(file);
-    // Remove existing dictionary.
-    if (!FileUtils::removeDirAndFiles(dictDirPath)) {
-        AKLOGE("Existing directory %s cannot be removed.", dictDirPath);
-        ASSERT(false);
+    // Make sure the data reached the file before it replaces the live dictionary.
+    if (fflush(file) != 0 || fsync(fileno(file)) != 0) {
+        AKLOGE("File %s cannot be synced. errno: %d", bodyFilePath, errno);
+        fclose(file);
         return false;
     }
-    // Rename temporary directory.
-    if (rename(tmpDirPath, dictDirPath) != 0) {
-        AKLOGE("%s cannot be renamed to %s", tmpDirPath, dictDirPath);
-        ASSERT(false);
+    if (fclose(file) != 0) {
+        return false;
+    }
+    // Swap the finished directory into place; the old one is only removed once the new one
+    // is live, and is restored if the swap fails.
+    if (!FileUtils::replaceDirAtomically(tmpDirPath, dictDirPath)) {
+        AKLOGE("%s cannot be moved into place as %s", tmpDirPath, dictDirPath);
         return false;
     }
     return true;

@@ -177,6 +177,8 @@ fun ImportScreen(fileKind: FileKindAndInfo, onApply: (FileKindAndInfo, InputMeth
             if(fileKind.invalidKindHint == InvalidFileHint.ImportedWordListInsteadOfDict) {
                 Text(stringResource(R.string.resource_importer_error_wordlist_1))
                 Tip(stringResource(R.string.resource_importer_error_wordlist_2))
+            } else if(fileKind.invalidKindHint == InvalidFileHint.CouldNotRead) {
+                Text(stringResource(R.string.resource_importer_error_could_not_read))
             } else {
                 Text(stringResource(R.string.resource_importer_error_invalid_fiile))
             }
@@ -286,7 +288,8 @@ fun FileKind.extension(): String {
 }
 
 enum class InvalidFileHint {
-    ImportedWordListInsteadOfDict
+    ImportedWordListInsteadOfDict,
+    CouldNotRead
 }
 
 data class FileKindAndInfo(
@@ -874,7 +877,7 @@ class ImportResourceActivity : ComponentActivity() {
             )
         }
         null -> {
-            val pseudoKind = FileKindAndInfo(FileKind.Invalid, null, null)
+            val pseudoKind = FileKindAndInfo(FileKind.Invalid, null, null, invalidKindHint = InvalidFileHint.CouldNotRead)
             ImportScreen(
                 fileKind = pseudoKind,
                 onApply = { fileKind, inputMethodSubtype ->

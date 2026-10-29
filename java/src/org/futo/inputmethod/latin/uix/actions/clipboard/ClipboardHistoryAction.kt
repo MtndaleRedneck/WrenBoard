@@ -838,7 +838,7 @@ class ClipboardHistoryManager(val context: Context, val coroutineScope: Lifecycl
                 if(e is CancellationException) return@launch
 
                 clipboardIOFailure.value = true
-                clipboardIOFailureReason = e.toString()
+                clipboardIOFailureReason = e.javaClass.simpleName
                 reportError("saveClipboard", e)
             }
         }
@@ -856,26 +856,22 @@ class ClipboardHistoryManager(val context: Context, val coroutineScope: Lifecycl
     private fun decodeFile(file: File): List<ClipboardEntry> =
         decodeData(AtomicFile(file).readFully())
 
+    private fun describeFile(file: File): String =
+        if(file.exists()) { "exists, ${file.length()} bytes" } else { "does not exist" }
+
+    // Never put clipboard contents (or exception messages, which can quote the input) into a
+    // bug entry: record the exception class and file states only.
     private fun reportError(during: String, e: Exception) {
         BugViewerState.pushBug(BugInfo("ClipboardHistoryManager", """
 Clipboard IO error during $during
 
-Cause: ${e.message}
+Cause: ${e.javaClass.simpleName}
 
 Stack trace: ${e.stackTrace.map { it.toString() }}
 
---- main data start --- snip ---
-${if(clipboardFile.exists()) { clipboardFile.readText() } else { "File does not exist" }}
---- main data end --- snip ---
-
-
---- bak data start --- snip ---
-${if(clipboardFileBak.exists()) { clipboardFileBak.readText() } else { "File does not exist" }}
---- bak data end --- snip ---
-
---- swap data start --- snip ---
-${if(clipboardFileSwap.exists()) { clipboardFileSwap.readText() } else { "File does not exist" }}
---- swap data end --- snip ---
+main file: ${describeFile(clipboardFile)}
+bak file: ${describeFile(clipboardFileBak)}
+swap file: ${describeFile(clipboardFileSwap)}
 """))
     }
 
@@ -922,8 +918,9 @@ ${if(clipboardFileSwap.exists()) { clipboardFileSwap.readText() } else { "File d
             clipboardIOFailureReason = ""
             clipboardIOFailure.value = false
         } catch (e: Exception) {
-            e.printStackTrace()
-            clipboardIOFailureReason = "Exception: ${e.message}"
+            // Exception messages can quote the clipboard JSON, so only the class goes to logs/UI
+            android.util.Log.e("ClipboardHistory", "load failed: ${e.javaClass.simpleName}")
+            clipboardIOFailureReason = "Exception: ${e.javaClass.simpleName}"
             clipboardIOFailure.value = true
 
             reportError("loadClipboard", e)
@@ -974,7 +971,7 @@ ${if(clipboardFileSwap.exists()) { clipboardFileSwap.readText() } else { "File d
                     QuickClip.markQuickClipDismissed()
                 }
             } catch(e: Exception) {
-                e.printStackTrace()
+                android.util.Log.e("ClipboardHistory", "clear primary clip failed: ${e.javaClass.simpleName}")
             }
         }
         clipboardHistory.removeAll { it == item }

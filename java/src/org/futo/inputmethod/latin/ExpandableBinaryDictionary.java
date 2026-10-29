@@ -650,6 +650,7 @@ abstract public class ExpandableBinaryDictionary extends Dictionary {
                         // The next access after the restore reloads from the restored files.
                         return;
                     }
+                    recoverInterruptedFlush(dictFile);
                     if (!dictFile.exists() || isNeededToRecreate()) {
                         // If the dictionary file does not exist or contents have been updated,
                         // generate a new one.
@@ -674,6 +675,26 @@ abstract public class ExpandableBinaryDictionary extends Dictionary {
                 }
             }
         });
+    }
+
+    /**
+     * The native flush swaps a finished directory into place by renaming the old one to
+     * "<dict>.bak" first. If the process died between the two renames, the live directory is
+     * missing and the backup holds the last good data: put it back. If both exist the swap
+     * finished and only the cleanup was missed: drop the old copy.
+     */
+    static void recoverInterruptedFlush(final File dictFile) {
+        final File backup = new File(dictFile.getPath() + ".bak");
+        if (!backup.exists()) {
+            return;
+        }
+        if (!dictFile.exists()) {
+            if (!backup.renameTo(dictFile)) {
+                Log.e(TAG, "Can't restore the dictionary backup for " + dictFile.getName());
+            }
+        } else if (!FileUtils.deleteRecursively(backup)) {
+            Log.e(TAG, "Can't remove the old dictionary copy for " + dictFile.getName());
+        }
     }
 
     /**

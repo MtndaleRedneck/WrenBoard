@@ -27,7 +27,8 @@ public object BugViewerState {
     val bugs = mutableListOf<BugInfo>()
 
     fun pushBug(bug: BugInfo) {
-        Log.e("BugViewerState", "Bug pushed: $bug")
+        // Only the title goes to logcat; details can hold user content and stay in the in-app viewer.
+        Log.e("BugViewerState", "Bug pushed: ${bug.name}")
         bugs.add(0, bug)
     }
 

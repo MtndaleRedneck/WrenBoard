@@ -293,7 +293,8 @@ object SettingsExporter {
                     out.add(entryName to copy)
                 }
                 context.filesDir.listFiles()?.forEach { f ->
-                    if(f.name.startsWith("UserHistoryDictionary")) {
+                    // ".bak"/".tmp" directories are leftovers of an interrupted save, not live data
+                    if(f.name.startsWith("UserHistoryDictionary") && !f.name.endsWith(".bak") && !f.name.endsWith(".tmp")) {
                         // Runtime layout (verified on the emulator): a DIRECTORY holding .header and .body files
                         if(f.isDirectory) f.listFiles()?.forEach { sub ->
                             if(sub.isFile) snap("userdict/${f.name}/${sub.name}", sub)
@@ -456,6 +457,52 @@ object SettingsExporter {
             // Re-allow dictionaries to open (the gate is set by quiesceForRestore)
             org.futo.inputmethod.latin.personalization.PersonalizationHelper.endRestore()
             staged.delete()
+            File(context.filesDir, DICT_STAGE_DIR).deleteRecursively()
+        }
+    }
+
+    private const val DICT_STAGE_DIR = "restore-dict-stage"
+
+    /**
+     * Replaces learned-word dictionaries with the staged ones. A staged directory must hold both
+     * its header and body file before anything is touched. Each live directory is renamed to
+     * ".bak", the staged one renamed into place, then the backup removed; on a failed rename the
+     * old directory is put back. A kill between the two renames leaves the ".bak" for
+     * ExpandableBinaryDictionary to restore on the next open. Runs on the keyboard executor.
+     */
+    private suspend fun swapStagedDictionaries(context: Context, stage: File, destructive: Boolean) {
+        val staged = stage.listFiles()?.filter { it.isDirectory } ?: emptyList()
+        for(dir in staged) {
+            val files = dir.list()?.toSet() ?: emptySet()
+            if(!files.contains("${dir.name}.header") || !files.contains("${dir.name}.body")) {
+                throw java.io.IOException("Backup learned-word data for ${dir.name} is incomplete; existing data unchanged")
+            }
+        }
+        org.futo.inputmethod.latin.personalization.PersonalizationHelper.callOnKeyboardExecutor {
+            for(dir in staged) {
+                val live = File(context.filesDir, dir.name)
+                val backup = File(context.filesDir, "${dir.name}.bak")
+                if(backup.exists()) backup.deleteRecursively()
+                val hadOld = live.exists()
+                if(hadOld && !live.renameTo(backup)) {
+                    throw java.io.IOException("Could not replace learned words for ${dir.name}; old data kept")
+                }
+                if(!dir.renameTo(live)) {
+                    if(hadOld) backup.renameTo(live)
+                    throw java.io.IOException("Could not move restored learned words into place for ${dir.name}; old data kept")
+                }
+                if(hadOld) backup.deleteRecursively()
+            }
+            if(destructive) {
+                // A destructive restore replaces everything: drop dictionaries the backup did not contain
+                val restored = staged.map { it.name }.toSet()
+                context.filesDir.listFiles()?.forEach {
+                    if(it.name.startsWith("UserHistoryDictionary") && !it.name.endsWith(".bak") && it.name !in restored) {
+                        it.deleteRecursively()
+                    }
+                }
+            }
+            Unit
         }
     }
 
@@ -470,6 +517,8 @@ object SettingsExporter {
         val clipboardFile = context.clipboardFile
         val transformersDir = dirs.transformers
         val extFilesDir = dirs.ext
+        val dictStage = File(context.filesDir, DICT_STAGE_DIR)
+        dictStage.deleteRecursively()
         if(destructive && !org.futo.inputmethod.latin.personalization.PersonalizationHelper.quiesceForRestore()) {
             // Nothing has been deleted or written yet. Make the keyboard reload its dictionaries and stop.
             GlobalIMEMessage.tryEmit(IMEMessage.ReloadResources)
@@ -491,14 +540,8 @@ object SettingsExporter {
                 it.delete()
             }
 
-            // delete all user dictionaries
-            org.futo.inputmethod.latin.personalization.PersonalizationHelper.callOnKeyboardExecutor {
-                context.filesDir.listFiles()?.forEach {
-                    if(it.name.startsWith("UserHistoryDictionary")) {
-                        it.deleteRecursively()
-                    }
-                }
-            }
+            // Learned-word dictionaries are NOT deleted here: the restored ones are staged first and
+            // swapped in after the whole archive was read (see swapStagedDictionaries).
 
             context.clipboardDir.deleteRecursively()
             ChineseIME.getRimeDir(context).deleteRecursively()
@@ -537,13 +580,13 @@ object SettingsExporter {
                 }
 
                 destinationFor(entry.name, dirs) != null -> {
-                    val dest = destinationFor(entry.name, dirs)!!
+                    val validated = destinationFor(entry.name, dirs)!!
+                    // Learned-word files go to a staging directory, never straight into place
+                    val dest = if(entry.name.startsWith("userdict/")) {
+                        SafeFiles.resolveContained(dictStage, entry.name.removePrefix("userdict/"))
+                    } else validated
                     dest.parentFile?.mkdirs()
-                    val write = { dest.outputStream().use { SafeFiles.copyBounded(zipIn, it, dest.parentFile!!) } }
-                    if(entry.name.startsWith("userdict/")) {
-                        // serialized with dictionary flush/reload tasks (same executor)
-                        org.futo.inputmethod.latin.personalization.PersonalizationHelper.callOnKeyboardExecutor { write() }
-                    } else write()
+                    dest.outputStream().use { SafeFiles.copyBounded(zipIn, it, dest.parentFile!!) }
                 }
 
                 else -> {
@@ -556,6 +599,10 @@ object SettingsExporter {
             zipIn.closeEntry()
             entry = zipIn.nextEntry
         }
+
+        // Swap the staged learned-word dictionaries in. The old ones stay until each new one is complete.
+        swapStagedDictionaries(context, dictStage, destructive)
+        dictStage.deleteRecursively()
 
         // Files are in place: let dictionaries open again BEFORE asking the IME to reload them.
         org.futo.inputmethod.latin.personalization.PersonalizationHelper.endRestore()

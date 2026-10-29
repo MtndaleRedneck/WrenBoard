@@ -16,6 +16,7 @@
 
 #include "dictionary/utils/file_utils.h"
 
+#include <climits>
 #include <cstdio>
 #include <cstring>
 #include <dirent.h>
@@ -26,6 +27,34 @@
 #include <unistd.h>
 
 namespace latinime {
+
+/* static */ bool FileUtils::replaceDirAtomically(const char *const newDirPath,
+        const char *const dirPath) {
+    char backupPath[PATH_MAX];
+    if (snprintf(backupPath, sizeof(backupPath), "%s.bak", dirPath) >= static_cast<int>(sizeof(backupPath))) {
+        return false;
+    }
+    if (existsDir(backupPath) && !removeDirAndFiles(backupPath)) {
+        return false;
+    }
+    const bool hadOld = existsDir(dirPath);
+    if (hadOld && rename(dirPath, backupPath) != 0) {
+        // Nothing has changed: the old directory is still in place.
+        return false;
+    }
+    if (rename(newDirPath, dirPath) != 0) {
+        if (hadOld) {
+            // Put the old directory back so learned data is not lost.
+            rename(backupPath, dirPath);
+        }
+        return false;
+    }
+    if (hadOld) {
+        // The new directory is live. Failing to remove the old copy is not an error.
+        removeDirAndFiles(backupPath);
+    }
+    return true;
+}
 
 // Returns -1 on error.
 /* static */ int FileUtils::getFileSize(const char *const filePath) {

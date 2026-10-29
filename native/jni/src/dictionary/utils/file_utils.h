@@ -31,6 +31,13 @@ class FileUtils {
     // Remove a directory and all files in the directory.
     static bool removeDirAndFiles(const char *const dirPath);
 
+    // Replaces dirPath with the fully written directory newDirPath without ever leaving the
+    // dictionary missing: the old directory is renamed to "<dirPath>.bak", the new one is renamed
+    // into place, then the backup is removed. If any step fails the old directory is put back
+    // and false is returned. A crash between the renames leaves "<dirPath>.bak" for
+    // ExpandableBinaryDictionary to restore on the next open.
+    static bool replaceDirAtomically(const char *const newDirPath, const char *const dirPath);
+
     static int getFilePathWithSuffixBufSize(const char *const filePath, const char *const suffix);
 
     static void getFilePathWithSuffix(const char *const filePath, const char *const suffix,

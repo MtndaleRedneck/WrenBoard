@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 6 to 11: back up the inherited defaults, except the bundled language model file.
+     That file is recreated from the APK on demand, so it is not worth backup quota.
+     Imported models are not excluded. -->
+<full-backup-content>
+    <exclude domain="file" path="transformer-models/ml4_q6_k.gguf"/>
+</full-backup-content>

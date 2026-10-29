@@ -110,16 +110,10 @@ bool Ver4DictBuffers::flushHeaderAndDictBuffers(const char *const dictDirPath,
         AKLOGE("Shortcut dict content cannot be written. %s", tmpDirPath);
         return false;
     }
-    // Remove existing dictionary.
-    if (!FileUtils::removeDirAndFiles(dictDirPath)) {
-        AKLOGE("Existing directory %s cannot be removed.", dictDirPath);
-        ASSERT(false);
-        return false;
-    }
-    // Rename temporary directory.
-    if (rename(tmpDirPath, dictDirPath) != 0) {
-        AKLOGE("%s cannot be renamed to %s", tmpDirPath, dictDirPath);
-        ASSERT(false);
+    // Swap the finished directory into place; the old one is only removed once the new one
+    // is live, and is restored if the swap fails.
+    if (!FileUtils::replaceDirAtomically(tmpDirPath, dictDirPath)) {
+        AKLOGE("%s cannot be moved into place as %s", tmpDirPath, dictDirPath);
         return false;
     }
     return true;
