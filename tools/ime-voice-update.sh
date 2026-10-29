@@ -10,9 +10,13 @@ if ! adb shell id 2>/dev/null | grep -q "uid=0"; then
 else
   vtexts() { sed 's/>/>\n/g' "shots/$1.xml" | sed -n 's/.*text="\([^"]\+\)".*/\1/p' | tr '\n' '|'; }
   vmd() { adb shell "md5sum $VDS 2>/dev/null" | awk '{print $1}' | tr -d '\r'; }
-  # (1) update dialog vs the recorded check outcome. The datastore keeps a boolean
-  # last_update_check_failed; the key string is present with EITHER value, so read the value:
+  # (1) update dialog vs the recorded check outcome. Open the update destination FIRST so
+  # this leg is self-contained: the screen performs a real check, which records the result.
+  # The datastore keeps a boolean last_update_check_failed; the key string is present with
+  # EITHER value, so read the value:
   # androidx preferences_pb encodes a bool entry as the key bytes then 0x12 0x02 0x08 <0x00|0x01>.
+  adb shell input keyevent KEYCODE_HOME; sleep 1
+  adb shell am start -n "$SETTINGS_ACT" --es navDest update >/dev/null 2>&1; sleep 10
   adb shell "cat $VDS" > shots/vds.pb 2>/dev/null
   VFLAG=$(python3 - <<'PYFLAG'
 data = open("shots/vds.pb","rb").read()
@@ -25,8 +29,6 @@ print(v)
 PYFLAG
 )
   note "last_update_check_failed value: $VFLAG (1 = last check failed, 0 = last check succeeded, -1 = unreadable)"
-  adb shell input keyevent KEYCODE_HOME; sleep 1
-  adb shell am start -n "$SETTINGS_ACT" --es navDest update >/dev/null 2>&1; sleep 5
   shot vu_01_update_dialog; xdump vu_01_update_dialog
   T=$(vtexts vu_01_update_dialog); note "update dialog texts: $T"
   case "$VFLAG" in

@@ -273,7 +273,8 @@ if [ "${WB_FOCUS:-}" = shift ]; then
   exit 0
 fi
 if [ "${WB_FOCUS:-}" = learn ]; then note "FOCUS=learn: skipping the broad typing/symbols/settings legs; running learn-restore then the real-learned-data export/fresh-install leg only"; fi
-if [ "${WB_FOCUS:-}" != learn ]; then
+if [ "${WB_FOCUS:-}" = voice ]; then note "FOCUS=voice: skipping the broad typing/symbols/settings and learn/e2e legs; running the update-dialog + voice-backend confirmation leg only"; fi
+if [ "${WB_FOCUS:-}" != learn ] && [ "${WB_FOCUS:-}" != voice ]; then
 note "== lowercase typing =="
 dim "before-type"
 type_letters h e l l o
@@ -877,15 +878,21 @@ dim "final"
 CUR=$(adb shell settings get secure default_input_method)
 check "default IME still WrenBoard at end" "$PKG" "$CUR"
 LDC() { note "LEARNED-DIR checkpoint [$1]: $(adb shell 'ls -l /data/data/com.wrenboard.keyboard/files/UserHistoryDictionary.en_US.dict 2>&1' | tr -d '\r' | tr '\n' ';' | cut -c1-260)"; }
+if [ "${WB_FOCUS:-}" != voice ]; then
 source tools/ime-learn-restore.sh
 LDC after-learn-restore
+fi
 if [ "${WB_FOCUS:-}" != learn ]; then
+if [ "${WB_FOCUS:-}" != voice ]; then
 source tools/ime-import-regress.sh
 LDC after-import-regress
+fi
 source tools/ime-voice-update.sh   # before e2e: e2e uninstalls and reinstalls the app
 LDC after-voice-update
 fi
+if [ "${WB_FOCUS:-}" != voice ]; then
 source tools/ime-export-e2e.sh
 source tools/ime-launcher-icon.sh
+fi
 note "== done =="
 exit 0
