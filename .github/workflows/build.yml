@@ -37,6 +37,8 @@ jobs:
           printf 'storeFile=%s\nkeyAlias=wrenboard\nkeyPassword=%s\nstorePassword=%s\n' "$RUNNER_TEMP/release.keystore" "$KEYSTORE_PASSWORD" "$KEYSTORE_PASSWORD" > keystore.properties
       - name: Build stable release APK
         run: ./gradlew --no-daemon assembleStableRelease
+      - name: Build stable DEBUG preview APK (layout screenshots only, never published)
+        run: ./gradlew --no-daemon assembleStableDebug
       - name: Cleanup signing material
         if: always()
         run: rm -f keystore.properties "$RUNNER_TEMP/release.keystore"
@@ -44,3 +46,8 @@ jobs:
         with:
           name: WrenBoard-baseline-apk
           path: build/outputs/apk/stable/release/*.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: WrenBoard-debug-preview-apk
+          path: build/outputs/apk/stable/debug/*.apk
+          retention-days: 3

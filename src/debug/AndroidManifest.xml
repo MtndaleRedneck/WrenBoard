@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- DEBUG BUILD TYPE ONLY. Never part of the release APK: lives in src/debug. Renders the production Voice Input composable
+     at a controlled level for layout screenshots. Not a microphone test. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <activity
+            android:name="org.futo.inputmethod.latin.debugpreview.VoicePreviewActivity"
+            android:exported="true" />
+    </application>
+</manifest>
