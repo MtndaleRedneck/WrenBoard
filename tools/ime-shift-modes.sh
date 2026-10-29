@@ -115,14 +115,18 @@ note "== SHIFT SETTING: default state, real Settings screen =="
 open_settings_page default && { idx=$(ls shots | sed -n 's/^shift_page_default_\([0-9]*\)\.xml$/\1/p' | tail -1); D=$(row_value "shift_page_default_$idx"); note "default (fresh install, never touched) Caps lock row shows: $D"; [ "$D" = cycle ] && note "PASS(default): default choice is the tap cycle" || note "FAIL(default): default choice is '$D', wanted cycle"; }
 back_to_target cyc1 || true
 
-midword_obs() { # observation only: shift tapped while a word is just typed; frames before, right after the tap, after a second tap, after the next letter
-  type_letters h i; sleep 0.6; shot "shift_${1}_midword_before"; note "OBSERVE midword before shift [$1]: field='$(edit_text)'"
+midword_obs() { # SwiftKey parity: shift tapped right after letters were typed must leave them alone and capitalize only the NEXT letter (both modes)
+  clear_field; type_letters h i; sleep 0.6; shot "shift_${1}_midword_before"; note "OBSERVE midword before shift [$1]: field='$(edit_text)'"
   tapk shift; sleep 0.8; shot "shift_${1}_midword_aftershift"; note "OBSERVE midword right after one shift tap [$1]: field='$(edit_text)'"
-  tapk shift; sleep 0.8; shot "shift_${1}_midword_after2"; note "OBSERVE midword after a second shift tap [$1]: field='$(edit_text)'"
   type_letters x; sleep 0.5; shot "shift_${1}_midword"
-  note "OBSERVE midword [$1]: typed 'hi', shift, shift, 'x' -> '$(edit_text)'"
+  assert_field "midword: 'hi' + shift + 'x' leaves 'hi' alone and capitalizes only the next letter [$1]" "hiX"
   clear_field
-  # in tap-cycle mode the two taps above ended in caps lock; unlock with one more tap so later legs start from lowercase
+  type_letters y; sleep 0.4; tapk shift; type_letters o u; sleep 0.5; shot "shift_${1}_midword_you"
+  assert_field "midword: 'y' + shift + 'ou' gives 'yOu' (the SwiftKey video case) [$1]" "yOu"
+  clear_field
+  # a second shift tap on a finished word must not recase or select it either
+  type_letters h i; sleep 0.5; tapk shift; sleep 1.0; tapk shift; sleep 0.8; shot "shift_${1}_midword_twotaps"; assert_field "midword: two shift taps on a finished word leave 'hi' alone (no recase, no selection) [$1]" "hi"
+  clear_field
   if [ "$2" = cycle ]; then tapk shift; sleep 0.4; type_letters z; sleep 0.4; note "midword cleanup (cycle): after unlock tap typed z -> '$(edit_text)'"; clear_field; fi
 }
 cycle_tests() { # cycle_tests <tag>

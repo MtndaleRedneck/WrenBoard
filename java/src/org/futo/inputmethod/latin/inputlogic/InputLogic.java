@@ -1974,19 +1974,11 @@ public final class InputLogic {
      * @param settingsValues The current settings values.
      */
     private void performRecapitalization(final SettingsValues settingsValues) {
-        // Recapitalization of an existing selection waits for a cursor move after start-input;
-        // SwiftKey-style cycling of the word before the cursor does not.
-        if (!mRecapitalizeStatus.mIsEnabled() && mConnection.hasSelection()) {
-            return; // Recapitalize is disabled for now
-        }
-        if (!mConnection.hasSelection()) {
-            // SwiftKey-style: with no selection, cycle the capitalization of the word
-            // immediately before the cursor.
-            selectWordBeforeCursorForRecapitalization(settingsValues);
-            if (!mConnection.hasSelection()) {
-                return;
-            }
-            mRecapitalizeStatus.enable(); // our own selection, so following taps keep cycling
+        // Only an explicit user selection is recapitalized, and only after a cursor move
+        // (FUTO behavior). With no selection a shift tap leaves the typed text alone and only
+        // affects the next letter, as in SwiftKey.
+        if (!mConnection.hasSelection() || !mRecapitalizeStatus.mIsEnabled()) {
+            return;
         }
         final int selectionStart = mConnection.getExpectedSelectionStart();
         final int selectionEnd = mConnection.getExpectedSelectionEnd();
@@ -2016,41 +2008,6 @@ public final class InputLogic {
         mConnection.send();
         mConnection.setSelection(mRecapitalizeStatus.getNewCursorStart(),
                 mRecapitalizeStatus.getNewCursorEnd());
-    }
-
-    /**
-     * Selects the word immediately before the cursor so that shift-tap cycles its
-     * capitalization. Does nothing when a word is being composed or when the character
-     * right before the cursor is a separator.
-     */
-    private void selectWordBeforeCursorForRecapitalization(final SettingsValues settingsValues) {
-        if (mWordComposer.isComposingWord()) {
-            // Commit the word as typed so it can be selected and recapitalized.
-            mConnection.finishComposingText();
-            mWordComposer.reset(false);
-        }
-        final int cursorPosition = mConnection.getExpectedSelectionEnd();
-        final CharSequence textBeforeCursor = mConnection.getTextBeforeCursor(
-                Constants.MAX_CHARACTERS_FOR_RECAPITALIZATION, 0);
-        if (TextUtils.isEmpty(textBeforeCursor)) {
-            return;
-        }
-        final int[] separators = settingsValues.mSpacingAndPunctuations.sortedWordSeparators;
-        int wordStart = textBeforeCursor.length();
-        while (wordStart > 0) {
-            final int codePoint = Character.codePointBefore(textBeforeCursor, wordStart);
-            if (java.util.Arrays.binarySearch(separators, codePoint) >= 0
-                    || Character.isWhitespace(codePoint)) {
-                break;
-            }
-            wordStart -= Character.charCount(codePoint);
-        }
-        final int wordLength = textBeforeCursor.length() - wordStart;
-        if (wordLength <= 0) {
-            return;
-        }
-        mConnection.setSelection(cursorPosition - wordLength, cursorPosition);
-        mConnection.send();
     }
 
     private void performAdditionToUserHistoryDictionary(final SettingsValues settingsValues,
