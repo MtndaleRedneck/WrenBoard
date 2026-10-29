@@ -22,7 +22,12 @@ seed() { # seed <snapshot-KB>
 run_case() { # run_case <label> <KB>
   note "=== case $1: snapshot ${2} KB ==="; seed "$2"
   adb logcat -c
-  OUT=$(adb shell bmgr backupnow $P 2>&1 | tr -d '\r'); note "backupnow: $(echo "$OUT" | tr '\n' ' ' | cut -c1-300)"
+  # up to 3 attempts: a backupnow right after a restore was seen to move only 512 bytes (progress "x/512"); record every attempt's last progress total
+  for att in 1 2 3; do
+    OUT=$(adb shell bmgr backupnow $P 2>&1 | tr -d '\r'); TOT=$(echo "$OUT" | grep -o 'progress: [0-9]*/[0-9]*' | tail -1)
+    note "backupnow attempt $att: last progress '${TOT}' result: $(echo "$OUT" | grep -o 'Backup finished with result: [A-Za-z]*' | tail -1)"
+    case "$TOT" in */512) sleep 6;; *) break;; esac
+  done
   adb logcat -d 2>/dev/null | tr -d '\r' | grep -iE "FullBackup|BackupManager|quota|LocalTransport|bkproto|PFTBT|BackupTransport" | cut -c1-260 > "out/log_$1.txt"
   note "full filtered backup log for this case: out/log_$1.txt ($(wc -l < out/log_$1.txt) lines); quota/size lines: $(grep -iE 'quota|exceed|too large|rejected' out/log_$1.txt | head -3 | tr '\n' '|' | cut -c1-300)"
   TOKEN=$(adb shell bmgr list sets 2>/dev/null | tr -d '\r' | awk '{print $1}' | head -1); note "restore set token: $TOKEN"
@@ -38,10 +43,11 @@ run_case() { # run_case <label> <KB>
   adb shell am start -n $P/.Main >/dev/null 2>&1; sleep 2
 }
 # order varied on purpose: the first run showed mid (12 MB) not captured after a small case; repeat mid first and again later to separate size from order
-run_case mid_first 12288
-run_case small 512
-run_case mid_again 12288
+# order chosen so each size runs both after a successful auto-restore and after a missed one (run 2 showed strict alternation, so size and order were confounded)
+run_case over_first 27000
+run_case mid 12288
 run_case under_quota 24000
-run_case mid_after_under 12288
-run_case over_quota 27000
+run_case over_again 27000
+run_case small 512
+run_case under_again 24000
 note "== done =="
