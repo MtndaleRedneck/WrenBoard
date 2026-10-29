@@ -55,6 +55,8 @@ import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import kotlin.math.roundToInt
+import androidx.compose.ui.layout.layout
 import kotlinx.coroutines.delay
 import org.futo.voiceinput.shared.R
 import org.futo.voiceinput.shared.types.MagnitudeState
@@ -68,17 +70,21 @@ data class MicrophoneDeviceState(
     val deviceName: String
 )
 
+// Circle radius = CIRCLE_BASE_RADIUS_DP * (CIRCLE_IDLE_FACTOR + 2 * level); the prompt pill is placed from the idle radius.
+private const val CIRCLE_BASE_RADIUS_DP = 80f
+private const val CIRCLE_IDLE_FACTOR = 0.8f
+
 @Composable
 fun AnimatedRecognizeCircle(magnitude: MutableFloatState = mutableFloatStateOf(0.5f)) {
     val radius = animateValueChanges(magnitude.floatValue, 100)
     val color = MaterialTheme.colorScheme.primaryContainer
 
     val radiusMod = with(LocalDensity.current) {
-        80.dp.toPx()
+        CIRCLE_BASE_RADIUS_DP.dp.toPx()
     }
 
     Canvas(modifier = Modifier.fillMaxSize()) {
-        val drawRadius = radiusMod * (0.8f + radius * 2.0f)
+        val drawRadius = radiusMod * (CIRCLE_IDLE_FACTOR + radius * 2.0f)
         drawCircle(color = color, radius = drawRadius)
     }
 }
@@ -191,11 +197,21 @@ fun InnerRecognize(
             MagnitudeState.TALKING -> stringResource(R.string.listening)
         }
 
+        // WrenBoard: the prompt pill's TOP edge sits just below the idle circle's bottom edge. The circle is drawn
+        // at CIRCLE_BASE_RADIUS_DP * 0.8 when silent (AnimatedRecognizeCircle), and the pill is centered in the box,
+        // so the vertical offset is idle radius + gap + half of the measured pill height (text bounds + padding).
+        val idleRadiusPx = with(LocalDensity.current) { (CIRCLE_BASE_RADIUS_DP * CIRCLE_IDLE_FACTOR).dp.toPx() }
+        val gapPx = with(LocalDensity.current) { 8.dp.toPx() }
         Text(
             text,
             modifier = Modifier
-                .offset(x = 0.dp, y = 72.dp)
-                // WrenBoard: moved below the circle (was 48dp, overlapping its lower edge); WrenBoard: opaque backing so the prompt stays readable over the circle
+                .layout { measurable, constraints ->
+                    val placeable = measurable.measure(constraints)
+                    layout(placeable.width, placeable.height) {
+                        placeable.place(0, (idleRadiusPx + gapPx + placeable.height / 2f).roundToInt())
+                    }
+                }
+                // opaque backing so the prompt stays readable if the circle grows over it while talking
                 .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(8.dp))
                 .padding(horizontal = 12.dp, vertical = 4.dp),
             textAlign = TextAlign.Center,
