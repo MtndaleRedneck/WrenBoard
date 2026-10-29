@@ -293,7 +293,7 @@ shot 05_shift_typed
 assert_field "shift produced Hello" "Hello"
 dim "after-shift-single"
 
-note "== word-case cycling (shift on completed word), isolated: fresh field, shift state confirmed off =="
+note "== shift taps leave a completed word alone (SwiftKey parity, user decision; the old word case-cycle is removed), isolated: fresh field, shift state confirmed off =="
 clear_field
 shot 07a_case_precondition
 type_letters h e l l o
@@ -303,11 +303,11 @@ adb shell log -t IMETARGET "CASEMARK-A"
 tapk shift; sleep 0.8; C1=$(edit_text); shot 07c_case_tap1
 tapk shift; sleep 0.8; C2=$(edit_text); shot 07d_case_tap2
 tapk shift; sleep 0.8; C3=$(edit_text); shot 07e_case_tap3
-note "word-case cycle (variant A, typed then wait 1.5s) observed: hello -> '$C1' -> '$C2' -> '$C3'"
-if [ "$C1" = "Hello" ] && [ "$C2" = "HELLO" ]; then
-  note "PASS: word-case cycling (Hello then HELLO; third tap -> '$C3')"
+note "shift taps on a finished word (typed, wait 1.5s) observed: hello -> '$C1' -> '$C2' -> '$C3'"
+if [ "$C1" = "hello" ] && [ "$C2" = "hello" ] && [ "$C3" = "hello" ]; then
+  note "PASS: shift taps on a finished word leave it unchanged (hello, hello, hello)"
 else
-  note "FAIL: word-case cycling variant A (expected Hello/HELLO/hello). Active IME was ours at preceding checkpoint; shift state per 07c-07e screenshots"
+  note "FAIL: shift taps on a finished word changed it (expected hello/hello/hello): '$C1' '$C2' '$C3'"
 fi
 note "(case variant B cursor-move diagnostic removed: variant A passes and B only probed the old hypothesis)"
 precond caps
