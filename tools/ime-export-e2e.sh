@@ -47,6 +47,8 @@ else
   for k in "${!WANT[@]}"; do [ "$(adb shell "[ -e '$k' ] && echo y || echo n" | tr -d '\r')" = n ] && :; done
   note "fresh install has seeded data before restore: $(adb shell "[ -e $APPDIR/files/themes/e2etheme.zip ] && echo YES-UNEXPECTED || echo no" | tr -d '\r')"
   # 3b. REAL path first: in-app Import -> system document picker (DocumentsUI) -> pick the real export file
+  # Navigation only: a fresh install shows the setup wizard until the IME is enabled; enable+select it so Settings opens the real pages.
+  adb shell ime enable "$IME" >/dev/null 2>&1; adb shell ime set "$IME" >/dev/null 2>&1; sleep 2
   adb shell am start -n "$SETTINGS_ACT" --es navDest misc >/dev/null 2>&1; sleep 5; shot e2e_p1_misc; xdump e2e_p1_misc
   if IV=$(python3 tools/xml_node.py shots/e2e_p1_misc.xml 'Import configuration' || python3 tools/xml_node.py shots/e2e_p1_misc.xml 'Import Configuration'); then
     read -r PX PY _ <<< "$IV"; adb shell input tap $PX $PY; sleep 4; shot e2e_p2_picker; xdump e2e_p2_picker
