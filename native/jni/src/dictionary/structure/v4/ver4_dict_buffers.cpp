@@ -27,6 +27,8 @@
 
 #include "dictionary/utils/byte_array_utils.h"
 #include "dictionary/utils/dict_file_writing_utils.h"
+#include <climits>
+
 #include "dictionary/utils/file_utils.h"
 #include "utils/byte_array_view.h"
 
@@ -49,6 +51,11 @@ namespace latinime {
     }
     std::vector<ReadWriteByteArrayView> buffers;
     const ReadWriteByteArrayView buffer = bodyBuffer->getReadWriteByteArrayView();
+    if (buffer.size() > static_cast<size_t>(INT_MAX)) {
+        // Keep the int-based walk below exact: reject bodies that do not fit an int.
+        AKLOGE("The dict body file is too large.");
+        return Ver4DictBuffersPtr(nullptr);
+    }
     int position = 0;
     while (position < static_cast<int>(buffer.size())) {
         // The 4 byte length field itself must fit in the file.
@@ -58,12 +65,17 @@ namespace latinime {
         }
         const int bufferSize = ByteArrayUtils::readUint32AndAdvancePosition(
                 buffer.data(), &position);
-        buffers.push_back(buffer.subView(position, bufferSize));
-        position += bufferSize;
-        if (bufferSize < 0 || position < 0 || position > static_cast<int>(buffer.size())) {
+        // Validate the declared size against the remaining bytes BEFORE using it: subView's
+        // bounds check is ASSERT-only and compiles out in release (NDEBUG), and
+        // position += bufferSize would be signed-overflow UB for large values, so the
+        // rejection must precede both the subView and the add.
+        if (bufferSize < 0
+                || static_cast<size_t>(bufferSize) > buffer.size() - static_cast<size_t>(position)) {
             AKLOGE("The dict body file is corrupted.");
             return Ver4DictBuffersPtr(nullptr);
         }
+        buffers.push_back(buffer.subView(position, bufferSize));
+        position += bufferSize;  // No overflow: position + bufferSize <= buffer.size() <= INT_MAX.
     }
     if (buffers.size() != Ver4DictConstants::NUM_OF_CONTENT_BUFFERS_IN_BODY_FILE) {
         AKLOGE("The dict body file is corrupted.");
