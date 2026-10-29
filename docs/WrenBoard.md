@@ -11,7 +11,7 @@
 
 ## Dictation
 
-Voice input uses an English speech model that is bundled with the app, so dictation works without an internet connection. Choosing a different voice-input app asks for confirmation first.
+Voice input uses an English speech model that is bundled with the app, so dictation does not need an internet connection. Choosing a different voice-input app asks for confirmation first.
 
 ## Themes
 
@@ -19,10 +19,10 @@ WrenBoard ships with a SwiftKey-inspired default theme. All of FUTO Keyboard's t
 
 ## Your data
 
-- Learned words, the personal dictionary and clipboard history stay on the phone.
-- The app has no crash reporting and no analytics. In testing, the only network request it made was the update check against this repository's releases.
-- Settings > export saves a backup file with your settings, themes, personal dictionary and learned words. Restore reads that file back. Restoring replaces what is on the phone, so export first if you are unsure.
-- Automatic cloud backup is not part of the current build.
+- Learned words, the personal dictionary and clipboard history are stored on the phone.
+- Crash-report emailing from FUTO Keyboard has been removed from this build. The app makes a network request to check for updates; dictation does not need one.
+- Settings can export a backup file with your settings, themes, personal dictionary and learned words. A restore option reads that file back and replaces what is on the phone, so export first if you are unsure.
+- Backup and recovery on a new or replacement phone is still being worked on. Treat an exported file as a manual copy for now. Automatic cloud backup is not part of the current build.
 
 ## Updates
 

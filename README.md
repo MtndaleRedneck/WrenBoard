@@ -3,11 +3,11 @@
 A customized FUTO Keyboard for Android that combines selected features from FUTO Keyboard and SwiftKey.
 
 - SwiftKey-style layout with a number row, symbols pages and an arrow-key row
-- Dictation that runs on the phone, no account needed
+- Dictation using a speech model bundled with the app, no account needed
 - Learned words and a personal dictionary that stay on the device
 - Hold backspace to delete whole words, tap a finished word's shift to cycle its case
 - Long-press 123 for the clipboard, plus an editable toolbar
-- Export and restore your settings, themes and dictionaries
+- Export your settings, themes and dictionaries to a file
 
 Details are in [docs/WrenBoard.md](docs/WrenBoard.md).
 
