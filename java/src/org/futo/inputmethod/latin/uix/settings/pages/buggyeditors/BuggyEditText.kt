@@ -218,7 +218,7 @@ class BuggyEditText @JvmOverloads constructor(
                         this.hint = this@BuggyEditText.hint
                     }
 
-                    Log.d(TAG, "Outputting ExtractedText(text=$text, startOffset=$startOffset, selectionStart=$selectionStart, selectionEnd=$selectionEnd)")
+                    Log.d(TAG, "Outputting ExtractedText(length=${text.length}, startOffset=$startOffset, selectionStart=$selectionStart, selectionEnd=$selectionEnd)")
                 }.also {
                     imm.updateExtractedText(this@BuggyEditText, request.token, it)
                 }
