@@ -8,9 +8,14 @@ SH=$(jq -r '.keys.shift | "\(.[0]) \(.[1])"' "$GEOM")
 
 open_settings_page() { # opens Long-Press Keys & Spacebar and scrolls until 'Caps lock' is on screen; sets CL (cx cy y1) or empty
   CL=""
-  adb shell input keyevent KEYCODE_HOME; sleep 1
-  adb shell am start -n "$SETTINGS_ACT" --es navDest longPress >/dev/null 2>&1; sleep 5
-  local i
+  local i t
+  for t in 1 2 3; do
+    adb shell input keyevent KEYCODE_HOME; sleep 1
+    adb shell am start -n "$SETTINGS_ACT" --es navDest longPress >/dev/null 2>&1; sleep 5
+    xdump "shift_page_$1_try$t"
+    # the deep link can land on another page on a cold start: retry the launch until the right page shows
+    if python3 tools/xml_node.py "shots/shift_page_$1_try$t.xml" 'Long-Press Keys' >/dev/null 2>&1; then break; fi
+  done
   for i in 0 1 2 3 4 5; do
     xdump "shift_page_$1_$i"
     if CL=$(python3 tools/xml_node.py "shots/shift_page_$1_$i.xml" 'Caps lock'); then
@@ -33,17 +38,26 @@ set_mode() { # set_mode <cycle|futo> <tag>: open page, open dropdown, tap option
   cur=$(row_value "shift_page_$2_before_$(ls shots | sed -n "s/^shift_page_$2_before_\([0-9]*\)\.xml$/\1/p" | tail -1)")
   note "settings row before change ($2): displayed value = $cur"
   read -r CX CY _ <<< "$CL"
-  adb shell input tap $CX $CY; sleep 1.5
-  shot "shift_dropdown_$2"; xdump "shift_dropdown_$2"
-  if ON=$(python3 tools/xml_node.py "shots/shift_dropdown_$2.xml" "$label"); then
-    # when the row already shows this label, the menu item may be the second node; tap the last match instead
+  adb shell input tap $CX $CY; sleep 2
+  local k
+  for k in 1 2 3 4; do
+    xdump "shift_dropdown_$2"
+    if python3 tools/xml_node.py "shots/shift_dropdown_$2.xml" "$CYCLE_LABEL" >/dev/null 2>&1 && python3 tools/xml_node.py "shots/shift_dropdown_$2.xml" "$FUTO_LABEL" >/dev/null 2>&1; then break; fi
+    sleep 1.5
+  done
+  shot "shift_dropdown_$2"
+  # popup open = both labels on screen; the popup item is the LAST node carrying the label (the row itself comes first)
+  if ON=$(python3 tools/xml_node.py "shots/shift_dropdown_$2.xml" "$label" last) && python3 tools/xml_node.py "shots/shift_dropdown_$2.xml" "$CYCLE_LABEL" >/dev/null 2>&1 && python3 tools/xml_node.py "shots/shift_dropdown_$2.xml" "$FUTO_LABEL" >/dev/null 2>&1; then
     read -r OX OY _ <<< "$ON"
-    adb shell input tap $OX $OY; sleep 1.5
+    adb shell input tap $OX $OY; sleep 2.5
   else
-    note "INCONCLUSIVE(harness): option '$label' not found after opening dropdown (shift_dropdown_$2.png/xml)"; return 1
+    note "INCONCLUSIVE(harness): dropdown popup with both options not seen for '$label' (shift_dropdown_$2.png/xml)"; return 1
   fi
   shot "shift_after_select_$2"; xdump "shift_after_select_$2"
-  local now; now=$(row_value "shift_after_select_$2")
+  local now
+  # after the popup closes the row shows the selected label once; if the popup is still open the check is invalid
+  if python3 tools/xml_node.py "shots/shift_after_select_$2.xml" "$CYCLE_LABEL" >/dev/null 2>&1 && python3 tools/xml_node.py "shots/shift_after_select_$2.xml" "$FUTO_LABEL" >/dev/null 2>&1; then note "INCONCLUSIVE(harness): popup still open after the tap ($2)"; return 1; fi
+  now=$(row_value "shift_after_select_$2")
   if [ "$now" = "$1" ]; then note "PASS(UI): Caps lock row shows '$label' after selecting it ($2)"; else note "FAIL(UI): Caps lock row shows '$now' after selecting '$1' ($2)"; fi
 }
 reopen_check() { # reopen_check <expect> <tag>: reopen settings page and read the persisted value
@@ -61,6 +75,7 @@ back_to_target() {
 }
 # --- evdev touch device for a measured quick double-tap (same method as the caps double-tap leg) ---
 TDEV=""
+adb root >/dev/null 2>&1; sleep 3; adb wait-for-device; note "adb root attempted for the sendevent probe: uid=$(adb shell id -u | tr -d '\r')"
 for dev in $(adb shell getevent -lp 2>/dev/null | tr -d '\r' | awk '/^add device/{d=$4} /ABS_MT_POSITION_X/{print d}' | sort -u); do
   RX=$(adb shell getevent -lp "$dev" 2>/dev/null | tr -d '\r' | sed -n 's/.*ABS_MT_POSITION_X .*max \([0-9]*\).*/\1/p' | head -1)
   RY=$(adb shell getevent -lp "$dev" 2>/dev/null | tr -d '\r' | sed -n 's/.*ABS_MT_POSITION_Y .*max \([0-9]*\).*/\1/p' | head -1)
@@ -99,6 +114,10 @@ cycle_tests() { # cycle_tests <tag>
   assert_field "cycle: slow second press (1 s gap) locks, lock persists across a space [$1]" "WORLD HI"
   tapk shift; type_letters x; sleep 0.5; shot "shift_${1}_c3_unlocked"
   assert_field "cycle: third press returns to lowercase [$1]" "WORLD HIx"
+  clear_field
+  # observation leg for isolation (not an assertion): shift tapped while a word is still being composed
+  type_letters h i; sleep 0.4; tapk shift; type_letters x; sleep 0.5; shot "shift_${1}_midword"
+  note "OBSERVE midword [$1]: typed 'hi', tapped shift, typed 'x' -> '$(edit_text)'"
   clear_field
   if [ -n "$TDEV" ]; then
     G=$(quick_double_tap); note "cycle: quick two-tap measured down-to-down gap ${G:-unmeasured} ms"; sleep 0.5
@@ -163,3 +182,4 @@ type_letters a b c; sleep 0.5; shot "shift_eng_after_switch_typed"
 E=$(edit_text); note "after switching cycle->futo with one-shot engaged, typed abc -> '$E'"
 case "$E" in ABC) note "FAIL: shift stuck as caps lock after the mode change ('ABC')";; Abc|abc) note "PASS: no stuck caps lock after the mode change ('$E')";; *) note "INCONCLUSIVE: unexpected text after mode change ('$E')";; esac
 note "NOT TESTED: shift+letter chord (no multi-touch injection in this harness) and the auto-capitalised shift state; both unchanged by the diff except through the shared press path."
+
