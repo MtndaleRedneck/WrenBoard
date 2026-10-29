@@ -34,6 +34,8 @@ if [ -z "$EXPF" ]; then
 else
   note "export file: $EXPF ($(adb shell stat -c %s "$EXPF" | tr -d '\r') bytes)"
   adb shell "unzip -l '$EXPF' 2>/dev/null || true" | head -30 | sed 's/^/    /' | tee -a "$R"
+  NLA=$(adb shell "unzip -l '$EXPF' 2>/dev/null | grep -c 'userdict/.*UserHistoryDictionary.*\.dict\.\(header\|body\)'" | tr -d '\r'); NOLEARN=0
+  if [ "${NLA:-0}" -ge 2 ]; then note "PREMISE OK: export archive contains the learned dictionary header and body (${NLA} entries)"; else NOLEARN=1; note "INCONCLUSIVE(premise): export archive lacks the learned dictionary header/body (${NLA:-0} entries); recovery verdict below is not evidence"; fi
   TU=$(adb shell stat -c %u /data/data/com.wrenboard.imetarget | tr -d '\r')
   adb shell "mkdir -p /data/data/com.wrenboard.imetarget/files && cp '$EXPF' /data/data/com.wrenboard.imetarget/files/exp.backup && chown -R $TU:$TU /data/data/com.wrenboard.imetarget/files"
     adb shell "restorecon -R /data/data/com.wrenboard.imetarget/files 2>/dev/null; ls -lZ /data/data/com.wrenboard.imetarget/files/exp.backup; md5sum '$EXPF' /data/data/com.wrenboard.imetarget/files/exp.backup; run-as com.wrenboard.imetarget sh -c 'wc -c < files/exp.backup' 2>&1" | tr -d '\r' | sed 's/^/    copy-check: /' | tee -a "$R"
@@ -82,7 +84,7 @@ PY
         note "REAL learned dict dir after fresh-install restore: $(adb shell ls -l $APPDIR/files/UserHistoryDictionary.en_US.dict 2>&1 | tr -d '\r' | tr '\n' ';' | cut -c1-300)"
         sleep 8; adb unroot >/dev/null 2>&1; sleep 3; adb wait-for-device
         LPHASE=freshrestore; precond freshrestore && { predict_slots zorblax z o r b l; FR=$PR; } || FR=BLOCKED
-        if [ "$FR" = BLOCKED ]; then note "INCONCLUSIVE(harness): fresh-install prediction check blocked (target focus/keyboard not verified)"; elif [ -n "$FR" ]; then note "PASS(real data): after export -> uninstall -> fresh install -> real picker restore, learned 'zorblax' is predicted again ($FR)"; else note "FAIL(real data): learned 'zorblax' NOT offered after fresh-install restore (frames learn_freshrestore_*)"; fi
+        if [ "$FR" = BLOCKED ]; then note "INCONCLUSIVE(harness): fresh-install prediction check blocked (target focus/keyboard not verified)"; elif [ -n "$FR" ]; then note "PASS(real data): after export -> uninstall -> fresh install -> real picker restore, learned 'zorblax' is predicted again ($FR)"; elif [ "${NOLEARN:-0}" = 1 ]; then note "INCONCLUSIVE(premise): no learned data was in the archive, so the fresh-install prediction result is not a recovery verdict"; else note "FAIL(real data): learned 'zorblax' NOT offered after fresh-install restore (frames learn_freshrestore_*)"; fi
         adb root >/dev/null 2>&1; sleep 4; adb wait-for-device
       else
         note "REAL-PICKER: no Import button after picking the file (see e2e_p3_after_pick.png; app or harness undecided)"

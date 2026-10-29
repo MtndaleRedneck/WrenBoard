@@ -209,6 +209,8 @@ clear_field
 note "GATE: PASS (focused EditText + WrenBoard keyboard pixels + validated key mapping)"
 
 cp "$GEOM" shots/geom_letters.json
+if [ "${WB_FOCUS:-}" = learn ]; then note "FOCUS=learn: skipping the broad typing/symbols/settings legs; running learn-restore then the real-learned-data export/fresh-install leg only"; fi
+if [ "${WB_FOCUS:-}" != learn ]; then
 note "== lowercase typing =="
 dim "before-type"
 type_letters h e l l o
@@ -806,6 +808,7 @@ else
 fi
 shot 15_cold2_state
 
+fi  # end of the skipped-in-focus region
 adb logcat -d > shots/logcat_full.txt 2>&1
 note "== final =="
 dim "final"
@@ -814,10 +817,12 @@ check "default IME still WrenBoard at end" "$PKG" "$CUR"
 LDC() { note "LEARNED-DIR checkpoint [$1]: $(adb shell 'ls -l /data/data/com.wrenboard.keyboard/files/UserHistoryDictionary.en_US.dict 2>&1' | tr -d '\r' | tr '\n' ';' | cut -c1-260)"; }
 source tools/ime-learn-restore.sh
 LDC after-learn-restore
+if [ "${WB_FOCUS:-}" != learn ]; then
 source tools/ime-import-regress.sh
 LDC after-import-regress
 source tools/ime-voice-update.sh   # before e2e: e2e uninstalls and reinstalls the app
 LDC after-voice-update
+fi
 source tools/ime-export-e2e.sh
 source tools/ime-launcher-icon.sh
 note "== done =="

@@ -6,6 +6,10 @@ on:
         description: "build run id to take the APK from (blank = latest successful build)"
         required: false
         default: ""
+      focus:
+        description: "learn = only the learn-restore and the real-learned-data export/fresh-install legs"
+        required: false
+        default: ""
 jobs:
   verify:
     runs-on: ubuntu-latest
@@ -60,7 +64,7 @@ jobs:
           arch: x86_64
           profile: Nexus 6
           disable-animations: true
-          script: bash tools/ime-verify.sh apk/*.apk tools/ime-target/out/imetarget.apk
+          script: WB_FOCUS=${{ inputs.focus }} bash tools/ime-verify.sh apk/*.apk tools/ime-target/out/imetarget.apk
       - uses: actions/upload-artifact@v4
         if: always()
         with:
