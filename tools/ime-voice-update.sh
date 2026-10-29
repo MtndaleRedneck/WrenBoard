@@ -4,7 +4,7 @@ note "== update-failure dialog and voice-backend confirmation =="
 VAPP=com.wrenboard.keyboard; VDS=/data/data/$VAPP/files/datastore/settings.preferences_pb
 VSW="$VAPP/org.futo.inputmethod.latin.uix.settings.VoiceInputSwitchActivity"
 VTARGET=com.google.android.tts
-adb root >/dev/null 2>&1; sleep 4; adb wait-for-device; sleep 2
+adb_ready root; sleep 2
 if ! adb shell id 2>/dev/null | grep -q "uid=0"; then
   note "INCONCLUSIVE(harness): adb root unavailable for voice/update steps"
 else
@@ -52,4 +52,4 @@ else
   note "(opaque installed IME package used to test the confirmation gate only; this is not proof the engine works)"
   note "FATAL EXCEPTION count after voice/update steps: $(adb logcat -d 2>/dev/null | grep -c 'FATAL EXCEPTION')"
 fi
-adb unroot >/dev/null 2>&1; sleep 3; adb wait-for-device
+adb_ready unroot

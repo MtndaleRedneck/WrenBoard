@@ -5,7 +5,7 @@ APP=com.wrenboard.keyboard
 APPDIR=/data/data/$APP
 IMPORT_ACT="$APP/org.futo.inputmethod.latin.uix.ImportResourceActivity"
 note "== import/restore regression (real importer; fixtures served by test-only provider; data checked as root on emulator) =="
-adb root >/dev/null 2>&1; sleep 4; adb wait-for-device; sleep 2
+adb_ready root; sleep 2
 if adb shell id 2>/dev/null | grep -q "uid=0"; then IR_ROOT=1; else IR_ROOT=0; fi
 note "adb root available: $IR_ROOT"
 if [ "$IR_ROOT" = 1 ]; then
@@ -96,6 +96,6 @@ adb shell rm -f /data/local/tmp/fill.bin
 F1=$(fatals); note "FATAL EXCEPTION count in logcat during import tests: before=$F0 after=$F1"
 [ "$F1" = "$F0" ] && note "PASS: no crash during import/restore tests" || note "FAIL: logcat shows FATAL EXCEPTION during import/restore tests (see logcat_import.txt)"
 adb logcat -d 2>/dev/null | grep -B2 -A12 "FATAL EXCEPTION" | tail -60 > shots/logcat_import.txt
-adb unroot >/dev/null 2>&1; sleep 3; adb wait-for-device
+adb_ready unroot
 fi
 adb shell am start -n com.wrenboard.imetarget/.TestInput >/dev/null 2>&1; sleep 2

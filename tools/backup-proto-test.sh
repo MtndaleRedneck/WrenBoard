@@ -3,7 +3,9 @@
 set -u
 APK="$1"; P=com.wrenboard.bkproto; D=/data/data/$P/files; mkdir -p out; R=out/results.txt; : > "$R"
 note() { echo "$*" | tee -a "$R"; }
-adb root >/dev/null 2>&1; sleep 4; adb wait-for-device
+# adb root/unroot restarts adbd; the emulator can report "device offline" for a while afterwards. Wait until a shell command really works (up to ~60 s).
+adb_ready() { local i; [ -n "$1" ] && adb "$1" >/dev/null 2>&1; sleep 3; adb wait-for-device 2>/dev/null; for i in $(seq 1 30); do adb shell true >/dev/null 2>&1 && return 0; sleep 2; done; return 1; }
+adb_ready root
 note "api: $(adb shell getprop ro.build.version.sdk | tr -d '\r') image: $(adb shell getprop ro.product.model | tr -d '\r')"
 note "transports: $(adb shell bmgr list transports | tr -d '\r' | tr '\n' ' ')"
 adb shell bmgr enable true 2>&1 | tee -a "$R"

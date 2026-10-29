@@ -2,7 +2,7 @@
 # The export uses the app's own Export configuration screen and the system document picker (Save).
 # Data checks use adb root on the emulator. Harness steps that do not complete are reported as INCONCLUSIVE(harness).
 note "== manual export -> fresh install -> restore (real export file, real importer) =="
-adb root >/dev/null 2>&1; sleep 4; adb wait-for-device; sleep 2
+adb_ready root; sleep 2
 if ! adb shell id 2>/dev/null | grep -q "uid=0"; then
   note "INCONCLUSIVE(harness): adb root unavailable, export/restore E2E skipped"
 else
@@ -82,10 +82,10 @@ PY
         [ "$ALLOK" = 1 ] && note "PASS(real picker): export -> uninstall -> fresh install -> picker restore returned all seeded locations byte-identical" || note "FAIL(real picker): some seeded locations did not come back"
         # REAL learned data (typed earlier by the learn flow, exported as part of this backup): does the word predict again on the fresh install?
         note "REAL learned dict dir after fresh-install restore: $(adb shell ls -l $APPDIR/files/UserHistoryDictionary.en_US.dict 2>&1 | tr -d '\r' | tr '\n' ';' | cut -c1-300)"
-        sleep 8; adb unroot >/dev/null 2>&1; sleep 3; adb wait-for-device
+        sleep 8; adb_ready unroot
         LPHASE=freshrestore; precond freshrestore && { predict_slots zorblax z o r b l; FR=$PR; } || FR=BLOCKED
         if [ "$FR" = BLOCKED ]; then note "INCONCLUSIVE(harness): fresh-install prediction check blocked (target focus/keyboard not verified)"; elif [ -n "$FR" ]; then note "PASS(real data): after export -> uninstall -> fresh install -> real picker restore, learned 'zorblax' is predicted again ($FR)"; elif [ "${NOLEARN:-0}" = 1 ]; then note "INCONCLUSIVE(premise): no learned data was in the archive, so the fresh-install prediction result is not a recovery verdict"; else note "FAIL(real data): learned 'zorblax' NOT offered after fresh-install restore (frames learn_freshrestore_*)"; fi
-        adb root >/dev/null 2>&1; sleep 4; adb wait-for-device
+        adb_ready root
       else
         note "REAL-PICKER: no Import button after picking the file (see e2e_p3_after_pick.png; app or harness undecided)"
       fi
@@ -127,5 +127,5 @@ PY
   fi
 fi
 
-adb unroot >/dev/null 2>&1; sleep 3; adb wait-for-device
+adb_ready unroot
 fi

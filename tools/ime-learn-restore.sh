@@ -26,7 +26,7 @@ learn_word z o r b l a x
 sleep 8   # more than the 5 s delayed flush
 LPHASE=pre; predict_slots zorblax z o r b l; H=$PR
 if [ "$H" = BLOCKED ]; then note "INCONCLUSIVE(harness): pre-export prediction check blocked (focus/typing not verified)"; elif [ -n "$H" ]; then note "PASS: typed learned word 'zorblax' is offered as a prediction from 'zorbl' (slot:field = '$H')"; else note "FAIL-or-INCONCLUSIVE: no suggestion slot produced 'zorblax' after typing it 3 times (see shots learn_pred_zorblax_*; check frames to tell app from harness)"; fi
-adb root >/dev/null 2>&1; sleep 4; adb wait-for-device; sleep 2
+adb_ready root; sleep 2
 if adb shell id 2>/dev/null | grep -q "uid=0"; then
   note "learned dict dir after typing: $(adb shell ls -l $LDIR | tr -d '\r' | tr '\n' ';')"
   # export through the real Export screen
@@ -47,20 +47,20 @@ if adb shell id 2>/dev/null | grep -q "uid=0"; then
     adb shell "mkdir -p /data/data/com.wrenboard.imetarget/files && cp '$LEXP' /data/data/com.wrenboard.imetarget/files/exp.backup && chown -R $TU:$TU /data/data/com.wrenboard.imetarget/files"
     adb shell "restorecon -R /data/data/com.wrenboard.imetarget/files 2>/dev/null; ls -lZ /data/data/com.wrenboard.imetarget/files/exp.backup; md5sum '$LEXP' /data/data/com.wrenboard.imetarget/files/exp.backup; run-as com.wrenboard.imetarget sh -c 'wc -c < files/exp.backup' 2>&1" | tr -d '\r' | sed 's/^/    copy-check: /' | tee -a "$R"
     # change the learned words on the RUNNING instance: learn another word
-    adb unroot >/dev/null 2>&1; sleep 3; adb wait-for-device
+    adb_ready unroot
     precond learn2; clear_field
     learn_word q u e n v i l
     sleep 8
     LPHASE=prerestore; predict_slots quenvil q u e n v; H2=$PR
     note "before restore, 'quenvil' prediction: '${H2:-none}' (BLOCKED = not verified)"
     # restore onto the running instance
-    adb root >/dev/null 2>&1; sleep 4; adb wait-for-device; sleep 2
+    adb_ready root; sleep 2
     adb shell am start -W -a android.intent.action.VIEW -d "content://com.wrenboard.imetarget.fix/exp.backup" -t application/octet-stream -n "$LAPP/org.futo.inputmethod.latin.uix.ImportResourceActivity" >/dev/null 2>&1
     sleep 4; shot learn_03_importer; xdump learn_03_importer
     if IB=$(python3 tools/xml_node.py shots/learn_03_importer.xml 'Import'); then
       read -r IX IY _ <<< "$IB"; adb shell input tap $IX $IY; sleep 12; shot learn_04_after_restore
       sleep 8   # > 5 s: a late delayed flush of old memory would have fired by now
-      adb unroot >/dev/null 2>&1; sleep 3; adb wait-for-device
+      adb_ready unroot
       LPHASE=postrestore; predict_slots zorblax z o r b l; H3=$PR
       if [ "$H3" = BLOCKED ]; then note "INCONCLUSIVE(harness): post-restore zorblax check blocked (focus/typing not verified)"; elif [ -n "$H3" ]; then note "PASS: after restore on the running instance 'zorblax' predicts again ('$H3')"; else note "FAIL-or-INCONCLUSIVE: 'zorblax' not offered after restore (frames learn_pred_zorblax_*; compare with the pre-export frame)"; fi
       LPHASE=postrestoreq; predict_slots quenvil q u e n v; H4=$PR
@@ -73,4 +73,4 @@ if adb shell id 2>/dev/null | grep -q "uid=0"; then
     else note "INCONCLUSIVE(harness or app): no Import button for the learned-words export (learn_03_importer.png)"; fi
   fi
 else note "INCONCLUSIVE(harness): adb root unavailable for learned-words test"; fi
-adb unroot >/dev/null 2>&1; sleep 3; adb wait-for-device
+adb_ready unroot
