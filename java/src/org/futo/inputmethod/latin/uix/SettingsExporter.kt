@@ -472,37 +472,9 @@ object SettingsExporter {
      */
     private suspend fun swapStagedDictionaries(context: Context, stage: File, destructive: Boolean) {
         val staged = stage.listFiles()?.filter { it.isDirectory } ?: emptyList()
-        for(dir in staged) {
-            val files = dir.list()?.toSet() ?: emptySet()
-            if(!files.contains("${dir.name}.header") || !files.contains("${dir.name}.body")) {
-                throw java.io.IOException("Backup learned-word data for ${dir.name} is incomplete; existing data unchanged")
-            }
-        }
+        DictionarySwap.validate(staged)
         org.futo.inputmethod.latin.personalization.PersonalizationHelper.callOnKeyboardExecutor {
-            for(dir in staged) {
-                val live = File(context.filesDir, dir.name)
-                val backup = File(context.filesDir, "${dir.name}.bak")
-                if(backup.exists()) backup.deleteRecursively()
-                val hadOld = live.exists()
-                if(hadOld && !live.renameTo(backup)) {
-                    throw java.io.IOException("Could not replace learned words for ${dir.name}; old data kept")
-                }
-                if(!dir.renameTo(live)) {
-                    if(hadOld) backup.renameTo(live)
-                    throw java.io.IOException("Could not move restored learned words into place for ${dir.name}; old data kept")
-                }
-                if(hadOld) backup.deleteRecursively()
-            }
-            if(destructive) {
-                // A destructive restore replaces everything: drop dictionaries the backup did not contain
-                val restored = staged.map { it.name }.toSet()
-                context.filesDir.listFiles()?.forEach {
-                    if(it.name.startsWith("UserHistoryDictionary") && !it.name.endsWith(".bak") && it.name !in restored) {
-                        it.deleteRecursively()
-                    }
-                }
-            }
-            Unit
+            DictionarySwap.swap(context.filesDir, staged, destructive)
         }
     }
 
