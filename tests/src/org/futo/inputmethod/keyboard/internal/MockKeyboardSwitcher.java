@@ -60,6 +60,10 @@ public class MockKeyboardSwitcher implements SwitchActions {
 
     private final KeyboardState mState = new KeyboardState(this);
 
+    public void setShiftCycleMode(final boolean enabled) {
+        mState.setShiftCycleMode(enabled);
+    }
+
     public int getLayoutId() {
         return mLayout;
     }
