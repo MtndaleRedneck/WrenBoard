@@ -115,6 +115,14 @@ note "== SHIFT SETTING: default state, real Settings screen =="
 open_settings_page default && { idx=$(ls shots | sed -n 's/^shift_page_default_\([0-9]*\)\.xml$/\1/p' | tail -1); D=$(row_value "shift_page_default_$idx"); note "default (fresh install, never touched) Caps lock row shows: $D"; [ "$D" = cycle ] && note "PASS(default): default choice is the tap cycle" || note "FAIL(default): default choice is '$D', wanted cycle"; }
 back_to_target cyc1 || true
 
+midword_obs() { # observation only: shift tapped while a word is just typed; frames before, right after the tap, after a second tap, after the next letter
+  type_letters h i; sleep 0.6; shot "shift_${1}_midword_before"; note "OBSERVE midword before shift [$1]: field='$(edit_text)'"
+  tapk shift; sleep 0.8; shot "shift_${1}_midword_aftershift"; note "OBSERVE midword right after one shift tap [$1]: field='$(edit_text)'"
+  tapk shift; sleep 0.8; shot "shift_${1}_midword_after2"; note "OBSERVE midword after a second shift tap [$1]: field='$(edit_text)'"
+  type_letters x; sleep 0.5; shot "shift_${1}_midword"
+  note "OBSERVE midword [$1]: typed 'hi', shift, shift, 'x' -> '$(edit_text)'"
+  clear_field
+}
 cycle_tests() { # cycle_tests <tag>
   note "== CYCLE mode behavior ($1) =="
   clear_field; tapk shift; shot "shift_${1}_c1_oneshot"; type_letters w o; sleep 0.5
@@ -126,8 +134,7 @@ cycle_tests() { # cycle_tests <tag>
   assert_field "cycle: third press returns to lowercase [$1]" "WORLD HIx"
   clear_field
   # observation leg for isolation (not an assertion): shift tapped while a word is still being composed
-  type_letters h i; sleep 0.6; shot "shift_${1}_midword_before"; note "OBSERVE midword before shift [$1]: field='$(edit_text)'"; tapk shift; type_letters x; sleep 0.5; shot "shift_${1}_midword"
-  note "OBSERVE midword [$1]: typed 'hi', tapped shift, typed 'x' -> '$(edit_text)'"
+  midword_obs "$1"
   clear_field
   if [ -n "$TDEV" ]; then
     G=$(quick_double_tap); note "cycle: quick two-tap measured down-to-down gap ${G:-unmeasured} ms"; sleep 0.5
@@ -165,6 +172,7 @@ futo_tests() {
   type_letters w o r l d; sleep 0.5; shot "shift_${1}_f4_hold_typed"
   assert_field "futo: a 1600 ms hold locks caps ('WORLD') [$1]" "WORLD"
   tapk shift; clear_field
+  midword_obs "$1"
 }
 futo_tests futo1
 
