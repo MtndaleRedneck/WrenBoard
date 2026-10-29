@@ -356,6 +356,11 @@ class KeyboardState(private val switchActions: SwitchActions) {
         }
     }
 
+    // Set from the Settings "Caps lock" choice before each key press (KeyboardSwitcher.onPressKey).
+    // Defaults to upstream behavior so the unit-test mock switcher is unchanged.
+    private var shiftCycleMode: Boolean = false
+    fun setShiftCycleMode(enabled: Boolean) { shiftCycleMode = enabled }
+
     private var shiftTime: Long? = null
     private fun onShiftTapForShiftLockTimer() {
         if(!isAlphabet) return onCancelShiftTimer()
@@ -393,8 +398,21 @@ class KeyboardState(private val switchActions: SwitchActions) {
         when (code) {
             Constants.CODE_SHIFT -> {
                 shiftKeyState.onPress()
-                toggleShift(manually = true)
-                onShiftTapForShiftLockTimer()
+                if(shiftCycleMode) {
+                    // WrenBoard setting "Caps lock: tap cycle": lowercase -> shift (one letter) -> caps lock
+                    // -> lowercase, by plain presses with no timer. A press while the manual one-shot shift
+                    // is showing locks it. Auto-capitalized shift (Shifted) and caps lock keep the upstream
+                    // toggle (press unshifts). Long-press lock is disabled in this mode (PointerTracker).
+                    if(isAlphabet && currentLayout.page == KeyboardLayoutPage.ManuallyShifted) {
+                        lockShift()
+                    } else {
+                        toggleShift(manually = true)
+                    }
+                } else {
+                    // Upstream FUTO: a quick second press (double-tap) locks.
+                    toggleShift(manually = true)
+                    onShiftTapForShiftLockTimer()
+                }
             }
             Constants.CODE_CAPSLOCK -> {
                 // only in onReleaseKey?
@@ -436,7 +454,9 @@ class KeyboardState(private val switchActions: SwitchActions) {
                     shiftKeyState.onRelease()
             }
             Constants.CODE_CAPSLOCK -> {
-                lockShift()
+                // lockShift() toggles: never unlock from a CAPSLOCK emit when already locked (e.g. cycle-mode
+                // press locked at DOWN, then the mode flips to FUTO style while the key is held).
+                if(!alphabetShiftState.isShiftLocked) lockShift()
             }
             Constants.CODE_SWITCH_ALPHA_SYMBOL -> {
                 finalizeChord(autoCapsFlags)

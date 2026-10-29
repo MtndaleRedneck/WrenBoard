@@ -108,6 +108,7 @@ public class SettingsValues {
     public final boolean mBackspaceUndoesAutocorrect;
     public final int mSpacebarSwipeMode;
     public final int mSpacebarHoldMode;
+    public final int mShiftLockMode;
     public final int mBackspaceMode;
     public final int mBackspaceModeHold;
     public final int mNumberRowMode;
@@ -209,6 +210,8 @@ public class SettingsValues {
                 legacySpacebarMode == Settings.SPACEBAR_MODE_SWIPE_LANGUAGE_LEGACY ? Settings.SPACEBAR_MODE_LANGUAGE : Settings.SPACEBAR_MODE_CURSOR);
         mSpacebarHoldMode = prefs.getInt(Settings.PREF_SPACEBAR_HOLD_MODE,
                 legacySpacebarMode == Settings.SPACEBAR_MODE_SWIPE_CURSOR_LEGACY ? Settings.SPACEBAR_MODE_LANGUAGE : Settings.SPACEBAR_MODE_CURSOR);
+
+        mShiftLockMode = prefs.getInt(Settings.PREF_SHIFT_LOCK_MODE, Settings.SHIFT_LOCK_MODE_CYCLE);
 
         mBackspaceMode = prefs.getInt(Settings.PREF_BACKSPACE_MODE, Settings.BACKSPACE_MODE_CHARACTERS);
         mBackspaceModeHold = prefs.getInt(Settings.PREF_BACKSPACE_MODE_HOLD, Settings.BACKSPACE_MODE_WORDS);

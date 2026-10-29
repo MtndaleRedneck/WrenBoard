@@ -494,6 +494,9 @@
 
     <!-- Misc keyboard settings -->
     <string name="keyboard_settings_title">Keyboard</string>
+    <string name="keyboard_settings_shift_lock">Caps lock</string>
+    <string name="keyboard_settings_shift_lock_cycle">Tap shift: lowercase, uppercase, caps lock</string>
+    <string name="keyboard_settings_shift_lock_upstream">Double-tap or hold shift (FUTO style)</string>
     <string name="keyboard_settings_show_number_row">Show Number Row</string>
     <string name="keyboard_settings_show_number_row_subtitle">When active, the number row is shown on top of the keyboard on supported layouts</string>
     <string name="keyboard_settings_show_arrow_row">Show Arrow Keys</string>

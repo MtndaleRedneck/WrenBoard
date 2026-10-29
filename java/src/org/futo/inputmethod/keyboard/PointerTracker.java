@@ -1222,6 +1222,11 @@ public final class PointerTracker implements PointerTrackerQueue.Element,
         if (key == null) {
             return;
         }
+        if (key.getCode() == Constants.CODE_SHIFT
+                && Settings.getInstance().getCurrent().mShiftLockMode == Settings.SHIFT_LOCK_MODE_CYCLE) {
+            // WrenBoard "Caps lock: tap cycle" mode: holding shift does not lock caps (tap cycle only).
+            return;
+        }
         if (key.getHasNoPanelAutoMoreKey()) {
             cancelKeyTracking();
             final int moreKeyCode = key.getMoreKeys().get(0).mCode;

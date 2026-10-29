@@ -131,6 +131,10 @@ public final class Settings implements SharedPreferences.OnSharedPreferenceChang
     public static final int SPACEBAR_MODE_SWIPE_LANGUAGE_LEGACY = 1; // Swipe switches language, long-press+drag moves cursor
     public static final int SPACEBAR_MODE_SWIPE_CURSOR_ONLY_LEGACY = 2; // Swipe and long-press+drag moves cursor
 
+    public static final String PREF_SHIFT_LOCK_MODE = "pref_shift_lock_mode";
+    public static final int SHIFT_LOCK_MODE_CYCLE = 0; // press shift: lowercase -> shift -> caps lock -> lowercase
+    public static final int SHIFT_LOCK_MODE_UPSTREAM = 1; // FUTO: quick double-tap locks, long-press locks
+
     public static final String PREF_SPACEBAR_HOLD_MODE = "pref_spacebar_hold_mode";
     public static final String PREF_SPACEBAR_SWIPE_MODE = "pref_spacebar_swipe_mode";
     public static final int SPACEBAR_MODE_OFF = 0;

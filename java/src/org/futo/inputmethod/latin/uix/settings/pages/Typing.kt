@@ -591,6 +591,26 @@ val LongPressMenu = UserSettingsMenu(
         },
 
 
+        UserSetting(name = R.string.keyboard_settings_shift_lock) {
+            val setting = useSharedPrefsInt(
+                key = Settings.PREF_SHIFT_LOCK_MODE,
+                default = remember { Settings.getInstance().current.mShiftLockMode }
+            )
+
+            val modes = mapOf(
+                Settings.SHIFT_LOCK_MODE_CYCLE to stringResource(R.string.keyboard_settings_shift_lock_cycle),
+                Settings.SHIFT_LOCK_MODE_UPSTREAM to stringResource(R.string.keyboard_settings_shift_lock_upstream),
+            )
+
+            DropDownPickerSettingItem(
+                label = stringResource(R.string.keyboard_settings_shift_lock),
+                options = modes.keys.toList(),
+                selection = setting.value,
+                onSet = { setting.setValue(it) },
+                getDisplayName = { modes[it] ?: "?" },
+            )
+        },
+
         userSettingDecorationOnly {
             ScreenTitle(stringResource(R.string.morekey_settings_spacebar_title))
         },

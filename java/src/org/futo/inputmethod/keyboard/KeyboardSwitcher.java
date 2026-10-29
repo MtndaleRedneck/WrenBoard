@@ -269,6 +269,7 @@ public final class KeyboardSwitcher implements SwitchActions {
 
     public void onPressKey(final int code, final boolean isSinglePointer,
             final int currentAutoCapsState) {
+        mState.setShiftCycleMode(Settings.getInstance().getCurrent().mShiftLockMode == Settings.SHIFT_LOCK_MODE_CYCLE);
         mState.onPressKey(code, isSinglePointer, transformAutoCapsState(currentAutoCapsState));
     }
 
