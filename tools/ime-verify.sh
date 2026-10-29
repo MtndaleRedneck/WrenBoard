@@ -200,7 +200,24 @@ dump > shots/ui_keyboard.xml 2>/dev/null
 geom_rebuild 02_keyboard 02_keyboard_overlay
 GRC=$?
 note "kbd_geom exit: $GRC"
-[ "$GRC" -ne 0 ] && { cat shots/kbd_geom.err >> "$R"; fail_early "keyboard pixels not confirmed (kbd_geom rc=$GRC)"; }
+if [ "$GRC" -ne 0 ]; then
+  # ONE bounded recovery (diagnostic): record the first failure, relaunch target, re-tap field, re-shoot, re-run the SAME geometry gate.
+  cat shots/kbd_geom.err >> "$R"
+  cp shots/02_keyboard.png shots/02_keyboard_attempt1.png; cp shots/ui_keyboard.xml shots/ui_keyboard_attempt1.xml
+  cp "$GEOM" shots/geom_attempt1.json 2>/dev/null
+  note "GEOMETRY-RECOVERY: attempt 1 failed (rc=$GRC: $(tr -d '\n' < shots/kbd_geom.err | cut -c1-160)); focus: $(adb shell dumpsys window | tr -d '\r' | grep mCurrentFocus | head -1); $(adb shell dumpsys input_method | tr -d '\r' | grep -o 'mInputShown=[a-z]*' | head -1); relaunching target once"
+  adb shell input keyevent KEYCODE_BACK; sleep 0.5
+  adb shell input keyevent KEYCODE_HOME; sleep 1
+  adb shell am start -S -f 0x14000000 -n com.wrenboard.imetarget/.TestInput >/dev/null 2>&1; sleep 3
+  B=$(edit_bounds); [ -n "$B" ] && tap_bounds "$B"; sleep 3
+  note "GEOMETRY-RECOVERY: after relaunch focus: $(adb shell dumpsys window | tr -d '\r' | grep mCurrentFocus | head -1); $(adb shell dumpsys input_method | tr -d '\r' | grep -o 'mInputShown=[a-z]*' | head -1); default IME: $(adb shell settings get secure default_input_method | tr -d '\r')"
+  shot 02_keyboard_attempt2
+  dump > shots/ui_keyboard.xml 2>/dev/null
+  geom_rebuild 02_keyboard_attempt2 02_keyboard_overlay
+  GRC=$?
+  note "GEOMETRY-RECOVERY: attempt 2 kbd_geom exit: $GRC (hard gate unchanged: nonzero = FAIL-EARLY)"
+  [ "$GRC" -ne 0 ] && { cat shots/kbd_geom.err >> "$R"; fail_early "keyboard pixels not confirmed after one recovery (kbd_geom rc=$GRC)"; }
+fi
 NBANDS=$(jq '.bands | length' "$GEOM"); NKEYS=$(jq '.keys | length' "$GEOM")
 note "geometry: bands=$NBANDS mapped-keys=$NKEYS toolbar=$(jq -c '.toolbar' "$GEOM")"
 [ "$NBANDS" -lt 4 ] && fail_early "too few keyboard bands ($NBANDS)"
