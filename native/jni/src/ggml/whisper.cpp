@@ -707,10 +707,10 @@ struct whisper_model {
     std::vector<whisper_layer_decoder> layers_decoder;
 
     // ggml context that contains all the meta information about the model tensors
-    struct ggml_context * ctx;
+    struct ggml_context * ctx = nullptr;
 
     // the model backend data is read-only and can be shared between processors
-    struct ggml_backend_buffer * buffer;
+    struct ggml_backend_buffer * buffer = nullptr;
 
     // tensors
     int n_loaded;
@@ -1591,10 +1591,12 @@ static bool whisper_model_load(struct whisper_model_loader * loader, whisper_con
             // before they index the fixed ne[4] array or size an allocation.
             if (n_dims < 0 || n_dims > 4) {
                 WHISPER_LOG_ERROR("%s: invalid tensor dimension count %d in model file\n", __func__, n_dims);
+                ggml_allocr_free(alloc);
                 return false;
             }
             if (length <= 0 || length > 4096) {
                 WHISPER_LOG_ERROR("%s: invalid tensor name length %d in model file\n", __func__, length);
+                ggml_allocr_free(alloc);
                 return false;
             }
 
@@ -1604,6 +1606,7 @@ static bool whisper_model_load(struct whisper_model_loader * loader, whisper_con
                 read_safe(loader, ne[i]);
                 if (ne[i] <= 0 || (int64_t) nelements * ne[i] > INT32_MAX) {
                     WHISPER_LOG_ERROR("%s: invalid tensor dimension %d in model file\n", __func__, ne[i]);
+                    ggml_allocr_free(alloc);
                     return false;
                 }
                 nelements *= ne[i];
@@ -1613,12 +1616,14 @@ static bool whisper_model_load(struct whisper_model_loader * loader, whisper_con
             std::vector<char> tmp(length); // create a buffer
             if (loader->read(loader->context, &tmp[0], tmp.size()) != tmp.size()) { // read to buffer
                 WHISPER_LOG_ERROR("%s: truncated tensor name in model file\n", __func__);
+                ggml_allocr_free(alloc);
                 return false;
             }
             name.assign(&tmp[0], tmp.size());
 
             if (model.tensors.find(name) == model.tensors.end()) {
                 WHISPER_LOG_ERROR("%s: unknown tensor '%s' in model file\n", __func__, name.data());
+                ggml_allocr_free(alloc);
                 return false;
             }
 
@@ -1631,12 +1636,14 @@ static bool whisper_model_load(struct whisper_model_loader * loader, whisper_con
                     WHISPER_LOG_ERROR("%s: tensor '%s' has wrong size in model file\n", __func__, name.data());
                     WHISPER_LOG_ERROR("%s: shape: [%d, %d, %d], expected: [%d, %d, %d]\n",
                                       __func__, ne[0], ne[1], ne[2], (int) tensor->ne[0], (int) tensor->ne[1], (int) tensor->ne[2]);
+                    ggml_allocr_free(alloc);
                     return false;
                 }
 
                 if (tensor->ne[0] != ne[0] || tensor->ne[1] != ne[1] || tensor->ne[2] != ne[2]) {
                     WHISPER_LOG_ERROR("%s: tensor '%s' has wrong shape in model file: got [%d, %d, %d], expected [%d, %d, %d]\n",
                                       __func__, name.data(), (int) tensor->ne[0], (int) tensor->ne[1], (int) tensor->ne[2], ne[0], ne[1], ne[2]);
+                    ggml_allocr_free(alloc);
                     return false;
                 }
 
@@ -1645,6 +1652,7 @@ static bool whisper_model_load(struct whisper_model_loader * loader, whisper_con
                 if ((nelements*bpe)/ggml_blck_size(tensor->type) != ggml_nbytes(tensor)) {
                     WHISPER_LOG_ERROR("%s: tensor '%s' has wrong size in model file: got %zu, expected %zu\n",
                                       __func__, name.data(), ggml_nbytes(tensor), nelements*bpe);
+                    ggml_allocr_free(alloc);
                     return false;
                 }
             }
@@ -1661,6 +1669,7 @@ static bool whisper_model_load(struct whisper_model_loader * loader, whisper_con
                 // for the CPU and Metal backend, we can read directly into the tensor
                 if (loader->read(loader->context, tensor->data, ggml_nbytes(tensor)) != ggml_nbytes(tensor)) {
                     WHISPER_LOG_ERROR("%s: truncated tensor data for '%s' in model file\n", __func__, name.data());
+                    ggml_allocr_free(alloc);
                     return false;
                 }
                 BYTESWAP_TENSOR(tensor);
@@ -1674,6 +1683,7 @@ static bool whisper_model_load(struct whisper_model_loader * loader, whisper_con
                 if (is_conv_bias) {
                     if (loader->read(loader->context, read_buf.data(), read_buf.size() / tensor->ne[0]) != read_buf.size() / tensor->ne[0]) {
                         WHISPER_LOG_ERROR("%s: truncated tensor data for '%s' in model file\n", __func__, name.data());
+                        ggml_allocr_free(alloc);
                         return false;
                     }
 
@@ -1689,6 +1699,7 @@ static bool whisper_model_load(struct whisper_model_loader * loader, whisper_con
                 } else {
                     if (loader->read(loader->context, read_buf.data(), read_buf.size()) != read_buf.size()) {
                         WHISPER_LOG_ERROR("%s: truncated tensor data for '%s' in model file\n", __func__, name.data());
+                        ggml_allocr_free(alloc);
                         return false;
                     }
                 }
@@ -1707,6 +1718,7 @@ static bool whisper_model_load(struct whisper_model_loader * loader, whisper_con
             WHISPER_LOG_WARN("%s: WARN no tensors loaded from model file - assuming empty model for testing\n", __func__);
         } else if (model.n_loaded != (int) model.tensors.size()) {
             WHISPER_LOG_ERROR("%s: ERROR not all tensors loaded from model file - expected %zu, got %d\n", __func__, model.tensors.size(), model.n_loaded);
+            ggml_allocr_free(alloc);
             return false;
         }
     }
@@ -3365,7 +3377,10 @@ struct whisper_context * whisper_init_with_params_no_state(struct whisper_model_
     if (!whisper_model_load(loader, *ctx)) {
         loader->close(loader->context);
         WHISPER_LOG_ERROR("%s: failed to load model\n", __func__);
-        delete ctx;
+        // whisper_free handles the partially loaded context: model.ctx/buffer are
+        // null-initialized, state is null in the no-state variant, and the load-time
+        // allocr is freed inside whisper_model_load on every failure exit.
+        whisper_free(ctx);
         return nullptr;
     }
 
