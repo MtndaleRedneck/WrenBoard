@@ -2,6 +2,13 @@
 # The export uses the app's own Export configuration screen and the system document picker (Save).
 # Data checks use adb root on the emulator. Harness steps that do not complete are reported as INCONCLUSIVE(harness).
 note "== manual export -> fresh install -> restore (real export file, real importer) =="
+# learn_verdict <prediction-result> <premise-missing 0|1>: the premise (header AND body in the real archive) gates every verdict, so a missing premise can never PASS or FAIL.
+learn_verdict() {
+  if [ "$2" = 1 ]; then note "INCONCLUSIVE(premise): the real archive lacks the learned dictionary header/body, so the fresh-install prediction result is not a recovery verdict";
+  elif [ "$1" = BLOCKED ]; then note "INCONCLUSIVE(harness): fresh-install prediction check blocked (target focus/keyboard not verified)";
+  elif [ -n "$1" ]; then note "PASS(real data): after export -> uninstall -> fresh install -> real picker restore, learned 'zorblax' is predicted again ($1)";
+  else note "FAIL(real data): learned 'zorblax' NOT offered after fresh-install restore (frames learn_freshrestore_*)"; fi
+}
 adb_ready root; sleep 2
 if ! adb shell id 2>/dev/null | grep -q "uid=0"; then
   note "INCONCLUSIVE(harness): adb root unavailable, export/restore E2E skipped"
@@ -84,7 +91,7 @@ PY
         note "REAL learned dict dir after fresh-install restore: $(adb shell ls -l $APPDIR/files/UserHistoryDictionary.en_US.dict 2>&1 | tr -d '\r' | tr '\n' ';' | cut -c1-300)"
         sleep 8; adb_ready unroot
         LPHASE=freshrestore; precond freshrestore && { predict_slots zorblax z o r b l; FR=$PR; } || FR=BLOCKED
-        if [ "$FR" = BLOCKED ]; then note "INCONCLUSIVE(harness): fresh-install prediction check blocked (target focus/keyboard not verified)"; elif [ -n "$FR" ]; then note "PASS(real data): after export -> uninstall -> fresh install -> real picker restore, learned 'zorblax' is predicted again ($FR)"; elif [ "${NOLEARN:-0}" = 1 ]; then note "INCONCLUSIVE(premise): no learned data was in the archive, so the fresh-install prediction result is not a recovery verdict"; else note "FAIL(real data): learned 'zorblax' NOT offered after fresh-install restore (frames learn_freshrestore_*)"; fi
+        learn_verdict "$FR" "${NOLEARN:-0}"
         adb_ready root
       else
         note "REAL-PICKER: no Import button after picking the file (see e2e_p3_after_pick.png; app or harness undecided)"
