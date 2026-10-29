@@ -11,6 +11,14 @@ import org.futo.inputmethod.latin.common.Constants;
  */
 @SmallTest
 public class KeyboardStateShiftCycleTests extends KeyboardStateTestsBase {
+    /**
+     * FUTO's KeyboardState reports every caps-locked page as ELEMENT_ALPHABET_SHIFT_LOCK_SHIFTED and
+     * never emits ELEMENT_ALPHABET_SHIFT_LOCKED (it only accepts that id as a load alias). The exact
+     * id asserted here is the emitted one; testLockedIdsAreSamePage pins that the two ids are the same
+     * locked page, and every other page still fails the exact comparison.
+     */
+    private static final int LOCKED_PAGE_ID = ALPHABET_SHIFT_LOCK_SHIFTED;
+
     @Override
     protected void setUp() throws Exception {
         super.setUp();
@@ -21,14 +29,24 @@ public class KeyboardStateShiftCycleTests extends KeyboardStateTestsBase {
         // 1st press: one-shot shift
         pressAndReleaseKey(CODE_SHIFT, ALPHABET_MANUAL_SHIFTED, ALPHABET_MANUAL_SHIFTED);
         // 2nd press, no timer involved: caps lock
-        pressAndReleaseKey(CODE_SHIFT, ALPHABET_SHIFT_LOCKED, ALPHABET_SHIFT_LOCKED);
+        pressAndReleaseKey(CODE_SHIFT, LOCKED_PAGE_ID, LOCKED_PAGE_ID);
         // letter keys leave the lock alone
-        pressAndReleaseKey('a', ALPHABET_SHIFT_LOCKED, ALPHABET_SHIFT_LOCKED);
+        pressAndReleaseKey('a', LOCKED_PAGE_ID, LOCKED_PAGE_ID);
         // 3rd press: back to lowercase
         pressAndReleaseKey(CODE_SHIFT, ALPHABET_UNSHIFTED, ALPHABET_UNSHIFTED);
         // and the cycle repeats
         pressAndReleaseKey(CODE_SHIFT, ALPHABET_MANUAL_SHIFTED, ALPHABET_MANUAL_SHIFTED);
-        pressAndReleaseKey(CODE_SHIFT, ALPHABET_SHIFT_LOCKED, ALPHABET_SHIFT_LOCKED);
+        pressAndReleaseKey(CODE_SHIFT, LOCKED_PAGE_ID, LOCKED_PAGE_ID);
+    }
+
+    public void testLockedIdsAreSamePage() {
+        final KeyboardLayoutElement a = KeyboardLayoutElement.fromElementId(ALPHABET_SHIFT_LOCK_SHIFTED);
+        final KeyboardLayoutElement b = KeyboardLayoutElement.fromElementId(ALPHABET_SHIFT_LOCKED);
+        assertEquals("both locked ids load the same page", a.getPage(), b.getPage());
+        assertTrue("that page is a locked page", a.getPage().getLocked());
+        // and a non-locked page is not equivalent
+        assertFalse("manual shifted is not the locked page",
+                a.getPage().equals(KeyboardLayoutElement.fromElementId(ALPHABET_MANUAL_SHIFTED).getPage()));
     }
 
     public void testOneShotRevertsAfterOneLetter() {
@@ -46,15 +64,15 @@ public class KeyboardStateShiftCycleTests extends KeyboardStateTestsBase {
     public void testCapsLockEmitAfterPressLockDoesNotUnlock() {
         // Mode flipped mid-hold: a press already locked, then a CODE_CAPSLOCK emit arrives.
         pressAndReleaseKey(CODE_SHIFT, ALPHABET_MANUAL_SHIFTED, ALPHABET_MANUAL_SHIFTED);
-        pressKey(CODE_SHIFT, ALPHABET_SHIFT_LOCKED);
+        pressKey(CODE_SHIFT, LOCKED_PAGE_ID);
         mSwitcher.onPressKey(Constants.CODE_CAPSLOCK, true /* isSinglePointer */);
         mSwitcher.onCodeInput(Constants.CODE_CAPSLOCK);
         mSwitcher.onReleaseKey(Constants.CODE_CAPSLOCK, NOT_SLIDING);
-        assertEquals("guard keeps the lock", ALPHABET_SHIFT_LOCKED, mSwitcher.getLayoutId());
+        assertEquals("guard keeps the lock", LOCKED_PAGE_ID, mSwitcher.getLayoutId());
         // Force the internal lock flag onto the page: the symbols round trip rebuilds the alphabet
         // page from the flag, so an unguarded (toggled-off) flag would come back unlocked.
         pressAndReleaseKey(CODE_SYMBOL, SYMBOLS_UNSHIFTED, SYMBOLS_UNSHIFTED);
-        pressAndReleaseKey(CODE_SYMBOL, ALPHABET_SHIFT_LOCKED, ALPHABET_SHIFT_LOCKED);
+        pressAndReleaseKey(CODE_SYMBOL, LOCKED_PAGE_ID, LOCKED_PAGE_ID);
     }
 
     public void testAutoCapitalisedShiftBehavesLikeUpstreamMode() {
