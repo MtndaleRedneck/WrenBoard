@@ -215,6 +215,36 @@ clear_field
 note "GATE: PASS (focused EditText + WrenBoard keyboard pixels + validated key mapping)"
 
 cp "$GEOM" shots/geom_letters.json
+if [ "${WB_FOCUS:-}" = caps ]; then
+  note "FOCUS=caps: shift long-press only. Source: shift has moreKeys [!noPanelAutoMoreKey!, key_capslock]; PointerTracker.onLongPressed auto-commits the first more-key with no panel after config_longpress_shift_lock_timeout=1200 ms (stationary hold, no slide)."
+  SH=$(jq -r '.keys.shift | "\(.[0]) \(.[1])"' "$GEOM")
+  clear_field; sleep 0.5
+  note "== caps control: stationary 800 ms hold (the earlier harness gesture, below the 1200 ms timer) =="
+  adb shell "input swipe $SH $SH 800"; sleep 0.8
+  shot caps_ctl_800_after
+  type_letters w o r l d; sleep 0.5
+  shot caps_ctl_800_typed
+  assert_field "control 800 ms hold typed (expect One-shot 'World', i.e. no lock)" "World"
+  clear_field; sleep 0.5
+  note "== caps test: stationary 1600 ms hold (past 1200 ms timer), frame taken at ~1.45 s while finger still down =="
+  ( adb shell "input swipe $SH $SH 1600" ) &
+  SWPID=$!
+  sleep 1.45; shot caps_1600_during_hold
+  wait $SWPID; sleep 0.8
+  shot caps_1600_after
+  type_letters w o r l d; sleep 0.5
+  shot caps_1600_typed
+  assert_field "shift long-press 1600 ms then typed WORLD (caps lock)" "WORLD"
+  note "== caps lock persistence: type a space and another word =="
+  tapk space; type_letters h i; sleep 0.5
+  shot caps_1600_persist
+  assert_field "caps lock persists across a space (WORLD HI)" "WORLD HI"
+  tapk shift; clear_field
+  adb logcat -d > shots/logcat_full.txt 2>&1
+  dim "final"
+  note "== done =="
+  exit 0
+fi
 if [ "${WB_FOCUS:-}" = learn ]; then note "FOCUS=learn: skipping the broad typing/symbols/settings legs; running learn-restore then the real-learned-data export/fresh-install leg only"; fi
 if [ "${WB_FOCUS:-}" != learn ]; then
 note "== lowercase typing =="
