@@ -116,7 +116,7 @@ cycle_tests() { # cycle_tests <tag>
   assert_field "cycle: third press returns to lowercase [$1]" "WORLD HIx"
   clear_field
   # observation leg for isolation (not an assertion): shift tapped while a word is still being composed
-  type_letters h i; sleep 0.4; tapk shift; type_letters x; sleep 0.5; shot "shift_${1}_midword"
+  type_letters h i; sleep 0.6; shot "shift_${1}_midword_before"; note "OBSERVE midword before shift [$1]: field='$(edit_text)'"; tapk shift; type_letters x; sleep 0.5; shot "shift_${1}_midword"
   note "OBSERVE midword [$1]: typed 'hi', tapped shift, typed 'x' -> '$(edit_text)'"
   clear_field
   if [ -n "$TDEV" ]; then
