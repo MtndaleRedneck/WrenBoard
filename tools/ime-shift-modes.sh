@@ -122,6 +122,8 @@ midword_obs() { # observation only: shift tapped while a word is just typed; fra
   type_letters x; sleep 0.5; shot "shift_${1}_midword"
   note "OBSERVE midword [$1]: typed 'hi', shift, shift, 'x' -> '$(edit_text)'"
   clear_field
+  # in tap-cycle mode the two taps above ended in caps lock; unlock with one more tap so later legs start from lowercase
+  if [ "$2" = cycle ]; then tapk shift; sleep 0.4; type_letters z; sleep 0.4; note "midword cleanup (cycle): after unlock tap typed z -> '$(edit_text)'"; clear_field; fi
 }
 cycle_tests() { # cycle_tests <tag>
   note "== CYCLE mode behavior ($1) =="
@@ -134,7 +136,7 @@ cycle_tests() { # cycle_tests <tag>
   assert_field "cycle: third press returns to lowercase [$1]" "WORLD HIx"
   clear_field
   # observation leg for isolation (not an assertion): shift tapped while a word is still being composed
-  midword_obs "$1"
+  midword_obs "$1" cycle
   clear_field
   if [ -n "$TDEV" ]; then
     G=$(quick_double_tap); note "cycle: quick two-tap measured down-to-down gap ${G:-unmeasured} ms"; sleep 0.5
@@ -172,7 +174,7 @@ futo_tests() {
   type_letters w o r l d; sleep 0.5; shot "shift_${1}_f4_hold_typed"
   assert_field "futo: a 1600 ms hold locks caps ('WORLD') [$1]" "WORLD"
   tapk shift; clear_field
-  midword_obs "$1"
+  midword_obs "$1" futo
 }
 futo_tests futo1
 
