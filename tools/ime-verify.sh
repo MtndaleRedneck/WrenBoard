@@ -782,7 +782,8 @@ note "== backup eligibility dry run (installed app) =="
 adb shell dumpsys package com.wrenboard.keyboard | tr -d '\r' | grep -E "^\s*(flags|pkgFlags|privateFlags)=" | head -3 | sed 's/^/    /' | tee -a "$R"
 adb shell dumpsys package com.wrenboard.keyboard | tr -d '\r' | grep -iE "dataExtractionRules|fullBackupContent|ALLOW_BACKUP" | head -5 | sed 's/^/    /' | tee -a "$R"
 FL=$(adb shell dumpsys package com.wrenboard.keyboard | tr -d '\r' | grep -E "^\s*pkgFlags=" | head -1)
-echo "$FL" | grep -q "ALLOW_BACKUP" && note "FAIL: ALLOW_BACKUP flag set on installed app ($FL)" || note "PASS: installed app does not carry ALLOW_BACKUP ($FL)"
+# FUTO-parity backup (allowBackup=true, one exclude for the bundled model): the flag SHOULD be present.
+echo "$FL" | grep -q "ALLOW_BACKUP" && note "PASS: installed app carries ALLOW_BACKUP as intended (FUTO parity) ($FL)" || note "FAIL: installed app lacks ALLOW_BACKUP, expected FUTO parity ($FL)"
 note "bmgr dry run:"; adb shell bmgr enabled 2>&1 | head -2 | sed 's/^/    /' | tee -a "$R"
 adb shell bmgr backupnow com.wrenboard.keyboard 2>&1 | head -6 | sed 's/^/    /' | tee -a "$R"
 adb shell bmgr list transports 2>&1 | head -4 | sed 's/^/    /' | tee -a "$R"
