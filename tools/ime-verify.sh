@@ -813,7 +813,7 @@ CUR=$(adb shell settings get secure default_input_method)
 check "default IME still WrenBoard at end" "$PKG" "$CUR"
 source tools/ime-learn-restore.sh
 source tools/ime-import-regress.sh
+source tools/ime-voice-update.sh   # before e2e: e2e uninstalls and reinstalls the app
 source tools/ime-export-e2e.sh
-source tools/ime-voice-update.sh
 note "== done =="
 exit 0

@@ -52,6 +52,18 @@ else
   adb logcat -d -v threadtime 2>/dev/null | tr -d '\r' | grep -i -E "ImportResource|FixtureProvider|imetarget|EACCES|ENOENT|FileNotFound|SecurityException|Permission Denial|avc: .*denied|wrenboard" | tail -80 > shots/logcat_e2e_importer.txt; note "e2e importer logcat lines captured: $(wc -l < shots/logcat_e2e_importer.txt) (shots/logcat_e2e_importer.txt)"
   adb shell "run-as com.wrenboard.imetarget sh -c 'ls -lZ files/; wc -c < files/exp.backup'" 2>&1 | tr -d '\r' | sed 's/^/    post-uninstall provider-file: /' | tee -a "$R"
   adb shell dumpsys package com.wrenboard.imetarget 2>/dev/null | grep -i -E "userId|provider" | head -5 | sed 's/^/    target-pkg: /' | tee -a "$R"
+  PROVMD=$(adb shell "content read --uri content://com.wrenboard.imetarget.fix/exp.backup 2>&1 | md5sum" | tr -d '\r' | cut -d' ' -f1); note "provider read via content read (shell caller) md5: $PROVMD (expected same as file md5 above)"
+  adb shell input keyevent KEYCODE_BACK; sleep 1
+  adb shell am start -W -a android.intent.action.VIEW -d "content://com.wrenboard.imetarget.fix/exp.backup" -t application/octet-stream -n "$APP/org.futo.inputmethod.latin.uix.ImportResourceActivity" >/dev/null 2>&1
+  sleep 5; shot e2e_03b_importer_second_try; xdump e2e_03b_importer_second_try
+  note "e2e second-try importer texts (warm process): $(python3 - <<'PY'
+import re
+try:
+    s=open('shots/e2e_03b_importer_second_try.xml').read(); print('|'.join(re.findall(r'text="([^"]+)"',s))[:200])
+except Exception as e: print('xml missing',e)
+PY
+)"
+  adb logcat -d -v threadtime 2>/dev/null | tr -d '\r' | grep -i -E "ImportResource|FixtureProvider|EACCES|ENOENT|FileNotFound|SecurityException|Permission Denial|avc: .*denied" | tail -60 > shots/logcat_e2e_importer_after_second.txt
   if IB=$(python3 tools/xml_node.py shots/e2e_03_importer.xml 'Import'); then
     read -r IX IY _ <<< "$IB"; adb shell input tap $IX $IY; sleep 12; shot e2e_04_after_restore
     ALLOK=1

@@ -23,6 +23,7 @@ else
   else note "INCONCLUSIVE(harness): update dialog not reached (frame vu_01_update_dialog.png)"; fi
   adb shell input keyevent KEYCODE_BACK; sleep 1
   # (2) voice backend confirmation
+  VSKIP=""
   if ! adb shell pm list packages 2>/dev/null | tr -d '\r' | grep -q "package:$VTARGET$"; then
     note "INCONCLUSIVE(harness): $VTARGET is not installed on this emulator; voice confirmation steps skipped"; VSKIP=1
   fi
