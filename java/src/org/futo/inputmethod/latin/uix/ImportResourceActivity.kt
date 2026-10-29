@@ -964,7 +964,8 @@ class ImportResourceActivity : ComponentActivity() {
         lifecycleScope.launch {
             val detected = withContext(Dispatchers.IO) {
                 try { detectItemBeingImported() } catch(e: kotlinx.coroutines.CancellationException) { throw e } catch(e: Exception) {
-                    Log.w("ImportResourceActivity", "Could not inspect file", e)
+                    // Exception type only: no message, path or URI.
+                    Log.w("ImportResourceActivity", "Could not inspect file: ${e.javaClass.simpleName}" + (e.cause?.let { " (cause ${it.javaClass.simpleName})" } ?: ""))
                     null
                 }
             }
