@@ -10,17 +10,30 @@ if ! adb shell id 2>/dev/null | grep -q "uid=0"; then
 else
   vtexts() { sed 's/>/>\n/g' "shots/$1.xml" | sed -n 's/.*text="\([^"]\+\)".*/\1/p' | tr '\n' '|'; }
   vmd() { adb shell "md5sum $VDS 2>/dev/null" | awk '{print $1}' | tr -d '\r'; }
-  # (1) update failure dialog: the 404 earlier set LAST_UPDATE_CHECK_FAILED; open the real dialog
-  note "datastore has last_update_check_failed key: $(adb shell "grep -c last_update_check_failed $VDS" | tr -d '\r')"
+  # (1) update dialog vs the recorded check outcome. The datastore keeps a boolean
+  # last_update_check_failed; the key string is present with EITHER value, so read the value:
+  # androidx preferences_pb encodes a bool entry as the key bytes then 0x12 0x02 0x08 <0x00|0x01>.
+  adb shell "cat $VDS" > shots/vds.pb 2>/dev/null
+  VFLAG=$(python3 - <<'PYFLAG'
+data = open("shots/vds.pb","rb").read()
+k = b"last_update_check_failed"
+i = data.find(k)
+v = -1
+if i >= 0 and data[i+len(k):i+len(k)+3] == b"\x12\x02\x08":
+    v = data[i+len(k)+3]
+print(v)
+PYFLAG
+)
+  note "last_update_check_failed value: $VFLAG (1 = last check failed, 0 = last check succeeded, -1 = unreadable)"
   adb shell input keyevent KEYCODE_HOME; sleep 1
   adb shell am start -n "$SETTINGS_ACT" --es navDest update >/dev/null 2>&1; sleep 5
   shot vu_01_update_dialog; xdump vu_01_update_dialog
   T=$(vtexts vu_01_update_dialog); note "update dialog texts: $T"
-  if echo "$T" | grep -q "Update check failed"; then note "PASS: update dialog says 'Update check failed' (not 'Up-to-date') after the 404 check (frame vu_01_update_dialog.png)"
-  elif echo "$T" | grep -q "Up-to-date"; then
-    if [ "$(adb shell "grep -c last_update_check_failed $VDS" | tr -d '\r')" = 0 ]; then note "INCONCLUSIVE: no failed check was recorded (flag absent), so 'Up-to-date' is not a defect here (frame vu_01_update_dialog.png)"
-    else note "FAIL: dialog says Up-to-date although a failed check was recorded (frame vu_01_update_dialog.png)"; fi
-  else note "INCONCLUSIVE(harness): update dialog not reached (frame vu_01_update_dialog.png)"; fi
+  case "$VFLAG" in
+    1) echo "$T" | grep -q "Update check failed"          && note "PASS: dialog says 'Update check failed' and the recorded flag agrees (frame vu_01_update_dialog.png)"          || note "FAIL: a failed check is recorded but the dialog does not say so: $T (frame vu_01_update_dialog.png)";;
+    0) echo "$T" | grep -q "Update check failed"          && note "FAIL: dialog says 'Update check failed' but the last recorded check succeeded (frame vu_01_update_dialog.png)"          || note "PASS: dialog matches the recorded successful check: $T (frame vu_01_update_dialog.png)";;
+    *) note "INCONCLUSIVE(harness): last_update_check_failed value unreadable (dialog texts: $T)";;
+  esac
   adb shell input keyevent KEYCODE_BACK; sleep 1
   # (2) voice backend confirmation
   VSKIP=""
