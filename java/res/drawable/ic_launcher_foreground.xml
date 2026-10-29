@@ -3,4 +3,9 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
+    <!-- Intentionally transparent foreground (the wren art is the adaptive background layer).
+         A vector with no path throws "no path defined" when inflated, so keep one transparent path. -->
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M0,0h108v108h-108z" />
 </vector>

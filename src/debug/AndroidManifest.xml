@@ -5,6 +5,7 @@
     <application>
         <activity
             android:name="org.futo.inputmethod.latin.debugpreview.VoicePreviewActivity"
-            android:exported="true" />
+            android:exported="true"
+            android:theme="@style/Theme.AppCompat.DayNight.NoActionBar" />
     </application>
 </manifest>
