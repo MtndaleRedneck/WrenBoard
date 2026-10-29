@@ -663,10 +663,19 @@ abstract public class ExpandableBinaryDictionary extends Dictionary {
                                 // TODO: remove the check below
                                 && matchesExpectedBinaryDictFormatVersionForThisType(
                                         binaryDictionary.getFormatVersion()))) {
-                            // Binary dictionary or its format version is not valid. Regenerate
-                            // the dictionary file. createNewDictionaryLocked will remove the
-                            // existing files if appropriate.
-                            createNewDictionaryLocked();
+                            // Binary dictionary or its format version is not valid. A restore
+                            // or an interrupted flush may have kept a ".bak" copy of the last
+                            // good learned words: fall back to it before regenerating an empty
+                            // dictionary and losing those words.
+                            if (!restoreDictionaryBackupLocked(dictFile)) {
+                                // No usable backup. Regenerate the dictionary file.
+                                // createNewDictionaryLocked removes the files if appropriate.
+                                createNewDictionaryLocked();
+                            }
+                        } else if (binaryDictionary != null) {
+                            // The live dictionary opened cleanly: a retained ".bak" copy has
+                            // served its purpose and can be dropped.
+                            deleteDictionaryBackup(dictFile);
                         }
                     }
                     clearNeedsToRecreate();
@@ -679,9 +688,11 @@ abstract public class ExpandableBinaryDictionary extends Dictionary {
 
     /**
      * The native flush swaps a finished directory into place by renaming the old one to
-     * "<dict>.bak" first. If the process died between the two renames, the live directory is
-     * missing and the backup holds the last good data: put it back. If both exist the swap
-     * finished and only the cleanup was missed: drop the old copy.
+     * "<dict>.bak" first, and a restore keeps such a copy as a fallback too. If the process
+     * died between the two renames, the live directory is missing and the backup holds the
+     * last good data: put it back. If both exist the swap finished; the backup is kept until
+     * the live dictionary has been opened and validated, then dropped - or put back when the
+     * live copy turns out not to open cleanly.
      */
     static void recoverInterruptedFlush(final File dictFile) {
         final File backup = new File(dictFile.getPath() + ".bak");
@@ -692,9 +703,44 @@ abstract public class ExpandableBinaryDictionary extends Dictionary {
             if (!backup.renameTo(dictFile)) {
                 Log.e(TAG, "Can't restore the dictionary backup for " + dictFile.getName());
             }
-        } else if (!FileUtils.deleteRecursively(backup)) {
+        }
+    }
+
+    /**
+     * Drops the retained "<dict>.bak" copy of a dictionary directory, if any. Only called once
+     * the live dictionary has been opened and validated, never before.
+     */
+    private static void deleteDictionaryBackup(final File dictFile) {
+        final File backup = new File(dictFile.getPath() + ".bak");
+        if (backup.exists() && !FileUtils.deleteRecursively(backup)) {
             Log.e(TAG, "Can't remove the old dictionary copy for " + dictFile.getName());
         }
+    }
+
+    /**
+     * Falls back to the retained "<dict>.bak" copy when the live dictionary did not open
+     * cleanly, then reloads and validates the backup. Returns false when there is no backup
+     * or the backup is not readable either; the caller regenerates in that case.
+     */
+    private boolean restoreDictionaryBackupLocked(final File dictFile) {
+        final File backup = new File(dictFile.getPath() + ".bak");
+        if (!backup.exists()) {
+            return false;
+        }
+        closeBinaryDictionary();
+        mBinaryDictionary = null;
+        if (!FileUtils.deleteRecursively(dictFile)) {
+            Log.e(TAG, "Can't remove the unreadable dictionary copy for " + dictFile.getName());
+        }
+        if (!backup.renameTo(dictFile)) {
+            Log.e(TAG, "Can't restore the dictionary backup for " + dictFile.getName());
+            return false;
+        }
+        loadBinaryDictionaryLocked();
+        final BinaryDictionary binaryDictionary = getBinaryDictionary();
+        return binaryDictionary != null && isValidDictionaryLocked()
+                && matchesExpectedBinaryDictFormatVersionForThisType(
+                        binaryDictionary.getFormatVersion());
     }
 
     /**

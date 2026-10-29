@@ -26,7 +26,7 @@ fun main() {
         val (fd, st) = fresh(); mkdict(fd, N, "old"); mkdict(st, N, "new")
         DictionarySwap.swap(fd, staged(st), false)
         check("replace: live has new", tag(fd, N) == "B-new")
-        check("replace: no .bak left", !File(fd, "$N.bak").exists())
+        check("replace: .bak kept holding old data", File(fd, "$N.bak/$N.body").readText() == "B-old")
     }
     run { // incomplete staged dir leaves old data untouched
         val (fd, st) = fresh(); mkdict(fd, N, "old"); mkdict(st, N, "new", body = false)
@@ -72,7 +72,7 @@ fun main() {
     run { // stale .bak
         val (fd, st) = fresh(); mkdict(fd, N, "old"); mkdict(fd, "$N.bak", "stale"); mkdict(st, N, "new")
         DictionarySwap.swap(fd, staged(st), false)
-        check("stale .bak: replaced cleanly", tag(fd, N) == "B-new" && !File(fd, "$N.bak").exists())
+        check("stale .bak: replaced by the just-retired live copy", tag(fd, N) == "B-new" && File(fd, "$N.bak/$N.body").readText() == "B-old")
     }
     run { // first write, destructive removes dicts not in backup
         val (fd, st) = fresh(); mkdict(fd, M, "extra"); mkdict(st, N, "new")
@@ -83,6 +83,30 @@ fun main() {
         val (fd, st) = fresh(); mkdict(fd, M, "keep"); mkdict(st, N, "new")
         DictionarySwap.swap(fd, staged(st), false)
         check("merge: other dict kept", tag(fd, M) == "B-keep")
+    }
+    run { // archive entry names: header-only learned-word dir rejected before anything is touched
+        val threw = try { DictionarySwap.validateEntryNames(listOf("userdict/$N/$N.header")); false } catch(e: IOException) { true }
+        check("entry names: header-only rejected", threw)
+    }
+    run { // body-only rejected
+        val threw = try { DictionarySwap.validateEntryNames(listOf("userdict/$N/$N.body")); false } catch(e: IOException) { true }
+        check("entry names: body-only rejected", threw)
+    }
+    run { // one incomplete dir of two rejected
+        val threw = try { DictionarySwap.validateEntryNames(listOf("userdict/$N/$N.header", "userdict/$N/$N.body", "userdict/$M/$M.header")); false } catch(e: IOException) { true }
+        check("entry names: one bad of two rejected", threw)
+    }
+    run { // complete pair accepted
+        DictionarySwap.validateEntryNames(listOf("userdict/$N/$N.header", "userdict/$N/$N.body"))
+        check("entry names: complete pair accepted", true)
+    }
+    run { // no learned-word entries accepted
+        DictionarySwap.validateEntryNames(listOf("themes/a.zip", "clipboard/c"))
+        check("entry names: no learned-word entries accepted", true)
+    }
+    run { // unexpected file inside a learned-word dir rejected
+        val threw = try { DictionarySwap.validateEntryNames(listOf("userdict/$N/$N.header", "userdict/$N/$N.body", "userdict/$N/extra.bin")); false } catch(e: IOException) { true }
+        check("entry names: unexpected file rejected", threw)
     }
     println(if(failures == 0) "RESULT OK: 0 failing" else "RESULT FAIL: $failures")
     if(failures != 0) System.exit(1)

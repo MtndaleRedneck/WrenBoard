@@ -400,10 +400,12 @@ object SettingsExporter {
     private suspend fun validateArchive(staged: File, dirs: RestoreDirs): Long {
         var total = 0L
         val buf = ByteArray(16384)
+        val entryNames = mutableListOf<String>()
         ZipInputStream(staged.inputStream().buffered()).use { zin ->
             var e = zin.nextEntry
             while(e != null) {
                 destinationFor(e.name, dirs)
+                entryNames.add(e.name)
                 // Entries parsed in memory get a sanity bound on ACTUAL decompressed bytes
                 // (not the archive's declared size). File entries are bounded by free space.
                 val inMemory = e.name == datastoreFileName || e.name == sharedPreferencesFileName || e.name == personalDictFileName
@@ -435,6 +437,9 @@ object SettingsExporter {
                 e = zin.nextEntry
             }
         }
+        // Learned-word directories must be complete before anything is deleted or written:
+        // reject an incomplete backup now, while existing data is still untouched.
+        DictionarySwap.validateEntryNames(entryNames)
         return total
     }
 
@@ -496,6 +501,8 @@ object SettingsExporter {
             GlobalIMEMessage.tryEmit(IMEMessage.ReloadResources)
             throw java.io.IOException("Could not pause learned-word saving; restore aborted, existing data unchanged")
         }
+        // Past this point existing data can be deleted or replaced: any failure must say so.
+        try {
         if (destructive) {
             // delete old clipboard
             if (clipboardFile.exists()) {
@@ -572,9 +579,12 @@ object SettingsExporter {
             entry = zipIn.nextEntry
         }
 
-        // Swap the staged learned-word dictionaries in. The old ones stay until each new one is complete.
-        swapStagedDictionaries(context, dictStage, destructive)
-        dictStage.deleteRecursively()
+            // Swap the staged learned-word dictionaries in. The old ones stay until each new one is complete.
+            swapStagedDictionaries(context, dictStage, destructive)
+            dictStage.deleteRecursively()
+        } catch(e: Exception) {
+            throw java.io.IOException("Restore stopped partway through; some existing data may have been replaced: ${e.message}", e)
+        }
 
         // Files are in place: let dictionaries open again BEFORE asking the IME to reload them.
         org.futo.inputmethod.latin.personalization.PersonalizationHelper.endRestore()

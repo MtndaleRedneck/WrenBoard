@@ -78,4 +78,6 @@ w("cfg_crcbad_last.cfg", cfg([("themes/shouldnotland2.zip", legit_theme), ("them
 w("cfg_traversal_last.cfg", cfg([("themes/shouldnotland3.zip", legit_theme), ("themes/../../pwned_by_restore.txt", b"x")]))
 # traversal via another domain name
 w("cfg_traversal_rime.cfg", cfg([("rime/../../../pwned_by_rime.txt", b"x")]))
+# learned-word directory with a header but no body: CRC-valid, must be rejected before any deletion
+w("cfg_headeronly_userdict.cfg", cfg([("userdict/UserHistoryDictionary.en_US.dict/UserHistoryDictionary.en_US.dict.header", b"WREN-FIXTURE-HEADER-ONLY")]))
 print("fixtures:", sorted(os.listdir(out)))
