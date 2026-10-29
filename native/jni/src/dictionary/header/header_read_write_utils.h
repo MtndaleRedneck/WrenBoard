@@ -33,6 +33,12 @@ class HeaderReadWriteUtils {
 
     static int getHeaderSize(const uint8_t *const dictBuf);
 
+    // Checks that the header of a dictionary buffer of bufSize bytes is well formed before any
+    // attribute is read: the fixed fields fit, the declared header size fits inside the buffer,
+    // and every attribute string is terminated inside the declared header. Invalid input is
+    // rejected, never clamped.
+    static bool isHeaderValid(const uint8_t *const dictBuf, const size_t bufSize);
+
     static DictionaryFlags getFlags(const uint8_t *const dictBuf);
 
     static AK_FORCE_INLINE int getHeaderOptionsPosition() {

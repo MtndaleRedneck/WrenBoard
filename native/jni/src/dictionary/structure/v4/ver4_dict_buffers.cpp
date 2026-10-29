@@ -49,6 +49,11 @@ namespace latinime {
     const ReadWriteByteArrayView buffer = bodyBuffer->getReadWriteByteArrayView();
     int position = 0;
     while (position < static_cast<int>(buffer.size())) {
+        // The 4 byte length field itself must fit in the file.
+        if (position + 4 > static_cast<int>(buffer.size())) {
+            AKLOGE("The dict body file is corrupted.");
+            return Ver4DictBuffersPtr(nullptr);
+        }
         const int bufferSize = ByteArrayUtils::readUint32AndAdvancePosition(
                 buffer.data(), &position);
         buffers.push_back(buffer.subView(position, bufferSize));

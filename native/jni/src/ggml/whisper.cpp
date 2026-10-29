@@ -881,7 +881,12 @@ static whisper_global g_state;
 
 template<typename T>
 static void read_safe(whisper_model_loader * loader, T & dest) {
-    loader->read(loader->context, &dest, sizeof(T));
+    // A short read leaves a zeroed value rather than uninitialized stack memory;
+    // callers validate the values they use.
+    if (loader->read(loader->context, &dest, sizeof(T)) != sizeof(T)) {
+        memset(&dest, 0, sizeof(T));
+        return;
+    }
     BYTESWAP_VALUE(dest);
 }
 
@@ -1202,8 +1207,16 @@ static bool whisper_model_load(struct whisper_model_loader * loader, whisper_con
         read_safe(loader, filters.n_mel);
         read_safe(loader, filters.n_fft);
 
-        filters.data.resize(filters.n_mel * filters.n_fft);
-        loader->read(loader->context, filters.data.data(), filters.data.size() * sizeof(float));
+        if (filters.n_mel <= 0 || filters.n_mel > 1024 || filters.n_fft <= 0 || filters.n_fft > 4096) {
+            WHISPER_LOG_ERROR("%s: invalid mel filter dimensions in model file\n", __func__);
+            return false;
+        }
+
+        filters.data.resize((size_t) filters.n_mel * filters.n_fft);
+        if (loader->read(loader->context, filters.data.data(), filters.data.size() * sizeof(float)) != filters.data.size() * sizeof(float)) {
+            WHISPER_LOG_ERROR("%s: truncated mel filters in model file\n", __func__);
+            return false;
+        }
         BYTESWAP_FILTERS(filters);
     }
 
@@ -1223,13 +1236,26 @@ static bool whisper_model_load(struct whisper_model_loader * loader, whisper_con
 
         tmp.reserve(128);
 
+        if (n_vocab < 0 || n_vocab > (1 << 20)) {
+            WHISPER_LOG_ERROR("%s: invalid vocab size %d in model file\n", __func__, n_vocab);
+            return false;
+        }
+
         for (int i = 0; i < n_vocab; i++) {
             uint32_t len;
             read_safe(loader, len);
 
+            if (len > (1u << 16)) {
+                WHISPER_LOG_ERROR("%s: invalid vocab token length in model file\n", __func__);
+                return false;
+            }
+
             if (len > 0) {
                 tmp.resize(len);
-                loader->read(loader->context, &tmp[0], tmp.size()); // read to buffer
+                if (loader->read(loader->context, &tmp[0], tmp.size()) != tmp.size()) { // read to buffer
+                    WHISPER_LOG_ERROR("%s: truncated vocab in model file\n", __func__);
+                    return false;
+                }
                 word.assign(&tmp[0], tmp.size());
             } else {
                 // seems like we have an empty-string token in multi-language models (i = 50256)
@@ -1561,16 +1587,34 @@ static bool whisper_model_load(struct whisper_model_loader * loader, whisper_con
                 break;
             }
 
+            // The dimension count and name length come from the file: reject bad values
+            // before they index the fixed ne[4] array or size an allocation.
+            if (n_dims < 0 || n_dims > 4) {
+                WHISPER_LOG_ERROR("%s: invalid tensor dimension count %d in model file\n", __func__, n_dims);
+                return false;
+            }
+            if (length <= 0 || length > 4096) {
+                WHISPER_LOG_ERROR("%s: invalid tensor name length %d in model file\n", __func__, length);
+                return false;
+            }
+
             int32_t nelements = 1;
             int32_t ne[4] = { 1, 1, 1, 1 };
             for (int i = 0; i < n_dims; ++i) {
                 read_safe(loader, ne[i]);
+                if (ne[i] <= 0 || (int64_t) nelements * ne[i] > INT32_MAX) {
+                    WHISPER_LOG_ERROR("%s: invalid tensor dimension %d in model file\n", __func__, ne[i]);
+                    return false;
+                }
                 nelements *= ne[i];
             }
 
             std::string name;
             std::vector<char> tmp(length); // create a buffer
-            loader->read(loader->context, &tmp[0], tmp.size()); // read to buffer
+            if (loader->read(loader->context, &tmp[0], tmp.size()) != tmp.size()) { // read to buffer
+                WHISPER_LOG_ERROR("%s: truncated tensor name in model file\n", __func__);
+                return false;
+            }
             name.assign(&tmp[0], tmp.size());
 
             if (model.tensors.find(name) == model.tensors.end()) {
@@ -1615,7 +1659,10 @@ static bool whisper_model_load(struct whisper_model_loader * loader, whisper_con
 #endif
                 ) && !is_conv_bias) {
                 // for the CPU and Metal backend, we can read directly into the tensor
-                loader->read(loader->context, tensor->data, ggml_nbytes(tensor));
+                if (loader->read(loader->context, tensor->data, ggml_nbytes(tensor)) != ggml_nbytes(tensor)) {
+                    WHISPER_LOG_ERROR("%s: truncated tensor data for '%s' in model file\n", __func__, name.data());
+                    return false;
+                }
                 BYTESWAP_TENSOR(tensor);
             } else {
                 // read into a temporary buffer first, then copy to device memory
@@ -1625,7 +1672,10 @@ static bool whisper_model_load(struct whisper_model_loader * loader, whisper_con
                 // [1, 512] -> [3000, 512] (conv1.bias)
                 // [1, 512] -> [1500, 512] (conv2.bias)
                 if (is_conv_bias) {
-                    loader->read(loader->context, read_buf.data(), read_buf.size() / tensor->ne[0]);
+                    if (loader->read(loader->context, read_buf.data(), read_buf.size() / tensor->ne[0]) != read_buf.size() / tensor->ne[0]) {
+                        WHISPER_LOG_ERROR("%s: truncated tensor data for '%s' in model file\n", __func__, name.data());
+                        return false;
+                    }
 
                     float * data_f32 = (float *) read_buf.data();
                     for (int64_t y = 0; y < tensor->ne[1]; ++y) {
@@ -1637,7 +1687,10 @@ static bool whisper_model_load(struct whisper_model_loader * loader, whisper_con
                         }
                     }
                 } else {
-                    loader->read(loader->context, read_buf.data(), read_buf.size());
+                    if (loader->read(loader->context, read_buf.data(), read_buf.size()) != read_buf.size()) {
+                        WHISPER_LOG_ERROR("%s: truncated tensor data for '%s' in model file\n", __func__, name.data());
+                        return false;
+                    }
                 }
 
                 ggml_backend_tensor_set(tensor, read_buf.data(), 0, ggml_nbytes(tensor));
@@ -3244,7 +3297,7 @@ struct whisper_context * whisper_init_from_file_with_params_no_state(const char 
     loader.read = [](void * ctx, void * output, size_t read_size) {
         std::ifstream * fin = (std::ifstream*)ctx;
         fin->read((char *)output, read_size);
-        return read_size;
+        return (size_t) fin->gcount();
     };
 
     loader.eof = [](void * ctx) {

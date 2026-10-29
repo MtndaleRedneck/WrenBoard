@@ -18207,7 +18207,16 @@ struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_p
 
     // read the tensor infos
     {
-        ctx->infos = malloc(ctx->header.n_tensors * sizeof(struct gguf_tensor_info));
+        // calloc: zeroed entries keep gguf_free() safe if parsing stops part-way, and calloc
+        // fails cleanly instead of wrapping when n_tensors is absurdly large.
+        const bool n_tensors_ok = ctx->header.n_tensors <= (1u << 20);
+        ctx->infos = n_tensors_ok ? calloc(ctx->header.n_tensors, sizeof(struct gguf_tensor_info)) : NULL;
+        if (!n_tensors_ok || (ctx->infos == NULL && ctx->header.n_tensors != 0)) {
+            fprintf(stderr, "%s: invalid tensor count\n", __func__);
+            fclose(file);
+            gguf_free(ctx);
+            return NULL;
+        }
 
         for (uint64_t i = 0; i < ctx->header.n_tensors; ++i) {
             struct gguf_tensor_info * info = &ctx->infos[i];
@@ -18218,7 +18227,16 @@ struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_p
 
             ok = ok && gguf_fread_str(file, &info->name,                          &offset);
             ok = ok && gguf_fread_el (file, &info->n_dims, sizeof(info->n_dims),  &offset);
-            for (uint32_t j = 0; j < info->n_dims; ++j) {
+
+            // n_dims comes from the file and indexes the fixed ne[GGML_MAX_DIMS] array
+            if (ok && info->n_dims > GGML_MAX_DIMS) {
+                fprintf(stderr, "%s: invalid tensor dimension count %u\n", __func__, (unsigned) info->n_dims);
+                fclose(file);
+                gguf_free(ctx);
+                return NULL;
+            }
+
+            for (uint32_t j = 0; ok && j < info->n_dims; ++j) {
                 ok = ok && gguf_fread_el(file, &info->ne[j], sizeof(info->ne[j]), &offset);
             }
             ok = ok && gguf_fread_el (file, &info->type,   sizeof(info->type),    &offset);

@@ -54,6 +54,35 @@ typedef DictionaryHeaderStructurePolicy::AttributeMap AttributeMap;
             + HEADER_DICTIONARY_VERSION_SIZE + HEADER_FLAG_SIZE);
 }
 
+/* static */ bool HeaderReadWriteUtils::isHeaderValid(const uint8_t *const dictBuf,
+        const size_t bufSize) {
+    const size_t optionsPos = static_cast<size_t>(getHeaderOptionsPosition());
+    if (dictBuf == nullptr || bufSize < optionsPos) {
+        return false;
+    }
+    const uint32_t headerSize = static_cast<uint32_t>(getHeaderSize(dictBuf));
+    if (headerSize < optionsPos || headerSize > bufSize) {
+        return false;
+    }
+    // Walk the attribute strings with the same framing as ByteArrayUtils: 0x1F ends a string,
+    // other bytes below 0x20 start a 3 byte code point, anything else is a 1 byte code point.
+    size_t pos = optionsPos;
+    int terminators = 0;
+    while (pos < headerSize) {
+        const uint8_t b = dictBuf[pos];
+        if (b == 0x1F) {
+            ++terminators;
+            ++pos;
+        } else if (b < 0x20) {
+            pos += 3;
+        } else {
+            ++pos;
+        }
+    }
+    // Every attribute is a key string plus a value string, all terminated inside the header.
+    return pos == headerSize && (terminators % 2) == 0;
+}
+
 /* static */ HeaderReadWriteUtils::DictionaryFlags
         HeaderReadWriteUtils::getFlags(const uint8_t *const dictBuf) {
     return ByteArrayUtils::readUint16(dictBuf,

@@ -15,6 +15,7 @@
  */
 
 #include "dictionary/structure/dictionary_structure_with_buffer_policy_factory.h"
+#include "dictionary/header/header_read_write_utils.h"
 
 #include <climits>
 
@@ -110,6 +111,11 @@ template<class DictConstants, class DictBuffers, class DictBuffersPtr, class Str
     if (!mmappedBuffer) {
         return nullptr;
     }
+    if (!HeaderReadWriteUtils::isHeaderValid(mmappedBuffer->getReadOnlyByteArrayView().data(),
+            mmappedBuffer->getReadOnlyByteArrayView().size())) {
+        AKLOGE("DICT: invalid dictionary header. path: %s", path);
+        return nullptr;
+    }
     const FormatUtils::FORMAT_VERSION formatVersion = FormatUtils::detectFormatVersion(
             mmappedBuffer->getReadOnlyByteArrayView());
     switch (formatVersion) {
@@ -173,6 +179,11 @@ template<class DictConstants, class DictBuffers, class DictBuffersPtr, class Str
     MmappedBuffer::MmappedBufferPtr mmappedBuffer(
             MmappedBuffer::openBuffer(path, bufOffset, size, false /* isUpdatable */));
     if (!mmappedBuffer) {
+        return nullptr;
+    }
+    if (!HeaderReadWriteUtils::isHeaderValid(mmappedBuffer->getReadOnlyByteArrayView().data(),
+            mmappedBuffer->getReadOnlyByteArrayView().size())) {
+        AKLOGE("DICT: invalid dictionary header. path: %s", path);
         return nullptr;
     }
     switch (FormatUtils::detectFormatVersion(mmappedBuffer->getReadOnlyByteArrayView())) {
