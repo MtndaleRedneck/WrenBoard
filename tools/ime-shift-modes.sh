@@ -37,7 +37,11 @@ set_mode() { # set_mode <cycle|futo> <tag>: open page, open dropdown, tap option
   open_settings_page "$2_before" || return 1
   cur=$(row_value "shift_page_$2_before_$(ls shots | sed -n "s/^shift_page_$2_before_\([0-9]*\)\.xml$/\1/p" | tail -1)")
   note "settings row before change ($2): displayed value = $cur"
-  read -r CX CY _ <<< "$CL"
+  # tap the dropdown BOX (its selected-value text), not the 'Caps lock' heading above it
+  local pidx pcur vlabel; pidx=$(ls shots | sed -n "s/^shift_page_$2_before_\([0-9]*\)\.xml$/\1/p" | tail -1)
+  if [ "$cur" = futo ]; then vlabel="$FUTO_LABEL"; else vlabel="$CYCLE_LABEL"; fi
+  if ! VN=$(python3 tools/xml_node.py "shots/shift_page_$2_before_${pidx}.xml" "$vlabel"); then note "INCONCLUSIVE(harness): selected-value node not found ($2)"; return 1; fi
+  read -r CX CY _ <<< "$VN"
   adb shell input tap $CX $CY; sleep 2
   local k
   for k in 1 2 3 4; do
@@ -65,6 +69,12 @@ reopen_check() { # reopen_check <expect> <tag>: reopen settings page and read th
   local idx now; idx=$(ls shots | sed -n "s/^shift_page_$2_\([0-9]*\)\.xml$/\1/p" | tail -1)
   now=$(row_value "shift_page_${2}_${idx}")
   if [ "$now" = "$1" ]; then note "PASS(persist): after app restart the Caps lock row shows the $1 choice ($2)"; else note "FAIL(persist): after app restart the row shows '$now', wanted '$1' ($2)"; fi
+}
+restart_app() { # force-stop = app restart; the platform flips the default IME away when the IME package is stopped (seen for upstream too), so record it and re-select ours
+  adb shell am force-stop "$PKG"; sleep 2
+  note "after force-stop default IME = $(adb shell settings get secure default_input_method | tr -d '\r')"
+  adb shell ime enable "$IME" >/dev/null 2>&1; adb shell ime set "$IME" >/dev/null 2>&1; sleep 1
+  note "after re-select default IME = $(adb shell settings get secure default_input_method | tr -d '\r')"
 }
 back_to_target() {
   adb shell input keyevent KEYCODE_BACK; sleep 0.8; adb shell input keyevent KEYCODE_HOME; sleep 1
@@ -160,14 +170,14 @@ futo_tests futo1
 
 # ================= back to cycle through the UI, restart, persistence =================
 set_mode cycle cyc2
-adb shell am force-stop "$PKG"; sleep 2
+restart_app
 reopen_check cycle cyc2_restart
 back_to_target cyc2 || true
 cycle_tests after-restart
 
 # ================= futo again, restart, persistence =================
 set_mode futo futo2
-adb shell am force-stop "$PKG"; sleep 2
+restart_app
 reopen_check futo futo2_restart
 back_to_target futo2 || true
 futo_tests after-restart
