@@ -245,6 +245,16 @@ if [ "${WB_FOCUS:-}" = caps ]; then
   note "== done =="
   exit 0
 fi
+if [ "${WB_FOCUS:-}" = shift ]; then
+  note "FOCUS=shift: Caps lock setting through the real Settings screen, both modes, restart persistence"
+  source tools/ime-shift-modes.sh
+  adb logcat -d > shots/logcat_full.txt 2>&1
+  FC=$(grep -c "FATAL EXCEPTION" shots/logcat_full.txt)
+  note "FATAL EXCEPTION count after the shift legs: $FC"
+  dim "final"
+  note "== done =="
+  exit 0
+fi
 if [ "${WB_FOCUS:-}" = learn ]; then note "FOCUS=learn: skipping the broad typing/symbols/settings legs; running learn-restore then the real-learned-data export/fresh-install leg only"; fi
 if [ "${WB_FOCUS:-}" != learn ]; then
 note "== lowercase typing =="
@@ -343,7 +353,7 @@ sleep 0.5
 shot 06b_capslock_doubletap_typed
 assert_field "caps lock via double-tap typed WORLD" "WORLD"
 tapk shift
-note "== caps lock via shift long-press (observation, not assumed spec) =="
+note "== shift long-press (default Caps lock setting = tap cycle: a hold must NOT lock; FUTO-mode hold is covered by focus=shift) =="
 clear_field
 SH=$(jq -r '.keys.shift | "\(.[0]) \(.[1])"' "$GEOM")
 adb shell input swipe $SH $SH 800
@@ -352,7 +362,7 @@ shot 06_capslock_state
 type_letters w o r l d
 sleep 0.5
 shot 07_capslock_typed
-assert_field "caps lock typed WORLD" "WORLD"
+assert_field "tap-cycle default: 800 ms hold is only a one-shot shift ('World', no lock)" "World"
 tapk shift  # release caps
 dim "after-caps"
 
