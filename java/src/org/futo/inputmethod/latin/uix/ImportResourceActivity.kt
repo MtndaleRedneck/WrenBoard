@@ -844,7 +844,7 @@ class ImportResourceActivity : ComponentActivity() {
                                     )
                                 }
                             } catch(e: Exception) {
-                                Log.w("ImportResourceActivity", "Restore failed", e)
+                                Log.w("ImportResourceActivity", "Restore failed: ${e.javaClass.simpleName}")
                                 withContext(Dispatchers.Main) {
                                     android.widget.Toast.makeText(applicationContext, "Restore failed, existing data was not changed unless this message says otherwise: ${e.message}", android.widget.Toast.LENGTH_LONG).show()
                                 }
