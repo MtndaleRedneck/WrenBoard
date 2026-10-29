@@ -12,11 +12,10 @@ md() { adb shell "md5sum '$1' 2>/dev/null" | awk '{print $1}' | tr -d '\r'; }
 # 1. seed data across the physical locations the exporter reads
 adb shell "mkdir -p $APPDIR/files/themes $APPDIR/files/clipboardfiles $APPDIR/files/UserHistoryDictionary.en_US.dict $EXT/rime && \
   echo -n SEED-THEME > $APPDIR/files/themes/e2etheme.zip && echo -n SEED-CLIPIMG > $APPDIR/files/clipboardfiles/e2eclip.bin && \
-  echo -n '[]' > $APPDIR/files/clipboard.json && echo -n SEED-HEADER > $APPDIR/files/UserHistoryDictionary.en_US.dict/UserHistoryDictionary.en_US.dict.header && echo -n SEED-BODY > $APPDIR/files/UserHistoryDictionary.en_US.dict/UserHistoryDictionary.en_US.dict.body && \
-  echo -n SEED-EXTDICT > $EXT/e2e_user.dict && echo -n SEED-RIME > $EXT/rime/e2e.txt && \
-  chown -R $UID_K:$UID_K $APPDIR/files/themes $APPDIR/files/clipboardfiles $APPDIR/files/clipboard.json $APPDIR/files/UserHistoryDictionary.en_US.dict $EXT"
+  echo -n '[]' > $APPDIR/files/clipboard.json &&  echo -n SEED-EXTDICT > $EXT/e2e_user.dict && echo -n SEED-RIME > $EXT/rime/e2e.txt && \
+  chown -R $UID_K:$UID_K $APPDIR/files/themes $APPDIR/files/clipboardfiles $APPDIR/files/clipboard.json $EXT"
 declare -A WANT
-for f in files/themes/e2etheme.zip files/clipboardfiles/e2eclip.bin files/clipboard.json files/UserHistoryDictionary.en_US.dict/UserHistoryDictionary.en_US.dict.header files/UserHistoryDictionary.en_US.dict/UserHistoryDictionary.en_US.dict.body; do WANT[$APPDIR/$f]=$(md $APPDIR/$f); done
+for f in files/themes/e2etheme.zip files/clipboardfiles/e2eclip.bin files/clipboard.json ; do WANT[$APPDIR/$f]=$(md $APPDIR/$f); done
 for f in e2e_user.dict rime/e2e.txt; do WANT[$EXT/$f]=$(md $EXT/$f); done
 # 2. export through the app UI
 adb shell rm -f /sdcard/Download/FUTOKeyboardSettings_* /sdcard/Documents/FUTOKeyboardSettings_* 2>/dev/null
@@ -78,6 +77,12 @@ PY
           if [ -n "${WANT[$k]}" ] && [ "$GOT" = "${WANT[$k]}" ]; then note "PASS(real picker): restored byte-identical: ${k#/}"; else note "FAIL(real picker): not restored / differs: ${k#/} (want ${WANT[$k]:0:8} got ${GOT:0:8})"; ALLOK=0; fi
         done
         [ "$ALLOK" = 1 ] && note "PASS(real picker): export -> uninstall -> fresh install -> picker restore returned all seeded locations byte-identical" || note "FAIL(real picker): some seeded locations did not come back"
+        # REAL learned data (typed earlier by the learn flow, exported as part of this backup): does the word predict again on the fresh install?
+        note "REAL learned dict dir after fresh-install restore: $(adb shell ls -l $APPDIR/files/UserHistoryDictionary.en_US.dict 2>&1 | tr -d '\r' | tr '\n' ';' | cut -c1-300)"
+        sleep 8; adb unroot >/dev/null 2>&1; sleep 3; adb wait-for-device
+        LPHASE=freshrestore; precond freshrestore && { predict_slots zorblax z o r b l; FR=$PR; } || FR=BLOCKED
+        if [ "$FR" = BLOCKED ]; then note "INCONCLUSIVE(harness): fresh-install prediction check blocked (target focus/keyboard not verified)"; elif [ -n "$FR" ]; then note "PASS(real data): after export -> uninstall -> fresh install -> real picker restore, learned 'zorblax' is predicted again ($FR)"; else note "FAIL(real data): learned 'zorblax' NOT offered after fresh-install restore (frames learn_freshrestore_*)"; fi
+        adb root >/dev/null 2>&1; sleep 4; adb wait-for-device
       else
         note "REAL-PICKER: no Import button after picking the file (see e2e_p3_after_pick.png; app or harness undecided)"
       fi
