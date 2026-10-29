@@ -34,7 +34,7 @@ if [ -z "$EXPF" ]; then
 else
   note "export file: $EXPF ($(adb shell stat -c %s "$EXPF" | tr -d '\r') bytes)"
   adb shell "unzip -l '$EXPF' 2>/dev/null || true" | head -30 | sed 's/^/    /' | tee -a "$R"
-  NLA=$(adb shell "unzip -l '$EXPF' 2>/dev/null | grep -c 'userdict/.*UserHistoryDictionary.*\.dict\.\(header\|body\)'" | tr -d '\r'); NOLEARN=0
+  NLA=$(adb shell "unzip -l '$EXPF' 2>/dev/null" | tr -d '\r' | grep -cE 'userdict/.*UserHistoryDictionary.*\.dict\.(header|body)$'); NOLEARN=0
   if [ "${NLA:-0}" -ge 2 ]; then note "PREMISE OK: export archive contains the learned dictionary header and body (${NLA} entries)"; else NOLEARN=1; note "INCONCLUSIVE(premise): export archive lacks the learned dictionary header/body (${NLA:-0} entries); recovery verdict below is not evidence"; fi
   TU=$(adb shell stat -c %u /data/data/com.wrenboard.imetarget | tr -d '\r')
   adb shell "mkdir -p /data/data/com.wrenboard.imetarget/files && cp '$EXPF' /data/data/com.wrenboard.imetarget/files/exp.backup && chown -R $TU:$TU /data/data/com.wrenboard.imetarget/files"
