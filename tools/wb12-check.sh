@@ -163,6 +163,17 @@ if leg keyboard; then
   clear_field
   type_word hello; F=$(field); case "$F" in hello|Hello) pass "typing hello ($F)";; *) fail "typing hello (got '$F')";; esac
   clear_field
+  # fix1b: starter words come from the person's own typing history; I/The/You only stand in when there is none
+  for i in 1 2 3; do clear_field; type_word zebra; tapcode 32; sleep 0.6; done
+  note "field after learning: '$(field)'"
+  clear_field; adb logcat -c; focus_target; sleep 2; S2=$(sugg); note "starter words after typing 'zebra' 3x at the start of a field: [$S2]"
+  grep 'STARTER' shots/_s.txt | tail -3 | sed 's/^.*WBDBG *: /  /' | tee -a "$R"
+  shot k01b_starter_words_from_history
+  echo "$S2" | grep -qi "zebra" && pass "starter words come from typing history ($S2)" || fail "starter words did not pick up typing history (got '$S2')"
+  dbg "dsbool:wren_starter_words=false" 1.0; adb logcat -c; focus_target; sleep 2; S3=$(sugg); note "starter words with the toggle off: [$S3]"
+  shot k01c_starter_words_toggle_off
+  echo "$S3" | grep -qi "zebra\|The" && fail "starter words still shown with the toggle off ($S3)" || pass "toggle off: no starter words in an empty field"
+  dbg "dsbool:wren_starter_words=true" 1.0
 fi
 
 if leg shift; then
@@ -405,6 +416,23 @@ if leg clipboard; then
   else fail "no 3-dot position"; fi
   adb logcat -c; dbg close 0.8; dbg "open:clipboard_history" 2.0; wlog cl3
   C=$(pos shots/cl3.txt 'CLIPCARD i=1 ')
+  # fix1b: a drag the system cancels must not delete, however far it went (snap back)
+  if [ -n "$C" ]; then read -r X Y <<< "$C"
+    adb logcat -c
+    adb shell "input motionevent DOWN $X $Y; input motionevent MOVE $((X-120)) $Y; input motionevent MOVE $((X-260)) $Y; input motionevent MOVE $((X-420)) $Y"
+    sleep 0.3; shot cl04a_drag_held_420px_before_cancel
+    CO=$(adb shell input motionevent CANCEL $((X-420)) $Y 2>&1 | tr -d '\r'); note "  CANCEL injection said: [${CO:0:160}]"
+    if echo "$CO" | grep -qi "unknown\|error\|usage\|exception"; then
+      adb shell "input motionevent MOVE $X $Y; input motionevent UP $X $Y"; note "INFO: this emulator's input tool has no CANCEL; cancelled drag not exercised on device (unit test covers it)"
+    else
+      sleep 1.5; wlog cl4c; shot cl04b_after_cancelled_drag_snap_back
+      if grep -q 'WINDOW CLIPMENU' shots/cl4c.txt; then note "INFO: a long-press menu opened before the drag started; cancelled drag not judged on device"
+      elif grep -q 'CLIP removed' shots/cl4c.txt; then fail "a cancelled 420 px drag deleted the clip"
+      else pass "a cancelled 420 px drag deletes nothing (card snaps back)"; fi
+    fi
+    adb logcat -c; dbg close 0.8; dbg "open:clipboard_history" 2.0; wlog cl3
+    C=$(pos shots/cl3.txt 'CLIPCARD i=1 ')
+  fi
   if [ -n "$C" ]; then read -r X Y <<< "$C"
     adb logcat -c; adb shell input swipe $X $Y $((X-600)) $Y 300; sleep 1.5; wlog cl4
     grep -q 'CLIP removed=1' shots/cl4.txt || { sleep 1.5; wlog cl4; }
@@ -575,10 +603,11 @@ if leg settings; then
   # FUTO page must still reach FUTO's own screens
   opensettings "" 2; opensettings wren_futo 3.5; dumpui st_futo2
   for w in "Languages" "Swipe" "Actions"; do uitext st_futo2 | grep -q "$w" && pass "FUTO page keeps $w" || fail "FUTO page lost $w"; done
-  # fix1: FUTO's Payment row is hidden; Help and Credits (FUTO's attribution) stay
-  adb shell input swipe 540 1900 540 600 400; sleep 1.5; shot st08b_wren_futo_scrolled; dumpui st_futo3
+  # fix1b: FUTO's Payment row stays exactly as upstream (FUTO's license forbids hiding payment in copies).
+  # Fresh install = IS_ALREADY_PAID false, so upstream shows the Payment row; it must be there.
+  shot st08a_wren_futo_top; adb shell input swipe 540 1900 540 600 400; sleep 1.5; shot st08b_wren_futo_scrolled; dumpui st_futo3
   FU="$(uitext st_futo2)$(uitext st_futo3)"; note "FUTO page (top + scrolled): ${FU:0:500}"
-  echo "$FU" | grep -q "Payment\|Pay for FUTO\|Unpaid" && fail "FUTO page still shows a payment row" || pass "FUTO page has no Payment row"
+  echo "$FU" | grep -q "Payment" && pass "FUTO page shows FUTO's Payment row (not paid, as upstream)" || fail "FUTO page lost FUTO's Payment row"
   echo "$FU" | grep -q "Help" && echo "$FU" | grep -q "Credits" && pass "FUTO page keeps Help and Credits" || fail "FUTO page lost Help or Credits"
   # Personal dictionary is still in Settings (Typing page, Words card) and opens
   opensettings wren_typing 3.5; FOUND=""
@@ -586,12 +615,14 @@ if leg settings; then
   if [ -n "$FOUND" ]; then shot st09_typing_personal_dictionary_row; adb shell input tap $XY; sleep 2.5; dumpui st_pd; shot st10_personal_dictionary_page; note "personal dictionary page: $(uitext st_pd | cut -c1-200)"
     uitext st_pd | grep -q "Personal dictionary" && pass "Personal dictionary row in Typing opens its page" || fail "Personal dictionary row did not open its page"
   else fail "no Personal dictionary row on the Typing page"; fi
-  # the "Unpaid FUTO Keyboard" reminder stays hidden even when forced on in FUTO's plain Settings style
+  # FUTO's "Unpaid FUTO Keyboard" reminder behaves as upstream: forced on, it shows in FUTO's plain Settings style
   focus_target; dbg "dsbool:force_show_notice=true" 1.0; dbg "dsbool:wren_settings_style=false" 1.0
   adb shell input keyevent KEYCODE_HOME; sleep 1; opensettings "" 4; dumpui st_plain; shot st11_futo_style_home_forced_notice
   adb shell input swipe 540 1900 540 700 400; sleep 1.5; dumpui st_plain2; PL="$(uitext st_plain)$(uitext st_plain2)"; note "FUTO-style home, notice forced: ${PL:0:500}"
   if echo "$PL" | grep -q "Languages\|Swipe\|Actions"; then
-    echo "$PL" | grep -q "Unpaid\|Payment\|Pay for FUTO" && fail "payment reminder or row shows in FUTO's plain style" || pass "no payment reminder or row in FUTO's plain style, even with the reminder forced"
+    echo "$PL" | grep -q "Payment" && pass "FUTO plain style shows the Payment row (as upstream)" || fail "FUTO plain style lost the Payment row"
+    # upstream also holds the reminder back while FUTO's migration notice is undismissed, so this one is recorded, not judged
+    echo "$PL" | grep -q "Unpaid" && note "INFO: forced Unpaid reminder shows (as upstream)" || note "INFO: forced Unpaid reminder not on screen (upstream holds it while the migration notice is undismissed)"
   else note "INFO: FUTO plain style did not come up (${PL:0:120})"; fi
   focus_target; dbg "dsbool:force_show_notice=false" 1.0; dbg "dsbool:wren_settings_style=true" 1.0
   adb shell input keyevent KEYCODE_HOME

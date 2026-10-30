@@ -68,10 +68,10 @@ jobs:
           emulator-options: -no-window -gpu swangle_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none
           disable-animations: true
           script: WB_LEGS="${{ inputs.legs }}" WB_LOCAL_APK_URL=http://127.0.0.1:8765/wb-debug.apk bash tools/wb12-check.sh wb-debug.apk tools/ime-target/out/imetarget.apk
-      - name: Unit tests (update prompt status rules)
+      - name: Unit tests (update prompt status, swipe delete, starter words)
         if: always()
         run: |
-          ./gradlew --no-daemon testStableDebugUnitTest -Pandroid.injected.build.abi=x86_64 --tests 'org.futo.inputmethod.updates.UpdateAttemptsTest'
+          ./gradlew --no-daemon testStableDebugUnitTest -Pandroid.injected.build.abi=x86_64 --tests 'org.futo.inputmethod.updates.UpdateAttemptsTest' --tests 'org.futo.inputmethod.latin.uix.actions.clipboard.WrenSwipeJudgeTest' --tests 'org.futo.inputmethod.engine.general.WrenStarterWordsTest'
       - name: Collect unit test results
         if: always()
         run: |

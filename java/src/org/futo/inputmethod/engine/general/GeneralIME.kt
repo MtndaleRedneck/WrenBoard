@@ -817,7 +817,11 @@ class GeneralIME(val helper: IMEHelper) : IMEInterface, WordLearner, SuggestionS
 
     private fun starterWordsIfNeeded(words: SuggestedWords, inputStyle: Int, sequenceNumber: Int): SuggestedWords {
         try {
-            if (!words.isEmpty) return words
+            if (!words.isEmpty) {
+                if (BuildConfig.DEBUG && inputStyle == SuggestedWords.INPUT_STYLE_BEGINNING_OF_SENTENCE_PREDICTION)
+                    Log.i("WBDBG", "STARTER predicted ${(0 until words.size()).joinToString("|") { words.getWord(it) }}")
+                return words
+            }
             if (inputStyle == SuggestedWords.INPUT_STYLE_TAIL_BATCH || inputStyle == SuggestedWords.INPUT_STYLE_UPDATE_BATCH) return words
             if (inputLogic.mWordComposer.isComposingWord && starterSkip("composing")) return words
             if (!settings.current.needsToLookupSuggestions() && starterSkip("field takes no suggestions")) return words
@@ -827,7 +831,8 @@ class GeneralIME(val helper: IMEHelper) : IMEInterface, WordLearner, SuggestionS
             val before = inputLogic.mConnection.getTextBeforeCursor(1, 0)
             if (!before.isNullOrEmpty() && starterSkip("text before cursor")) return words
             val list = ArrayList<SuggestedWordInfo>()
-            listOf("I", "The", "You").forEach {
+            // the prediction path (the person's own history at the start of a field) gave nothing: plain fallback
+            WrenStarterWords.choose(emptyList(), enabled = true).forEach {
                 list.add(SuggestedWordInfo(it, "", SuggestedWordInfo.MAX_SCORE, SuggestedWordInfo.KIND_PREDICTION,
                     Dictionary.DICTIONARY_HARDCODED, SuggestedWordInfo.NOT_AN_INDEX, SuggestedWordInfo.NOT_A_CONFIDENCE))
             }

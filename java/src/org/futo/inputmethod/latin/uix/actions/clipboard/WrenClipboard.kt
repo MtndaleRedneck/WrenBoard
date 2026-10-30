@@ -76,7 +76,6 @@ import org.futo.inputmethod.latin.uix.SettingsKey
 import org.futo.inputmethod.latin.uix.WbDebug
 import org.futo.inputmethod.latin.uix.settings.useDataStoreValue
 import java.io.File
-import kotlin.math.abs
 import kotlin.math.roundToInt
 
 /** WrenBoard 1.2: the SwiftKey-style emoji and clipboard panels. Off = FUTO's own panels (kept, not removed). */
@@ -378,12 +377,13 @@ private fun WrenClipCard(w: WrenClipboardWindow, entry: ClipboardEntry, view: Vi
     val widthPx = remember { mutableStateOf(1f) }
     val shape = RoundedCornerShape(11.5.dp)
     // Swipe a clip sideways to delete it (with Undo). The gesture is read on the card's resting slot (outside the
-    // offset), so the card moving under the finger cannot shrink or cancel the drag; a cancelled drag is judged
-    // the same way as a finished one, and the delete never waits on the slide-out animation.
-    val finishSwipe: () -> Unit = {
+    // offset), so the card moving under the finger cannot shrink or cancel the drag. Only a finished swipe past the
+    // threshold deletes; an interrupted or cancelled drag snaps back (WrenSwipeJudge). The delete never waits on
+    // the slide-out animation.
+    val finishSwipe: (Boolean) -> Unit = { completed ->
         val x = dragX.value
         dragging.value = false
-        if (abs(x) > 180f) {
+        if (WrenSwipeJudge.judge(x, completed) == WrenSwipeJudge.Outcome.Delete) {
             w.removeWithUndo(listOf(entry), resources.getString(R.string.wren_clip_deleted))
             scope.launch { offsetX.snapTo(x); try { offsetX.animateTo(if (x > 0) 1400f else -1400f) } catch (_: Exception) { } }
         } else {
@@ -397,8 +397,8 @@ private fun WrenClipCard(w: WrenClipboardWindow, entry: ClipboardEntry, view: Vi
             .pointerInput(entry) {
                 detectHorizontalDragGestures(
                     onDragStart = { dragging.value = true; dragX.value = offsetX.value },
-                    onDragEnd = { finishSwipe() },
-                    onDragCancel = { finishSwipe() },
+                    onDragEnd = { finishSwipe(true) },
+                    onDragCancel = { finishSwipe(false) },
                     onHorizontalDrag = { change, delta -> change.consume(); dragX.value += delta }
                 )
             }
