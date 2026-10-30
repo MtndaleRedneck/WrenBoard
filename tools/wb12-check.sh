@@ -8,6 +8,11 @@ APK="$1"; TAPK="$2"
 PKG=com.wrenboard.keyboard; TPKG=com.wrenboard.imetarget
 LEGS=",${WB_LEGS:-setup,keyboard,period,caps,shift,clip,update,toolbar,skin,emoji,clipboard,settings},"
 mkdir -p shots; R=shots/results.txt; : > "$R"
+ADB_BIN=$(type -P adb)
+adb() { timeout -k 5 120 "$ADB_BIN" "$@"; }   # a dead emulator must not hang the run
+opensettings() { # opensettings [navDest] [sleep]: open WrenBoard Settings (optionally at a page) straight from the shell
+  adb shell am start -n "$PKG/org.futo.inputmethod.latin.uix.settings.SettingsActivity" -f 0x34000000 ${1:+--es navDest "$1"} >/dev/null 2>&1; sleep "${2:-3}"
+}
 FAILS=0
 note() { echo "$*" | tee -a "$R"; }
 pass() { note "PASS: $*"; }
@@ -370,14 +375,14 @@ if leg settings; then
   echo "$T" | grep -qi "swiftkey" && fail "the word SwiftKey appears in Settings" || pass "no SwiftKey text on the home"
   n=2
   for d in wren_keyboard wren_typing voiceInput wren_clipemoji wren_backup about wren_futo; do
-    dbg "settings:$d" 3.0
+    opensettings "$d" 3.5
     shot "st0${n}_$d"; dumpui "st_$d"; P=$(uitext "st_$d"); note "$d: ${P:0:400}"
     echo "$P" | grep -qi "swiftkey" && fail "SwiftKey text on $d"
     [ -n "$P" ] && pass "$d opens" || fail "$d shows nothing"
     n=$((n+1))
   done
   # FUTO page must still reach FUTO's own screens
-  dbg "settings:wren_futo" 3.0; dumpui st_futo2
+  opensettings "" 2; opensettings wren_futo 3.5; dumpui st_futo2
   for w in "Languages" "Swipe" "Actions"; do uitext st_futo2 | grep -q "$w" && pass "FUTO page keeps $w" || fail "FUTO page lost $w"; done
   adb shell input keyevent KEYCODE_HOME
 fi
@@ -386,13 +391,14 @@ if leg update; then
   ensure_ime; focus_target
   note "== UPDATE dialog: Back and Dismiss close it; Update downloads in the app and opens the system installer =="
   adb shell input keyevent KEYCODE_HOME; sleep 1
-  dbg "settings:" 8.0          # Settings opens and runs its own update check first
-  dbg "settings:update" 3.0
+  [ "$(adb get-state 2>/dev/null | tr -d '\r')" = device ] || fail "emulator went offline before the update leg"
+  opensettings "" 8.0          # Settings opens and runs its own update check first
+  opensettings update 3.0
   shot u01_update_dialog_first; dumpui u01; T=$(uitext u01); note "dialog texts: ${T:0:300}"
   if echo "$T" | grep -q "Up-to-date\|Update check failed\|Update available"; then
     adb shell input keyevent KEYCODE_BACK; sleep 1.5; dumpui u02; T2=$(uitext u02)
     echo "$T2" | grep -q "Up-to-date\|Update check failed\|Update available" && fail "Back did not close the update dialog" || pass "Back closes the update dialog"
-    dbg "settings:update" 3.0; dumpui u03
+    opensettings update 3.0; dumpui u03
     XY=$(node_center u03 "Dismiss")
     if [ -n "$XY" ]; then adb shell input tap $XY; sleep 1.5; dumpui u04; T4=$(uitext u04)
       echo "$T4" | grep -q "Up-to-date\|Update check failed\|Update available" && fail "Dismiss did not close the update dialog" || pass "Dismiss closes the update dialog"
@@ -400,7 +406,7 @@ if leg update; then
   else fail "update dialog did not open"; fi
   adb shell appops set "$PKG" REQUEST_INSTALL_PACKAGES allow >/dev/null 2>&1
   dbg "seedupdate:99.0.0|https://github.com/MtndaleRedneck/WrenBoard/releases/download/v1.1.0/WrenBoard-1.1.apk" 1.5
-  dbg "settings:update" 3.0
+  opensettings update 3.0
   shot u05_update_available; dumpui u05; T=$(uitext u05); note "dialog texts: ${T:0:300}"
   XY=$(node_center u05 "Update")
   if [ -n "$XY" ]; then
