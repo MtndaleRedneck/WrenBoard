@@ -216,7 +216,9 @@ fun HomeScreen(navController: NavHostController = rememberNavController()) {
     val (skippedVersion, _) = useDataStore(key = SKIPPED_UPDATE_VERSION, default = -1)
     LaunchedEffect(updateInfo, skippedVersion) {
         val result = UpdateResult.fromString(updateInfo)
-        if(result != null && result.isNewer() && result.nextVersion != skippedVersion) {
+        if(result != null && result.isNewer() && result.nextVersion != skippedVersion
+            && org.futo.inputmethod.latin.uix.settings.UpdateStatus.promptedVersion != result.nextVersion) {
+            org.futo.inputmethod.latin.uix.settings.UpdateStatus.promptedVersion = result.nextVersion
             navController.navigate("update")
         }
     }

@@ -39,6 +39,7 @@ class KeyboardIconsSet {
         const val NAME_UNDEFINED = "undefined"
         const val NAME_SHIFT_KEY: String = "shift_key"
         const val NAME_SHIFT_KEY_SHIFTED: String = "shift_key_shifted"
+        const val NAME_SHIFT_KEY_LOCKED: String = "shift_key_locked"
         const val NAME_DELETE_KEY: String = "delete_key"
         const val NAME_SETTINGS_KEY: String = "settings_key"
         const val NAME_SPACE_KEY: String = "space_key"
@@ -61,6 +62,7 @@ class KeyboardIconsSet {
         val validIcons = mutableListOf(
             NAME_SHIFT_KEY,
             NAME_SHIFT_KEY_SHIFTED,
+            NAME_SHIFT_KEY_LOCKED,
             NAME_DELETE_KEY,
             NAME_SETTINGS_KEY,
             NAME_SPACE_KEY,

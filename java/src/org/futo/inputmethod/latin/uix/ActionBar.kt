@@ -86,6 +86,8 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -126,6 +128,7 @@ import org.futo.inputmethod.latin.suggestions.SuggestionStripViewListener
 import org.futo.inputmethod.latin.uix.actions.ActionCategory
 import org.futo.inputmethod.latin.uix.actions.ActionsSettings
 import org.futo.inputmethod.latin.uix.actions.EmojiAction
+import org.futo.inputmethod.latin.uix.actions.clipboard.ClipboardHistoryAction
 import org.futo.inputmethod.latin.uix.actions.FavoriteActions
 import org.futo.inputmethod.latin.uix.actions.VoiceInputAction
 import org.futo.inputmethod.latin.uix.actions.ensureWellFormed
@@ -191,7 +194,7 @@ val ActionBarScrollOffsetSetting = SettingsKey(
 
 val ActionBarExpanded = SettingsKey(
     booleanPreferencesKey("actionExpanded"),
-    true // WrenBoard: approved layout shows the toolbar row above the suggestion strip by default
+    false // WrenBoard 1.2: toolbar tucked behind the chevron by default (Ezzy Oct 29/30); it opens as a row above the strip
 )
 
 val OldStyleActionsBar = SettingsKey(
@@ -514,6 +517,9 @@ fun RowScope.SuggestionItems(words: SuggestedWords, onClick: (i: Int) -> Unit, o
         swipeTailRemovePrimarySuggestion = useDataStoreValue(DisplayTop4Setting)
     )
 
+    // WrenBoard: the centre slot (the best word) is always bold, as in SwiftKey and the approved render.
+    val boldCentre = isKeyStyledTheme()
+    var centreSuggestion: SuggestedWordInfo? = null
     val suggestionItem = @Composable { suggestion: SuggestedWordInfo? ->
         if(suggestion != null) {
             val idx = words.indexOf(suggestion)
@@ -521,7 +527,7 @@ fun RowScope.SuggestionItems(words: SuggestedWords, onClick: (i: Int) -> Unit, o
                 words,
                 idx,
                 isPrimary = idx == SuggestedWords.INDEX_OF_AUTO_CORRECTION,
-                forcePrimary = suggestion == layout.swipePrimaryElement,
+                forcePrimary = suggestion == layout.swipePrimaryElement || (boldCentre && suggestion == centreSuggestion),
                 onClick = { onClick(idx) },
                 onLongClick = { onLongClick(idx) },
                 isEmoji = suggestion in layout.emojiMatches
@@ -544,6 +550,7 @@ fun RowScope.SuggestionItems(words: SuggestedWords, onClick: (i: Int) -> Unit, o
                 suggestionItem(layout.emojiMatches[0])
             }
             SuggestionSeparator()
+            centreSuggestion = layout.autocorrectMatch
             suggestionItem(layout.autocorrectMatch)
             SuggestionSeparator()
 
@@ -562,6 +569,7 @@ fun RowScope.SuggestionItems(words: SuggestedWords, onClick: (i: Int) -> Unit, o
                 suggestionItem(layout.emojiMatches[0])
             }
             SuggestionSeparator()
+            centreSuggestion = layout.sortedMatches.getOrNull(0)
             suggestionItem(layout.sortedMatches.getOrNull(0))
             SuggestionSeparator()
             suggestionItem(layout.sortedMatches.getOrNull(supplementalSuggestionIndex))
@@ -573,9 +581,12 @@ fun RowScope.SuggestionItems(words: SuggestedWords, onClick: (i: Int) -> Unit, o
 @Composable
 fun LazyItemScope.ActionItem(idx: Int, action: Action, onSelect: (Action) -> Unit, onLongSelect: (Action) -> Unit, width: androidx.compose.ui.unit.Dp = 56.dp) {
 
+    val wbView = LocalView.current
+    val wbName = stringResource(action.name)
     val modifier = Modifier
         .width(width)
         .fillMaxHeight()
+        .onGloballyPositioned { c -> if (org.futo.inputmethod.latin.BuildConfig.DEBUG) { val loc = IntArray(2); wbView.getLocationOnScreen(loc); val p = c.positionInRoot(); WbDebug.logWindow("ACTION name=${wbName.replace(' ', '_')} cx=${(loc[0] + p.x + c.size.width / 2).toInt()} cy=${(loc[1] + p.y + c.size.height / 2).toInt()}") } }
 
     val contentCol = LocalKeyboardScheme.current.onBackground
 
@@ -669,8 +680,9 @@ fun ActionItems(onSelect: (Action) -> Unit, onLongSelect: (Action) -> Unit) {
     val actionItems = remember(actions, emojiIsActionKey) {
         val base = actions.toActionList().toSet().toMutableList()
         if(emojiIsActionKey && !base.contains(EmojiAction)) {
-            val voiceIdx = base.indexOf(VoiceInputAction)
-            base.add(if(voiceIdx >= 0) voiceIdx + 1 else 0, EmojiAction)
+            // approved order: Clipboard, Emoji, GIF, ...
+            val clipIdx = base.indexOf(ClipboardHistoryAction)
+            base.add(if(clipIdx >= 0) clipIdx + 1 else 0, EmojiAction)
         }
         base.toList()
     }
@@ -694,10 +706,15 @@ fun ActionItems(onSelect: (Action) -> Unit, onLongSelect: (Action) -> Unit) {
     } }
 
     BoxWithConstraints(Modifier.safeKeyboardPadding()) {
-        // WrenBoard: the approved layout spreads the toolbar actions evenly across the row
-        // (no overflow button); more than 7 actions fall back to a scrolling row.
+        // WrenBoard 1.2: the approved toolbar spreads up to seven chosen buttons plus More (always last)
+        // evenly across the row; more than that falls back to FUTO's scrolling row with More first.
         val evenSpread = actionItems.size in 1..7
-        val itemWidth = if (evenSpread) maxWidth / actionItems.size else 56.dp
+        val shown = if (evenSpread) actionItems.filter { it != MoreActionsAction } + MoreActionsAction else actionItems
+        val itemWidth = if (evenSpread) maxWidth / shown.size else 56.dp
+        if (org.futo.inputmethod.latin.BuildConfig.DEBUG) {
+            val wbNames = shown.map { stringResource(it.name) }
+            LaunchedEffect(wbNames) { WbDebug.logWindow("TOOLBAR " + wbNames.joinToString("|") { it.replace(' ', '_') }) }
+        }
         LazyRow(state = lazyListState) {
             if (!evenSpread) {
                 item {
@@ -706,8 +723,8 @@ fun ActionItems(onSelect: (Action) -> Unit, onLongSelect: (Action) -> Unit) {
                     }, onLongSelect = { })
                 }
             }
-            items(actionItems.size, key = { actionItems[it].name }) {
-                ActionItem(it, actionItems[it], onSelect, onLongSelect, itemWidth)
+            items(shown.size, key = { shown[it].name }) {
+                ActionItem(it, shown[it], onSelect, onLongSelect, itemWidth)
             }
         }
 
@@ -762,13 +779,16 @@ fun ExpandActionsButton(isActionsOpen: Boolean, onClick: () -> Unit) {
 
     val styled = isKeyStyledTheme()
     val strokePx = with(LocalDensity.current) { 1.5.dp.toPx() }
+    val wbView = LocalView.current
     IconButton(
         onClick = onClick,
         modifier = Modifier
             .width(42.dp)
+            .onGloballyPositioned { c -> if (org.futo.inputmethod.latin.BuildConfig.DEBUG) { val loc = IntArray(2); wbView.getLocationOnScreen(loc); val p = c.positionInRoot(); WbDebug.logWindow("CHEVRON open=$isActionsOpen cx=${(loc[0] + p.x + c.size.width / 2).toInt()} cy=${(loc[1] + p.y + c.size.height / 2).toInt()}") } }
             .rotate(
+                // WrenBoard: chevron points UP while the toolbar is tucked away and DOWN while it is open
                 if (isActionsOpen) {
-                    if(styled) 90.0f else -90.0f
+                    if(styled) 180.0f else -90.0f
                 } else {
                     0.0f
                 }
@@ -792,7 +812,7 @@ fun ExpandActionsButton(isActionsOpen: Boolean, onClick: () -> Unit) {
         colors = IconButtonDefaults.iconButtonColors(contentColor = fgCol)
     ) {
         Icon(
-            painter = painterResource(id = R.drawable.chevron_right),
+            painter = painterResource(id = if(styled) R.drawable.chevron_up else R.drawable.chevron_right),
             contentDescription = stringResource(
                 if (!isActionsOpen) R.string.keyboard_actionbar_expand_actions_talkback
                 else R.string.keyboard_actionbar_collapse_actions_talkback

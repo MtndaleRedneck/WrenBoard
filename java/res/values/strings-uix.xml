@@ -674,6 +674,33 @@
     <string name="setup_banner_turn_on">Turn on</string>
     <string name="setup_banner_switch">Switch</string>
     <string name="wren_starter_words">Starter words in an empty field</string>
+    <string name="wren_action_gif">GIF</string>
+    <string name="wren_action_share">Share</string>
+    <string name="wren_action_info">Info</string>
+    <string name="wren_about_title">About WrenBoard</string>
+    <string name="wren_back">Back</string>
+    <string name="wren_undo">Undo</string>
+    <string name="wren_clip_save">Save</string>
+    <string name="wren_clip_clear_all">Clear all</string>
+    <string name="wren_clip_clear_all_confirm">Delete %1$d clips? Pinned clips stay.</string>
+    <string name="wren_clip_cleared">Clipboard cleared</string>
+    <string name="wren_clip_deleted">Clip deleted</string>
+    <string name="wren_clip_settings">Clipboard settings</string>
+    <string name="wren_clip_pin">Pin</string>
+    <string name="wren_clip_unpin">Unpin</string>
+    <string name="wren_clip_paste">Paste</string>
+    <string name="wren_clip_edit">Edit</string>
+    <string name="wren_clip_delete">Delete</string>
+    <string name="wren_search_emojis">Search emojis</string>
+    <string name="wren_search_gifs">Search GIFs</string>
+    <string name="wren_emoji_lock">Lock</string>
+    <string name="wren_emoji_unlock">Unlock</string>
+    <string name="wren_gif_not_connected">No GIF source connected yet</string>
+    <string name="wren_gif_recents">Recents</string>
+    <string name="wren_gif_happy">Happy</string>
+    <string name="wren_gif_sad">Sad</string>
+    <string name="wren_gif_laugh">Laugh</string>
+    <string name="wren_swiftkey_panels">SwiftKey-style emoji and clipboard panels</string>
 
     <!-- Credits menu -->
     <string name="credits_menu_title">Credits</string>

@@ -100,6 +100,10 @@ object UpdateStatus {
     val downloadText = mutableStateOf("")
 
     var downloadedUpdate: ByteArrayOutputStream? = null
+
+    /** WrenBoard 1.2: the version Settings already prompted for in this app session, so a dismissed
+     *  prompt does not reopen itself every time the Settings screen is rebuilt. */
+    @Volatile var promptedVersion: Int = -1
 }
 
 private suspend fun install(scope: CoroutineScope, context: Context, inputStream: InputStream, dataLength: Long, updateStatusText: (String) -> Unit) {

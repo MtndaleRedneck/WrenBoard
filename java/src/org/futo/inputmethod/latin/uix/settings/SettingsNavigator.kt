@@ -22,6 +22,7 @@ import org.futo.inputmethod.latin.uix.SettingsExporter.ExportingMenu
 import org.futo.inputmethod.latin.uix.actions.AllActions
 import org.futo.inputmethod.latin.uix.settings.pages.ActionEditorScreen
 import org.futo.inputmethod.latin.uix.settings.pages.ActionsScreen
+import org.futo.inputmethod.latin.uix.settings.pages.WrenAboutMenu
 import org.futo.inputmethod.latin.uix.settings.pages.AdvancedParametersScreen
 import org.futo.inputmethod.latin.uix.settings.pages.AlreadyPaidDialog
 import org.futo.inputmethod.latin.uix.settings.pages.BlacklistScreen
@@ -110,7 +111,8 @@ val SettingsMenus = listOf(
     HelpMenu,
     MiscMenu,
     CreditsScreenLite,
-    IMESettingsMenu
+    IMESettingsMenu,
+    WrenAboutMenu
 ) + AllActions.mapNotNull { it.settingsMenu } + SettingsByLanguage.values
 
 

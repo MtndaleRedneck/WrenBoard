@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- WrenBoard 1.2: caps lock = the filled shift arrow with a bar under it (one-shot upper is the arrow alone). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="26dp"
+    android:height="26dp"
+    android:viewportWidth="26"
+    android:viewportHeight="26">
+  <path
+      android:fillColor="#FFFFFFFF"
+      android:pathData="M13,2L24,12.5L17.5,12.5L17.5,18.5L8.5,18.5L8.5,12.5L2,12.5Z"/>
+  <path
+      android:fillColor="#FFFFFFFF"
+      android:pathData="M8.5,20.5L17.5,20.5L17.5,23.5L8.5,23.5Z"/>
+</vector>

@@ -1,5 +1,6 @@
 package org.futo.inputmethod.latin.uix
 
+import org.futo.inputmethod.latin.uix.actions.clipboard.wbPos
 import android.content.ClipDescription
 import android.content.Context
 import android.content.Intent
@@ -838,7 +839,7 @@ class UixManager(private val latinIME: LatinIME) {
                     }
                 )
             ) {
-                if (mainKeyboardHidden.value || isInputOverridden.value) {
+                if ((mainKeyboardHidden.value || isInputOverridden.value) && windowImpl.showTitleBar) {
                     ActionWindowBar(
                         onBack = { closeActionWindow(true) },
                         canExpand = currWindowAction.value!!.canShowKeyboard,
@@ -932,7 +933,8 @@ class UixManager(private val latinIME: LatinIME) {
                                             onClick = {
                                                 it.onClick()
                                                 activeDialogRequestDismissed.value = true
-                                            }
+                                            },
+                                            modifier = Modifier.wbPos("DIALOGBTN text=${it.option.replace(' ', '_')}")
                                         ) {
                                             Text(it.option)
                                         }

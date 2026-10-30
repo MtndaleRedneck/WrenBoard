@@ -132,6 +132,10 @@ abstract class ActionWindow {
     open val fixedWindowHeight: Dp?
         get() = null
 
+    /** WrenBoard 1.2: false = the window draws its own header (SwiftKey-style panels), no FUTO title bar. */
+    open val showTitleBar: Boolean
+        get() = true
+
     @Composable
     abstract fun windowName(): String
 

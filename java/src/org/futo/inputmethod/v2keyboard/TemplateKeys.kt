@@ -60,7 +60,8 @@ data class ShiftKey(
         ),
 
         shiftLocked = BaseKey(
-            spec = "!icon/shift_key_shifted|!code/key_shift",
+            // WrenBoard: caps lock has its own glyph (arrow + bar), distinct from one-shot upper
+            spec = "!icon/shift_key_locked|!code/key_shift",
             moreKeys = ShiftMoreKeys,
             attributes = KeyAttributes(style = KeyVisualStyle.StickyOn) + attributes + FunctionalAttributes
         ),
