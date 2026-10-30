@@ -41,6 +41,12 @@ jobs:
         run: ./gradlew --no-daemon assembleStableDebug -Pandroid.injected.build.abi=x86_64
       - name: Build ime-target APK
         run: bash tools/ime-target/build.sh
+      - name: Stage APKs at fixed paths
+        run: |
+          find build/outputs/apk -name '*.apk' -print
+          cp "$(find build/outputs/apk -name '*debug*.apk' | head -1)" wb-debug.apk
+          ls -la wb-debug.apk tools/ime-target/out/imetarget.apk
+          python3 -c 'import PIL' 2>/dev/null || python3 -m pip install --quiet --break-system-packages pillow || true
       - name: Enable KVM
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
@@ -54,7 +60,7 @@ jobs:
           arch: x86_64
           profile: Nexus 6
           disable-animations: true
-          script: WB_LEGS="${{ inputs.legs }}" bash tools/wb12-check.sh "$(ls build/outputs/apk/stable/debug/*.apk | head -1)" tools/ime-target/out/imetarget.apk
+          script: WB_LEGS="${{ inputs.legs }}" bash tools/wb12-check.sh wb-debug.apk tools/ime-target/out/imetarget.apk
       - uses: actions/upload-artifact@v4
         if: always()
         with:
