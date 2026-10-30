@@ -1,6 +1,10 @@
 package org.futo.inputmethod.latin.uix.settings
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -29,14 +33,19 @@ fun SetupOrMain(inputMethodEnabled: Boolean, inputMethodSelected: Boolean, doubl
         }
     }
 
-    if (!inputMethodEnabled) {
-        SetupEnableIME()
-    } else if (needsToShowDirectBootWarning()) {
+    // WrenBoard 1.2: no setup wall. Settings always open; while WrenBoard is not enabled or not the active
+    // keyboard, a small banner at the top says so and offers the one button that fixes it.
+    if (needsToShowDirectBootWarning()) {
         SetupDirectBootWarning()
-    } else if (!inputMethodSelected) {
-        SetupChangeDefaultIME(doublePackage)
     } else {
-        main()
+        Column(modifier = Modifier.fillMaxSize()) {
+            if (!inputMethodEnabled || !inputMethodSelected) {
+                SetupBanner(inputMethodEnabled = inputMethodEnabled, doublePackage = doublePackage)
+            }
+            Box(modifier = Modifier.fillMaxWidth().weight(1.0f)) {
+                main()
+            }
+        }
     }
 }
 

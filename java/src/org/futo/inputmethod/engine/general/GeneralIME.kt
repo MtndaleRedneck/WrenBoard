@@ -43,6 +43,7 @@ import org.futo.inputmethod.latin.inputlogic.InputLogic
 import org.futo.inputmethod.latin.settings.Settings
 import org.futo.inputmethod.latin.suggestions.SuggestionStripViewAccessor
 import org.futo.inputmethod.latin.uix.SettingsKey
+import org.futo.inputmethod.latin.uix.StarterWordsSetting
 import org.futo.inputmethod.latin.uix.actions.throwIfDebug
 import org.futo.inputmethod.latin.uix.getSetting
 import org.futo.inputmethod.latin.uix.isDirectBootUnlocked
@@ -259,6 +260,23 @@ class GeneralIME(val helper: IMEHelper) : IMEInterface, WordLearner, SuggestionS
         )
 
         cancelSync()
+        showStarterWordsIfEmpty()
+    }
+
+    // WrenBoard P0-7: in an empty field, ask for predictions the same way FUTO does after a space, so the strip
+    // shows starter words (from the dictionary and the user's own typing history) instead of nothing.
+    private fun showStarterWordsIfEmpty() {
+        try {
+            if (!helper.context.getSetting(StarterWordsSetting)) return
+            if (inputLogic.mWordComposer.isComposingWord) return
+            if (!inputLogic.mConnection.isConnected) return
+            val before = inputLogic.mConnection.getTextBeforeCursor(1, 0)
+            if (before.isNullOrEmpty()) {
+                updateSuggestions(SuggestedWords.INPUT_STYLE_TYPING)
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "starter words skipped: ${e.javaClass.simpleName}")
+        }
     }
 
     var dictSyncJob: Job? = null

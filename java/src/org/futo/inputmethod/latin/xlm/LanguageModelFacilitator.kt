@@ -99,6 +99,14 @@ internal fun SuggestedWordInfo.scoreAtMost(other: SuggestedWordInfo): SuggestedW
     return result
 }
 
+/** Two or more letters, at least one upper case, none lower case: "NSNANA", "ISP". Not "I", not "McD". */
+internal fun isAllCapsWord(word: String): Boolean =
+    word.count { it.isLetter() } >= 2 && word.none { it.isLowerCase() } && word.any { it.isUpperCase() }
+
+/** WrenBoard P0-2: fold words typed in caps lock to lower case before they reach the model as context. */
+internal fun foldShoutedWords(context: String): String =
+    context.split(' ').joinToString(" ") { if(isAllCapsWord(it)) it.lowercase() else it }
+
 private fun levenshteinDistance(s1: String, s2: String): Int {
     val len1 = s1.length
     val len2 = s2.length
@@ -242,8 +250,13 @@ public class LanguageModelFacilitator(
             14, values.ngramContext.isBeginningOfSentenceContext, false)
 
 
+        // WrenBoard P0-2: a word typed in caps lock must not poison later lowercase typing. While the word being
+        // typed has lowercase letters, all-caps model guesses (HN, ISP, NSN after "NSNANA") are dropped.
+        val typedHasLowercase = values.composedData.mTypedWord?.any { it.isLowerCase() } == true
         val reweightedSuggestions = lmSuggestions.mapIndexedNotNull { i, it ->
-            if(transformerWeight == Float.NEGATIVE_INFINITY) { null } else {
+            if(transformerWeight == Float.NEGATIVE_INFINITY) { null }
+            else if(typedHasLowercase && isAllCapsWord(it.mWord)) { null }
+            else {
                 SuggestedWordInfo(
                     it.mWord,
                     it.mPrevWordsContext,

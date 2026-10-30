@@ -3,11 +3,16 @@
 ## Typing
 
 - Layout and look follow SwiftKey: a number row, letters, two symbols pages and a bottom row of arrow keys.
-- Shift once for one capital. Double-tap shift for caps lock. With shift tapped on a finished word, the word cycles through Capitalized, UPPERCASE and lowercase.
+- Shift: each tap moves lowercase → one capital → caps lock → lowercase, with no double-tap timing. One capital lasts for one letter; caps lock stays on and its key is marked differently. In the middle of a word, shift changes only the next letter (y, shift, ou types yOu); it never re-cases a finished word. Settings can switch to FUTO's style instead (double-tap or hold shift for caps lock). Shift on a selected word still changes its case.
 - Hold backspace to delete whole words. It speeds up the longer you hold.
-- Long-press 123 to open the clipboard.
-- The suggestion strip learns words as you type them.
+- Long-press 123 to open the clipboard. The 123 key shows a small clipboard mark, the way the comma shows the mic.
+- Long-press the period for ! , . ? in a box above the key; slide to one and let go to type it.
+- The suggestion strip learns words as you type them. In an empty field it shows starter words from your own typing (can be turned off).
 - Toolbar: voice, emoji, undo, redo, clipboard, theme and settings. You can reorder, hide and re-add actions in Settings.
+
+## Settings
+
+Settings open straight away, even before WrenBoard is turned on. Until it is your active keyboard, a small banner at the top says so, with a button that opens Android's keyboard switch.
 
 ## Dictation
 

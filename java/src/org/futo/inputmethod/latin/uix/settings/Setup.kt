@@ -14,6 +14,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Surface
+import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.Image
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
@@ -229,6 +233,69 @@ fun SetupDirectBootWarning() {
                     .fillMaxWidth()
             ) {
                 Text("Acknowledge (will not be shown again)")
+            }
+        }
+    }
+}
+
+
+/**
+ * WrenBoard 1.2: replaces the full-screen setup steps. Shown at the top of Settings while WrenBoard is not enabled
+ * or not the active keyboard. Not enabled: the button opens Android's keyboard list. Enabled but not active: the
+ * button opens the keyboard picker (the old Step 2 "Switch Input Methods").
+ */
+@Composable
+fun SetupBanner(inputMethodEnabled: Boolean, doublePackage: Boolean) {
+    val context = LocalContext.current
+    val onClick = {
+        if (!inputMethodEnabled) {
+            val intent = Intent(Settings.ACTION_INPUT_METHOD_SETTINGS)
+            intent.flags = Intent.FLAG_ACTIVITY_NO_HISTORY
+            context.startActivity(intent)
+        } else {
+            val inputMethodManager =
+                context.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+            inputMethodManager.showInputMethodPicker()
+            (context as? SettingsActivity)?.updateSystemState()
+        }
+        Unit
+    }
+
+    Surface(
+        color = Color(0xFF2A2A2A),
+        shape = RoundedCornerShape(12.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 8.dp)
+    ) {
+        Column(modifier = Modifier.padding(start = 16.dp, end = 8.dp, top = 6.dp, bottom = 6.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = stringResource(
+                        if (inputMethodEnabled) R.string.setup_banner_not_active else R.string.setup_banner_not_enabled
+                    ),
+                    color = Color(0xFFF2F2F2),
+                    style = Typography.Body.RegularMl,
+                    modifier = Modifier.weight(1.0f)
+                )
+                Button(
+                    onClick = onClick,
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF8A14), contentColor = Color(0xFF141414)),
+                    modifier = Modifier.padding(start = 8.dp)
+                ) {
+                    Text(
+                        stringResource(
+                            if (inputMethodEnabled) R.string.setup_banner_switch else R.string.setup_banner_turn_on
+                        )
+                    )
+                }
+            }
+            if (doublePackage) {
+                Text(
+                    stringResource(R.string.setup_warning_multiple_versions),
+                    color = Color(0xFFC7C7C7),
+                    style = Typography.Body.RegularMl
+                )
             }
         }
     }

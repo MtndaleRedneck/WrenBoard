@@ -628,6 +628,18 @@ class UixManager(private val latinIME: LatinIME) {
     val actionsExpanded: Boolean
         get() = isActionsExpanded.value
 
+    /** DEBUG builds only (WbDebug): set the toolbar state the way the chevron does. */
+    fun debugSetActionsExpanded(to: Boolean) {
+        if(!org.futo.inputmethod.latin.BuildConfig.DEBUG) return
+        if(isActionsExpanded.value != to) toggleActionsExpanded()
+    }
+
+    /** DEBUG builds only (WbDebug): open an action the way its toolbar button does. */
+    fun debugOpenAction(action: Action) {
+        if(!org.futo.inputmethod.latin.BuildConfig.DEBUG) return
+        onActionActivatedInternal(action)
+    }
+
     internal val resizers = KeyboardResizers(latinIME)
 
     private var isShowingActionEditor = mutableStateOf(false)
@@ -754,6 +766,7 @@ class UixManager(private val latinIME: LatinIME) {
         assert(action.windowImpl != null)
 
         currWindowAction.value = action
+        if(BuildConfig.DEBUG) WbDebug.logWindow("open ${org.futo.inputmethod.latin.uix.actions.ActionRegistry.actionToStringId(action)}")
 
         if (persistentStates[action] == null) {
             persistentStates[action] = action.persistentState?.let { it(keyboardManagerForAction) }
@@ -1468,6 +1481,7 @@ class UixManager(private val latinIME: LatinIME) {
     }
 
     fun setSuggestions(suggestedWords: SuggestedWords?, rtlSubtype: Boolean, cfg: ExpandableSuggestionBarConfiguration) {
+        if(org.futo.inputmethod.latin.BuildConfig.DEBUG) WbDebug.logSuggestions(suggestedWords)
         this.suggestedWords.value = suggestedWords
         this.expandableSuggestionCfg.value = cfg
 

@@ -16,8 +16,8 @@ jobs:
     env:
       KEYSTORE_B64: ${{ secrets.KEYSTORE_B64 }}
       KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
-      VERSION_NAME: 1.1.0
-      VERSION_CODE: "2"
+      VERSION_NAME: 1.2.0
+      VERSION_CODE: "3"
     steps:
       - uses: actions/checkout@v4
       - name: Init build submodules (swipe weights excluded; bundled English voice model cleared, provenance in README-WRENBOARD.md)

@@ -1,0 +1,66 @@
+name: wb12-check
+# WrenBoard 1.2 checkpoint checks: builds the DEBUG APK (x86_64 only, for the emulator) and runs
+# tools/wb12-check.sh, which drives the keyboard through WBDBG logcat geometry and saves screenshots.
+# The debug build is never published; release builds stay in build.yml.
+on:
+  push:
+    branches: [wrenboard-1.2]
+    paths-ignore:
+      - '**.md'
+  workflow_dispatch:
+    inputs:
+      legs:
+        description: "comma list of legs (blank = all)"
+        required: false
+        default: ""
+      note:
+        description: "free text, ignored"
+        required: false
+        default: ""
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    env:
+      VERSION_NAME: 1.2.0-check
+      VERSION_CODE: "3"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Init build submodules
+        run: git submodule update --init java/assets/themes java/res-large libs translations voiceinput-shared/src/main/ml
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Install NDK
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;28.2.13676358"
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Build stable DEBUG APK (x86_64 only)
+        run: ./gradlew --no-daemon assembleStableDebug -Pandroid.injected.build.abi=x86_64
+      - name: Build ime-target APK
+        run: bash tools/ime-target/build.sh
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Run WrenBoard 1.2 checks on the emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          target: google_apis
+          arch: x86_64
+          profile: Nexus 6
+          disable-animations: true
+          script: WB_LEGS="${{ inputs.legs }}" bash tools/wb12-check.sh "$(ls build/outputs/apk/stable/debug/*.apk | head -1)" tools/ime-target/out/imetarget.apk
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: wb12-shots
+          path: shots/
+          retention-days: 14
+      - name: Results
+        if: always()
+        run: cat shots/results.txt || true

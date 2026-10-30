@@ -1,5 +1,6 @@
 package org.futo.inputmethod.latin.uix.theme.presets
 
+import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.GradientDrawable
 import android.util.TypedValue
 import androidx.compose.runtime.Composable
@@ -17,6 +18,7 @@ import org.futo.inputmethod.latin.uix.theme.KeyQualifier
 import org.futo.inputmethod.latin.uix.theme.RowColSelection
 import org.futo.inputmethod.latin.uix.theme.ThemeOption
 import org.futo.inputmethod.latin.uix.theme.selector.ThemePreview
+import org.futo.inputmethod.v2keyboard.KeyVisualStyle
 
 // WrenBoard default theme: dark charcoal board, gradient keys, orange accent.
 // Colors measured from the user's reference design.
@@ -73,8 +75,47 @@ private fun keyGradient(context: android.content.Context, top: Int, bottom: Int)
     }
 }
 
+private fun popupBox(context: android.content.Context): GradientDrawable {
+    val dm = context.resources.displayMetrics
+    return GradientDrawable().apply {
+        shape = GradientDrawable.RECTANGLE
+        cornerRadius = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 6.0f, dm)
+        setColor(0xFF2B2B2B.toInt())
+        setStroke(TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 1.5f, dm).toInt().coerceAtLeast(2), 0xFFB4B4B4.toInt())
+    }
+}
+
 private fun wrenKeyBackgrounds(context: android.content.Context) = KeyedBitmaps(
     listOf(
+        // Long-press popup (P0-1): one solid box with a light border, items drawn flat inside it, and the item
+        // under the finger raised as a key so it is clear what a release will type (SwiftKey reference frame).
+        KeyedBitmap(
+            qualifiers = setOf(KeyQualifier.MoreKeysKeyboardBackground),
+            bitmap = KeyBackground(
+                foregroundColor = AccentOrange.toArgb(),
+                outlineColor = null,
+                background = popupBox(context)
+            )
+        ),
+        KeyedBitmap(
+            qualifiers = setOf(KeyQualifier.VisualStyle(KeyVisualStyle.MoreKey), KeyQualifier.Pressed),
+            bitmap = KeyBackground(
+                foregroundColor = AccentOrange.toArgb(),
+                hintColor = HintGrey,
+                outlineColor = 0xFFD0D0D0.toInt(),
+                outlineWidth = 1.dp,
+                background = keyGradient(context, 0xFF626262.toInt(), 0xFF2A2A2A.toInt())
+            )
+        ),
+        KeyedBitmap(
+            qualifiers = setOf(KeyQualifier.VisualStyle(KeyVisualStyle.MoreKey)),
+            bitmap = KeyBackground(
+                foregroundColor = AccentOrange.toArgb(),
+                hintColor = HintGrey,
+                outlineColor = null,
+                background = ColorDrawable(android.graphics.Color.TRANSPARENT)
+            )
+        ),
         // Most-specific entries first: matcher returns the first match.
         // Pressed top number row: lightened number gradient
         KeyedBitmap(
