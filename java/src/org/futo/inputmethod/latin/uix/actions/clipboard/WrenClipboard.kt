@@ -286,9 +286,9 @@ fun WrenClipboardPanel(w: WrenClipboardWindow) {
                         stringResource(R.string.wren_clip_clear_all), color = orange, fontSize = 15.sp,
                         modifier = Modifier.wbPos("CLIPCLEARALL").clip(RoundedCornerShape(8.dp)).clickable {
                             manager_dialog(w,
-                                resources.getString(R.string.wren_clip_clear_all_confirm, unpinned.size),
+                                resources.getString(R.string.wren_clip_clear_all_confirm),
                                 resources.getString(R.string.action_clipboard_manager_cancel_action_button),
-                                resources.getString(R.string.wren_clip_clear_all)
+                                resources.getString(R.string.wren_clip_delete)
                             ) { w.removeWithUndo(w.history.clipboardHistory.filter { !it.pinned }, resources.getString(R.string.wren_clip_cleared)) }
                         }.padding(horizontal = 10.dp, vertical = 8.dp)
                     )

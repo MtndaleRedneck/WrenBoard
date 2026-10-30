@@ -704,7 +704,7 @@
     <string name="wren_clip_title">Clipboard</string>
     <string name="wren_clip_save">Save</string>
     <string name="wren_clip_clear_all">Clear all</string>
-    <string name="wren_clip_clear_all_confirm">Delete %1$d clips? Pinned clips stay.</string>
+    <string name="wren_clip_clear_all_confirm">Delete all clips?</string>
     <string name="wren_clip_cleared">Clipboard cleared</string>
     <string name="wren_clip_deleted">Clip deleted</string>
     <string name="wren_clip_settings">Clipboard settings</string>
