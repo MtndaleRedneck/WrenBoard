@@ -87,6 +87,18 @@ object WbDebug {
                             ime.setSettingBlocking(androidx.datastore.preferences.core.booleanPreferencesKey(kv[0]), kv.getOrNull(1) == "true")
                             Log.i(TAG, "DSBOOL ${kv[0]}=${kv.getOrNull(1)}")
                         }
+                        cmd.startsWith("spint:") -> {
+                            // spint:<shared pref key>=<int>, e.g. spint:pref_key_longpress_timeout=1500 (screenshots of a held key)
+                            val kv = cmd.removePrefix("spint:").split("=")
+                            org.futo.inputmethod.latin.uix.PreferenceUtils.getDefaultSharedPreferences(ime).edit().putInt(kv[0], kv.getOrNull(1)?.toIntOrNull() ?: 0).apply()
+                            Log.i(TAG, "SPINT ${kv[0]}=${kv.getOrNull(1)}")
+                        }
+                        cmd.startsWith("sprm:") -> {
+                            // sprm:<shared pref key> : back to the default
+                            val k = cmd.removePrefix("sprm:")
+                            org.futo.inputmethod.latin.uix.PreferenceUtils.getDefaultSharedPreferences(ime).edit().remove(k).apply()
+                            Log.i(TAG, "SPRM $k")
+                        }
                         cmd.startsWith("seedupdate:") -> {
                             // seedupdate:<version>|<apk url> : store an update-check result as if the check had found it
                             val parts = cmd.removePrefix("seedupdate:").split("|", limit = 2)

@@ -922,21 +922,26 @@ class UixManager(private val latinIME: LatinIME) {
                             modifier = Modifier.align(Alignment.Center)
                         ) {
                             Column(modifier = Modifier.padding(16.dp)) {
+                                // WrenBoard 1.2: text and buttons use the container's own "on" colour; with the
+                                // WrenBoard keyboard colours the buttons were orange on orange and could not be seen.
+                                val dialogInk = MaterialTheme.colorScheme.onPrimaryContainer
                                 Text(
                                     activeDialogRequest.value?.text ?: "",
-                                    style = Typography.Body.Medium
+                                    style = Typography.Body.Medium,
+                                    color = dialogInk
                                 )
 
-                                Row {
+                                Row(modifier = Modifier.align(Alignment.End)) {
                                     activeDialogRequest.value?.options?.forEach {
                                         TextButton(
                                             onClick = {
                                                 it.onClick()
                                                 activeDialogRequestDismissed.value = true
                                             },
+                                            colors = androidx.compose.material3.ButtonDefaults.textButtonColors(contentColor = dialogInk),
                                             modifier = Modifier.wbPos("DIALOGBTN text=${it.option.replace(' ', '_')}")
                                         ) {
-                                            Text(it.option)
+                                            Text(it.option, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
                                         }
                                     }
                                 }
