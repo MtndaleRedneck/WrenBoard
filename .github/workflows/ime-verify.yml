@@ -10,6 +10,9 @@ on:
         description: "learn = only the learn-restore and the real-learned-data export/fresh-install legs"
         required: false
         default: ""
+permissions:
+  contents: read
+  actions: read
 jobs:
   verify:
     runs-on: ubuntu-latest
@@ -38,8 +41,8 @@ jobs:
       - name: Get APK from build run
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RID: ${{ inputs.run_id }}
         run: |
-          RID="${{ inputs.run_id }}"
           if [ -z "$RID" ]; then
             RID=$(gh run list --workflow build.yml --status success --limit 1 --json databaseId -q '.[0].databaseId')
           fi
@@ -57,14 +60,16 @@ jobs:
           sudo udevadm trigger --name-match=kvm
           ls -la /dev/kvm
       - name: Run installed-IME verification on emulator
-        uses: reactivecircus/android-emulator-runner@v2
+        env:
+          WB_FOCUS: ${{ inputs.focus }}
+        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
         with:
           api-level: 34
           target: google_apis
           arch: x86_64
           profile: Nexus 6
           disable-animations: true
-          script: WB_FOCUS=${{ inputs.focus }} bash tools/ime-verify.sh apk/*.apk tools/ime-target/out/imetarget.apk
+          script: bash tools/ime-verify.sh apk/*.apk tools/ime-target/out/imetarget.apk
       - uses: actions/upload-artifact@v4
         if: always()
         with:

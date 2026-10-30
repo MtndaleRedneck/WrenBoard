@@ -5,6 +5,9 @@ on:
       run_id:
         description: "build run id to take the DEBUG preview APK from"
         required: true
+permissions:
+  contents: read
+  actions: read
 jobs:
   preview:
     runs-on: ubuntu-latest
@@ -23,7 +26,7 @@ jobs:
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
       - name: Capture voice preview frames
-        uses: reactivecircus/android-emulator-runner@v2
+        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
         with:
           api-level: 34
           target: google_apis

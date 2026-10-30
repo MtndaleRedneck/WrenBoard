@@ -10,12 +10,12 @@ on:
       publish:
         type: boolean
         default: false
+permissions:
+  contents: read
 jobs:
   android:
     runs-on: ubuntu-latest
     env:
-      KEYSTORE_B64: ${{ secrets.KEYSTORE_B64 }}
-      KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
       VERSION_NAME: 1.1.0
       VERSION_CODE: "2"
     steps:
@@ -30,8 +30,11 @@ jobs:
         run: |
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;28.2.13676358"
-      - uses: gradle/actions/setup-gradle@v4
+      - uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4.4.3
       - name: Signing setup
+        env:
+          KEYSTORE_B64: ${{ secrets.KEYSTORE_B64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
         run: |
           echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/release.keystore"
           printf 'storeFile=%s\nkeyAlias=wrenboard\nkeyPassword=%s\nstorePassword=%s\n' "$RUNNER_TEMP/release.keystore" "$KEYSTORE_PASSWORD" "$KEYSTORE_PASSWORD" > keystore.properties

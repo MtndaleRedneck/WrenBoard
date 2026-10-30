@@ -22,11 +22,11 @@ WrenBoard ships with a SwiftKey-inspired default theme. All of FUTO Keyboard's t
 - Learned words, the personal dictionary and clipboard history are stored on the phone.
 - Crash-report emailing from FUTO Keyboard has been removed from this build. The app makes a network request to check for updates; dictation does not need one.
 - Settings can export a backup file with your settings, themes, personal dictionary and learned words. A restore option reads that file back and replaces what is on the phone, so export first if you are unsure.
-- Backup and recovery on a new or replacement phone is still being worked on. Treat an exported file as a manual copy for now. Automatic cloud backup is not part of the current build.
+- Backup and recovery on a new or replacement phone is still being worked on. Treat an exported file as a manual copy for now.
 
 ## Updates
 
-The app checks this repository's releases for a newer version. When one is found, it opens the download page so you can install it. Until the first release is published, the check reports that it could not find one.
+The app checks this repository's releases for a newer version. When one is found, it opens the download page so you can install it.
 
 ## Building from source
 
