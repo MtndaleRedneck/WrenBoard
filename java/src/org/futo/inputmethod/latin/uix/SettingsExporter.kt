@@ -289,15 +289,31 @@ object SettingsExporter {
                 var n = 0
                 fun snap(entryName: String, src: File) {
                     val copy = File(snapshotDir, "d${n++}")
+                    val lengthBefore = src.length()
+                    val modifiedBefore = src.lastModified()
                     src.inputStream().use { i -> copy.outputStream().use { o -> i.copyTo(o) } }
+                    if(src.length() != lengthBefore || src.lastModified() != modifiedBefore) {
+                        throw java.io.IOException("Learned-word data changed while exporting; nothing was exported")
+                    }
                     out.add(entryName to copy)
                 }
                 context.filesDir.listFiles()?.forEach { f ->
                     // ".bak"/".tmp" directories are leftovers of an interrupted save, not live data
                     if(f.name.startsWith("UserHistoryDictionary") && !f.name.endsWith(".bak") && !f.name.endsWith(".tmp")) {
-                        // Runtime layout (verified on the emulator): a DIRECTORY holding .header and .body files
-                        if(f.isDirectory) f.listFiles()?.forEach { sub ->
-                            if(sub.isFile) snap("userdict/${f.name}/${sub.name}", sub)
+                        // Runtime layout (verified on the emulator): a DIRECTORY holding <name>.header and
+                        // <name>.body. Only that pair is eligible, matching what the importer accepts:
+                        // stray files are skipped, an incomplete pair fails the whole export loudly.
+                        if(f.isDirectory) {
+                            val header = File(f, "${f.name}.header")
+                            val body = File(f, "${f.name}.body")
+                            val strays = f.listFiles()?.count { it.isFile && it.name != header.name && it.name != body.name } ?: 0
+                            if(strays > 0) Log.w("SettingsExporter", "export: skipping $strays stray file(s) in learned-word directory ${f.name}")
+                            if(header.isFile && body.isFile) {
+                                snap("userdict/${f.name}/${header.name}", header)
+                                snap("userdict/${f.name}/${body.name}", body)
+                            } else if(header.isFile || body.isFile) {
+                                throw java.io.IOException("Learned-word data for ${f.name} is incomplete; nothing was exported")
+                            }
                         }
                     }
                 }
