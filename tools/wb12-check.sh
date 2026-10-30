@@ -17,7 +17,17 @@ FAILS=0
 note() { echo "$*" | tee -a "$R"; }
 pass() { note "PASS: $*"; }
 fail() { note "FAIL: $*"; FAILS=$((FAILS+1)); }
-leg() { case "$LEGS" in *",$1,"*) return 0;; *) return 1;; esac; }
+alive() { # the emulator's adb link has dropped mid-run twice; try to bring it back before a leg
+  local st; st=$(timeout 10 "$ADB_BIN" get-state 2>/dev/null | tr -d '\r')
+  [ "$st" = device ] && return 0
+  echo "adb state '$st' before leg $1; reconnecting" | tee -a "$R"
+  timeout 20 "$ADB_BIN" reconnect offline >/dev/null 2>&1; sleep 5
+  timeout 90 "$ADB_BIN" wait-for-device >/dev/null 2>&1
+  st=$(timeout 10 "$ADB_BIN" get-state 2>/dev/null | tr -d '\r'); echo "adb state now '$st'" | tee -a "$R"
+  [ "$st" = device ] && { sleep 10; ensure_ime >/dev/null 2>&1; }
+  return 0
+}
+leg() { case "$LEGS" in *",$1,"*) alive "$1"; return 0;; *) return 1;; esac; }
 shot() { adb exec-out screencap -p > "shots/$1.png"; note "shot $1"; }
 dumpui() { adb shell uiautomator dump /sdcard/u.xml >/dev/null 2>&1; adb exec-out cat /sdcard/u.xml > "shots/$1.xml" 2>/dev/null; }
 uitext() { sed 's/>/>\n/g' "shots/$1.xml" | grep -o 'text="[^"]*"' | sed 's/text="//;s/"$//' | grep -v '^$' | tr '\n' '|'; }
@@ -268,6 +278,32 @@ pos() { # pos <file> <tag regex> -> "cx cy" of the last WINDOW line matching
 }
 wlog() { adb logcat -d -s WBDBG:I | tr -d '\r' > "shots/$1.txt"; }
 
+if leg settings; then
+  note "== SETTINGS tree (CP4): six groups + FUTO, each page opens =="
+  ensure_ime; note "default IME: $(adb shell settings get secure default_input_method | tr -d '\r')"
+  adb shell input keyevent KEYCODE_HOME; sleep 1
+  opensettings "" 6
+  dumpui st00; uitext st00 | grep -q "Personal dictionary" && { note "  first-entry personal dictionary page is up; going back to the home"; adb shell input keyevent KEYCODE_BACK; sleep 2; }
+  shot st01_settings_home; dumpui st01; T=$(uitext st01)
+  adb shell input swipe 540 1700 540 700 400; sleep 1.5; shot st01b_settings_home_scrolled; dumpui st01b; T="$T$(uitext st01b)"
+  note "home: ${T:0:700}"
+  ok=1; for w in "Keyboard" "Typing" "Voice" "Clipboard &amp; emoji" "Backup" "About" "FUTO"; do echo "$T" | grep -q "$w" || { ok=0; note "missing on home: $w"; }; done
+  [ $ok = 1 ] && pass "home shows the six groups and FUTO" || fail "home is missing groups"
+  echo "$T" | grep -qi "swiftkey" && fail "the word SwiftKey appears in Settings" || pass "no SwiftKey text on the home"
+  n=2
+  for d in wren_keyboard wren_typing voiceInput wren_clipemoji wren_backup about wren_futo; do
+    opensettings "$d" 3.5
+    shot "st0${n}_$d"; dumpui "st_$d"; P=$(uitext "st_$d"); note "$d: ${P:0:400}"
+    echo "$P" | grep -qi "swiftkey" && fail "SwiftKey text on $d"
+    [ -n "$P" ] && pass "$d opens" || fail "$d shows nothing"
+    n=$((n+1))
+  done
+  # FUTO page must still reach FUTO's own screens
+  opensettings "" 2; opensettings wren_futo 3.5; dumpui st_futo2
+  for w in "Languages" "Swipe" "Actions"; do uitext st_futo2 | grep -q "$w" && pass "FUTO page keeps $w" || fail "FUTO page lost $w"; done
+  adb shell input keyevent KEYCODE_HOME
+fi
+
 if leg emoji; then
   note "== EMOJI panel (SwiftKey replica): pages, Recents with Lock/Unlock, search, GIF tab =="
   focus_target; clear_field
@@ -367,31 +403,6 @@ if leg clipboard; then
   dbg close 1.0
 fi
 
-if leg settings; then
-  note "== SETTINGS tree (CP4): six groups + FUTO, each page opens =="
-  ensure_ime; note "default IME: $(adb shell settings get secure default_input_method | tr -d '\r')"
-  adb shell input keyevent KEYCODE_HOME; sleep 1
-  opensettings "" 6
-  dumpui st00; uitext st00 | grep -q "Personal dictionary" && { note "  first-entry personal dictionary page is up; going back to the home"; adb shell input keyevent KEYCODE_BACK; sleep 2; }
-  shot st01_settings_home; dumpui st01; T=$(uitext st01)
-  adb shell input swipe 540 1700 540 700 400; sleep 1.5; shot st01b_settings_home_scrolled; dumpui st01b; T="$T$(uitext st01b)"
-  note "home: ${T:0:700}"
-  ok=1; for w in "Keyboard" "Typing" "Voice" "Clipboard &amp; emoji" "Backup" "About" "FUTO"; do echo "$T" | grep -q "$w" || { ok=0; note "missing on home: $w"; }; done
-  [ $ok = 1 ] && pass "home shows the six groups and FUTO" || fail "home is missing groups"
-  echo "$T" | grep -qi "swiftkey" && fail "the word SwiftKey appears in Settings" || pass "no SwiftKey text on the home"
-  n=2
-  for d in wren_keyboard wren_typing voiceInput wren_clipemoji wren_backup about wren_futo; do
-    opensettings "$d" 3.5
-    shot "st0${n}_$d"; dumpui "st_$d"; P=$(uitext "st_$d"); note "$d: ${P:0:400}"
-    echo "$P" | grep -qi "swiftkey" && fail "SwiftKey text on $d"
-    [ -n "$P" ] && pass "$d opens" || fail "$d shows nothing"
-    n=$((n+1))
-  done
-  # FUTO page must still reach FUTO's own screens
-  opensettings "" 2; opensettings wren_futo 3.5; dumpui st_futo2
-  for w in "Languages" "Swipe" "Actions"; do uitext st_futo2 | grep -q "$w" && pass "FUTO page keeps $w" || fail "FUTO page lost $w"; done
-  adb shell input keyevent KEYCODE_HOME
-fi
 
 if leg update; then
   ensure_ime; focus_target
