@@ -158,7 +158,7 @@ if leg keyboard; then
   note "== KEYBOARD: starter words, 123 hint =="
   adb logcat -c; focus_target; sleep 2; S=$(sugg); note "suggestions in empty field: [$S]"
   grep 'STARTER' shots/_s.txt | tail -5 | sed 's/^.*WBDBG *: /  /' | tee -a "$R"
-  [ -n "$S" ] && pass "starter words shown in an empty field ($S)" || fail "empty field shows no starter words"
+  [ "$S" = "I|The|You" ] && pass "fresh empty field, toggle on: fallback starter words I|The|You ($S)" || fail "fresh empty field shows '$S' (wanted I|The|You)"
   XY=$(kxy code -3 2>/dev/null || true); note "123 key at: $XY"
   clear_field
   type_word hello; F=$(field); case "$F" in hello|Hello) pass "typing hello ($F)";; *) fail "typing hello (got '$F')";; esac
@@ -170,10 +170,14 @@ if leg keyboard; then
   grep 'STARTER' shots/_s.txt | tail -3 | sed 's/^.*WBDBG *: /  /' | tee -a "$R"
   shot k01b_starter_words_from_history
   echo "$S2" | grep -qi "zebra" && pass "starter words come from typing history ($S2)" || fail "starter words did not pick up typing history (got '$S2')"
-  [ "$(echo "$S2" | tr '|' '\n' | wc -l)" -le 3 ] && echo "$S2" | grep -q "|I|\||I$" && pass "history word first, I/The/You fill the rest ($S2)" || fail "empty-field strip is not history + I/The/You ($S2)"
+  [ "$(echo "$S2" | tr 'A-Z' 'a-z')" = "zebra" ] && pass "short history shown as predicted, no I/The/You padding ($S2)" || fail "empty field with history 'zebra' shows '$S2' (wanted just zebra)"
   dbg "dsbool:wren_starter_words=false" 1.0; adb logcat -c; focus_target; sleep 2; S3=$(sugg); note "starter words with the toggle off: [$S3]"
   shot k01c_starter_words_toggle_off
   [ -z "$S3" ] && pass "toggle off: no starter words in an empty field" || fail "starter words still shown with the toggle off ($S3)"
+  # toggle off only blanks the empty field: typing a word still gets FUTO's normal suggestions
+  adb logcat -c; type_word hel; sleep 1; S4=$(sugg); F4=$(field); note "toggle off, typed '$F4': [$S4]"; shot k01d_typed_word_toggle_off
+  echo "$S4" | tr '|' '\n' | grep -qi "^hel" && pass "toggle off: typed word still gets normal suggestions ($S4)" || fail "toggle off: typed 'hel' got no normal suggestions ($S4)"
+  clear_field
   dbg "dsbool:wren_starter_words=true" 1.0
 fi
 
