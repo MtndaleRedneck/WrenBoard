@@ -594,7 +594,9 @@ val LongPressMenu = UserSettingsMenu(
         UserSetting(name = R.string.keyboard_settings_shift_lock) {
             val setting = useSharedPrefsInt(
                 key = Settings.PREF_SHIFT_LOCK_MODE,
-                default = remember { Settings.getInstance().current.mShiftLockMode }
+                // WrenBoard 1.2: Settings can open before the keyboard has loaded its values (null), so fall back to
+                // the same default SettingsValues reads.
+                default = remember { Settings.getInstance().current?.mShiftLockMode ?: Settings.SHIFT_LOCK_MODE_CYCLE }
             )
 
             val modes = mapOf(
@@ -618,7 +620,7 @@ val LongPressMenu = UserSettingsMenu(
         UserSetting(name = R.string.morekey_settings_spacebar_swipe_shortcut) {
             val setting = useSharedPrefsInt(
                 key = Settings.PREF_SPACEBAR_SWIPE_MODE,
-                default = remember { Settings.getInstance().current.mSpacebarSwipeMode }
+                default = remember { Settings.getInstance().current?.mSpacebarSwipeMode ?: Settings.SPACEBAR_MODE_CURSOR }
             )
 
             val modes = mapOf(
@@ -639,7 +641,7 @@ val LongPressMenu = UserSettingsMenu(
         UserSetting(name = R.string.morekey_settings_spacebar_hold_shortcut) {
             val setting = useSharedPrefsInt(
                 key = Settings.PREF_SPACEBAR_HOLD_MODE,
-                default = remember { Settings.getInstance().current.mSpacebarHoldMode }
+                default = remember { Settings.getInstance().current?.mSpacebarHoldMode ?: Settings.SPACEBAR_MODE_LANGUAGE }
             )
 
             val modes = mapOf(
