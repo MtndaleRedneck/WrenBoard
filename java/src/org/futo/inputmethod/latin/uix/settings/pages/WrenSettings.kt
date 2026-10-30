@@ -43,31 +43,32 @@ private val keyPressNames = setOf(
     R.string.typing_settings_keypress_sound_volume,
 )
 
+private val wrenKeyboardLook = listOf(
+    userSettingNavigationItem(
+        title = R.string.theme_settings_title,
+        style = NavigationItemStyle.Misc,
+        navigateTo = "themes",
+        icon = R.drawable.themes
+    ),
+    userSettingNavigationItem(
+        title = R.string.wren_set_toolbar_buttons,
+        style = NavigationItemStyle.Misc,
+        navigateTo = "actions",
+        icon = R.drawable.smile
+    ),
+)
+private val wrenKeyboardLayout get() = KeyboardSettingsMenu.settings
+private val wrenKeyboardFeel get() = TypingSettingsMenu.settings.filter { it.name in keyPressNames }
+
 val WrenKeyboardMenu = UserSettingsMenu(
     title = R.string.wren_set_keyboard,
     navPath = "wren_keyboard", registerNavPath = true,
-    settings = listOf(
-        userSettingNavigationItem(
-            title = R.string.theme_settings_title,
-            style = NavigationItemStyle.Misc,
-            navigateTo = "themes",
-            icon = R.drawable.themes
-        ),
-        userSettingNavigationItem(
-            title = R.string.wren_set_toolbar_buttons,
-            style = NavigationItemStyle.Misc,
-            navigateTo = "actions",
-            icon = R.drawable.smile
-        ),
-    ) + KeyboardSettingsMenu.settings + TypingSettingsMenu.settings.filter { it.name in keyPressNames }
+    settings = wrenKeyboardLook + wrenKeyboardLayout + wrenKeyboardFeel
 )
 
-val WrenTypingMenu = UserSettingsMenu(
-    title = R.string.wren_set_typing,
-    navPath = "wren_typing", registerNavPath = true,
-    settings = LongPressMenu.settings.filter { it.name == R.string.keyboard_settings_shift_lock } +
-        TypingSettingsMenu.settings.filter { it.name !in keyPressNames } +
-        listOf(
+private val wrenTypingShift get() = LongPressMenu.settings.filter { it.name == R.string.keyboard_settings_shift_lock }
+private val wrenTypingTyping get() = TypingSettingsMenu.settings.filter { it.name !in keyPressNames }
+private val wrenTypingWords = listOf(
             userSettingNavigationItem(
                 title = R.string.wren_set_suggestions,
                 subtitle = R.string.wren_set_suggestions_sub,
@@ -87,7 +88,12 @@ val WrenTypingMenu = UserSettingsMenu(
                 navigateTo = "blacklist",
                 icon = R.drawable.file_text
             ),
-        )
+)
+
+val WrenTypingMenu = UserSettingsMenu(
+    title = R.string.wren_set_typing,
+    navPath = "wren_typing", registerNavPath = true,
+    settings = wrenTypingShift + wrenTypingTyping + wrenTypingWords
 )
 
 val WrenClipEmojiMenu = UserSettingsMenu(
@@ -134,6 +140,35 @@ val WrenBackupMenu = UserSettingsMenu(
 )
 
 /** FUTO's original Settings home, whole: swipe typing, languages, actions, theme, payment, help, developer, credits. */
+/**
+ * WrenBoard style: the six group pages render their rows in labelled cards (render 10b: LOOK / LAYOUT / FEEL).
+ * The rows are the same objects as in each menu's `settings` list, so search and the plain FUTO style see them unchanged.
+ */
+val WrenMenuSections: Map<String, List<Pair<Int, List<UserSetting>>>> by lazy {
+    mapOf(
+        "wren_keyboard" to listOf(
+            R.string.wren_sec_look to wrenKeyboardLook,
+            R.string.wren_sec_layout to wrenKeyboardLayout,
+            R.string.wren_sec_feel to wrenKeyboardFeel,
+        ),
+        "wren_typing" to listOf(
+            R.string.wren_sec_shift to wrenTypingShift,
+            R.string.wren_sec_typing to wrenTypingTyping,
+            R.string.wren_sec_words to wrenTypingWords,
+        ),
+        "wren_clipemoji" to listOf(
+            R.string.wren_sec_panels to WrenClipEmojiMenu.settings.take(1),
+            R.string.wren_sec_clipboard to WrenClipEmojiMenu.settings.drop(1).take(1),
+            R.string.wren_sec_emoji to WrenClipEmojiMenu.settings.drop(2),
+        ),
+        "wren_backup" to listOf(R.string.wren_sec_backup to WrenBackupMenu.settings),
+        "wren_futo" to listOf(
+            R.string.wren_sec_futo to WrenFutoMenu.settings.dropLast(1),
+            R.string.wren_sec_style to WrenFutoMenu.settings.takeLast(1),
+        ),
+    )
+}
+
 val WrenFutoMenu = UserSettingsMenu(
     title = R.string.wren_set_futo,
     navPath = "wren_futo", registerNavPath = true,
