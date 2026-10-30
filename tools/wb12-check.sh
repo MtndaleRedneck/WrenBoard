@@ -372,6 +372,7 @@ if leg settings; then
   ensure_ime; note "default IME: $(adb shell settings get secure default_input_method | tr -d '\r')"
   adb shell input keyevent KEYCODE_HOME; sleep 1
   opensettings "" 6
+  dumpui st00; uitext st00 | grep -q "Personal dictionary" && { note "  first-entry personal dictionary page is up; going back to the home"; adb shell input keyevent KEYCODE_BACK; sleep 2; }
   shot st01_settings_home; dumpui st01; T=$(uitext st01)
   adb shell input swipe 540 1700 540 700 400; sleep 1.5; shot st01b_settings_home_scrolled; dumpui st01b; T="$T$(uitext st01b)"
   note "home: ${T:0:700}"
