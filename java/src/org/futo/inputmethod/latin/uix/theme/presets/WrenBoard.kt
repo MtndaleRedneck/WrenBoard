@@ -198,6 +198,8 @@ val WrenBoardTheme = ThemeOption(
             advancedThemeOptions = AdvancedThemeOptions(
                 keyRoundness = 0.78f,
                 textSizeMultiplier = 0.88f,
+                // Symbols sit centred above the letter, as on Ezzy's phone, SwiftKey and the approved render.
+                centerHints = true,
                 keyBorders = true,
                 keyBackgrounds = wrenKeyBackgrounds(context)
             )

@@ -23,6 +23,11 @@ import org.futo.inputmethod.latin.uix.actions.AllActions
 import org.futo.inputmethod.latin.uix.settings.pages.ActionEditorScreen
 import org.futo.inputmethod.latin.uix.settings.pages.ActionsScreen
 import org.futo.inputmethod.latin.uix.settings.pages.WrenAboutMenu
+import org.futo.inputmethod.latin.uix.settings.pages.WrenKeyboardMenu
+import org.futo.inputmethod.latin.uix.settings.pages.WrenTypingMenu
+import org.futo.inputmethod.latin.uix.settings.pages.WrenClipEmojiMenu
+import org.futo.inputmethod.latin.uix.settings.pages.WrenBackupMenu
+import org.futo.inputmethod.latin.uix.settings.pages.WrenFutoMenu
 import org.futo.inputmethod.latin.uix.settings.pages.AdvancedParametersScreen
 import org.futo.inputmethod.latin.uix.settings.pages.AlreadyPaidDialog
 import org.futo.inputmethod.latin.uix.settings.pages.BlacklistScreen
@@ -112,7 +117,12 @@ val SettingsMenus = listOf(
     MiscMenu,
     CreditsScreenLite,
     IMESettingsMenu,
-    WrenAboutMenu
+    WrenAboutMenu,
+    WrenKeyboardMenu,
+    WrenTypingMenu,
+    WrenClipEmojiMenu,
+    WrenBackupMenu,
+    WrenFutoMenu
 ) + AllActions.mapNotNull { it.settingsMenu } + SettingsByLanguage.values
 
 

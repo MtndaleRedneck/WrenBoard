@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- WrenBoard 1.2: Material Symbols Rounded "spellcheck" (Apache License 2.0) -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="960"
+    android:viewportHeight="960">
+  <path android:fillColor="#FFFFFFFF" android:pathData="M564 768 762 570Q773 559 790.0 559.0Q807 559 818.0 570.0Q829 581 829.0 598.0Q829 615 818 626L621 823Q609 835 594.0 841.0Q579 847 564.0 847.0Q549 847 534.0 841.0Q519 835 507 823L422 738Q411 727 411.0 710.0Q411 693 422.0 682.0Q433 671 450.0 671.0Q467 671 478 682ZM254 508 217 613Q212 625 202.0 632.5Q192 640 179 640Q157 640 145.0 622.0Q133 604 141 584L303 149Q308 136 319.5 128.0Q331 120 345 120H377Q391 120 402.5 128.0Q414 136 419 149L581 583Q589 604 576.5 622.0Q564 640 541 640Q527 640 516.0 632.0Q505 624 500 611L464 508ZM282 432H438L362 216H358Z"/>
+</vector>

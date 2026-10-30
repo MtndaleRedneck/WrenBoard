@@ -243,17 +243,26 @@ fun HomeScreen(navController: NavHostController = rememberNavController()) {
                 }) {
                     Icon(Icons.Default.Search, contentDescription = stringResource(
                         R.string.settings_search_menu_title
-                    ))
+                    ), tint = if(useDataStoreValue(org.futo.inputmethod.latin.uix.settings.WrenSettingsStyle))
+                        androidx.compose.material3.MaterialTheme.colorScheme.primary
+                    else androidx.compose.material3.LocalContentColor.current)
                 }
             }
 
             ConditionalMigrateUpdateNotice()
-            ConditionalUnpaidNoticeWithNav(navController)
+            val wrenStyle = useDataStoreValue(org.futo.inputmethod.latin.uix.settings.WrenSettingsStyle)
+            if(wrenStyle) {
+                // WrenBoard 1.2: six groups plus the FUTO entry; FUTO's paid-version notice lives under FUTO.
+                UpdatesCard(navController)
+                WrenHomeList()
+            } else {
+                ConditionalUnpaidNoticeWithNav(navController)
 
-            HomeScreenLite.render(showTitle = false)
+                HomeScreenLite.render(showTitle = false)
 
-            UpdatesCard(navController)
-            FeedbackCard()
+                UpdatesCard(navController)
+                FeedbackCard()
+            }
 
 
             Spacer(modifier = Modifier.height(16.dp))
