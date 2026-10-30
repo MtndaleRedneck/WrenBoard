@@ -6,6 +6,8 @@ on:
         description: "comma-separated test classes"
         required: false
         default: "org.futo.inputmethod.keyboard.internal.KeyboardStateShiftCycleTests,org.futo.inputmethod.keyboard.internal.KeyboardStateMultiTouchTests,org.futo.inputmethod.keyboard.internal.KeyboardStateSingleTouchTests"
+permissions:
+  contents: read
 jobs:
   tests:
     runs-on: ubuntu-latest
@@ -25,21 +27,23 @@ jobs:
         run: |
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;28.2.13676358"
-      - uses: gradle/actions/setup-gradle@v4
+      - uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4.4.3
       - name: Enable KVM
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
       - name: Instrumented keyboard-state tests
-        uses: reactivecircus/android-emulator-runner@v2
+        env:
+          WB_CLASSES: ${{ inputs.classes }}
+        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
         with:
           api-level: 34
           target: google_apis
           arch: x86_64
           profile: Nexus 6
           disable-animations: true
-          script: ./gradlew --no-daemon connectedStableDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=${{ inputs.classes }}
+          script: ./gradlew --no-daemon connectedStableDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=$WB_CLASSES
       - uses: actions/upload-artifact@v4
         if: always()
         with:
