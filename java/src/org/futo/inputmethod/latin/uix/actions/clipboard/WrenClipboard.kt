@@ -277,7 +277,7 @@ fun WrenClipboardPanel(w: WrenClipboardWindow) {
                     manager_close(w, view)
                 }
                 Spacer(Modifier.width(6.dp))
-                Text(stringResource(R.string.action_clipboard_manager_title), color = orange, fontSize = 20.sp)
+                Text(stringResource(R.string.wren_clip_title), color = orange, fontSize = 20.sp)
                 Spacer(Modifier.weight(1f))
                 // Clear all: a header button with a confirmation (Ezzy, Oct 30); pinned clips stay; Undo brings them back.
                 val unpinned = w.history.clipboardHistory.filter { !it.pinned }
@@ -392,7 +392,7 @@ private fun WrenClipCard(w: WrenClipboardWindow, entry: ClipboardEntry, view: Vi
                 }
             )
             .fillMaxWidth()
-            .heightIn(min = 88.dp)
+            .heightIn(min = 52.dp)
             .wbPos("CLIPCARD i=$index pinned=${entry.pinned}")
             .clip(shape)
             .background(WrenPanelColors.Card, shape)

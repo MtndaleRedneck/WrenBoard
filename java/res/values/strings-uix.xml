@@ -701,6 +701,7 @@
     <string name="wren_set_style">WrenBoard look for Settings</string>
     <string name="wren_back">Back</string>
     <string name="wren_undo">Undo</string>
+    <string name="wren_clip_title">Clipboard</string>
     <string name="wren_clip_save">Save</string>
     <string name="wren_clip_clear_all">Clear all</string>
     <string name="wren_clip_clear_all_confirm">Delete %1$d clips? Pinned clips stay.</string>

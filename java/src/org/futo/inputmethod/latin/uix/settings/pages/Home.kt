@@ -28,6 +28,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.rememberNavController
 import org.futo.inputmethod.latin.ATLCompat
@@ -232,7 +233,11 @@ fun HomeScreen(navController: NavHostController = rememberNavController()) {
         ) {
             Spacer(modifier = Modifier.height(24.dp))
             Row(Modifier.padding(16.dp)) {
-                Text(stringResource(R.string.english_ime_settings), style = Typography.Heading.Medium, modifier = Modifier
+                Text(stringResource(R.string.english_ime_settings),
+                    style = if(useDataStoreValue(org.futo.inputmethod.latin.uix.settings.WrenSettingsStyle))
+                        Typography.Heading.Medium.copy(fontSize = 26.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+                    else Typography.Heading.Medium,
+                    modifier = Modifier
                     .align(CenterVertically)
                     .weight(1.0f))
 
@@ -252,8 +257,8 @@ fun HomeScreen(navController: NavHostController = rememberNavController()) {
             ConditionalMigrateUpdateNotice()
             val wrenStyle = useDataStoreValue(org.futo.inputmethod.latin.uix.settings.WrenSettingsStyle)
             if(wrenStyle) {
-                // WrenBoard 1.2: six groups plus the FUTO entry; FUTO's paid-version notice lives under FUTO.
-                UpdatesCard(navController)
+                // WrenBoard 1.2: six groups plus the FUTO entry; FUTO's paid-version notice lives under FUTO, and
+                // update checks under About (automatic checks and the update prompt keep running).
                 WrenHomeList()
             } else {
                 ConditionalUnpaidNoticeWithNav(navController)

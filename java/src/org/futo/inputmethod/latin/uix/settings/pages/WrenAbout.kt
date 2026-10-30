@@ -14,6 +14,8 @@ import org.futo.inputmethod.latin.uix.settings.userSettingDecorationOnly
 import org.futo.inputmethod.latin.uix.settings.userSettingNavigationItem
 import org.futo.inputmethod.latin.uix.theme.Typography
 import org.futo.inputmethod.updates.openManualUpdateCheck
+import org.futo.inputmethod.updates.UpdatesCard
+import org.futo.inputmethod.latin.uix.LocalNavController
 
 /** WrenBoard 1.2 About page: version, update check, licenses. Opened by the toolbar Info button and from Settings. */
 val WrenAboutMenu = UserSettingsMenu(
@@ -27,6 +29,9 @@ val WrenAboutMenu = UserSettingsMenu(
                 color = Color(0xFFF2F2F2),
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)
             )
+        },
+        userSettingDecorationOnly {
+            LocalNavController.current?.let { UpdatesCard(it) }
         },
         userSettingNavigationItem(
             title = R.string.settings_check_for_updates_manually,
