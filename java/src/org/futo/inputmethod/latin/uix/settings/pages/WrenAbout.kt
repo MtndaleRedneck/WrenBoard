@@ -33,11 +33,7 @@ val WrenAboutMenu = UserSettingsMenu(
         userSettingDecorationOnly {
             LocalNavController.current?.let { UpdatesCard(it) }
         },
-        userSettingNavigationItem(
-            title = R.string.settings_check_for_updates_manually,
-            style = NavigationItemStyle.MiscNoArrow,
-            navigate = { nav -> nav.context.openManualUpdateCheck() }
-        ),
+        // (FUTO's "Check for updates manually" row stays on the FUTO page; the card above has "Check now".)
         userSettingNavigationItem(
             title = R.string.credits_menu_title,
             style = NavigationItemStyle.MiscNoArrow,
