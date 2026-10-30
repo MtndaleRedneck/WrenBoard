@@ -101,12 +101,14 @@ if leg setup; then
   note "== SETUP: no wall, settings usable before WrenBoard is on =="
   adb shell ime disable "$IME" >/dev/null 2>&1
   adb shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1; sleep 6
-  shot s01_settings_not_enabled; dumpui s01; T=$(uitext s01); note "texts: ${T:0:400}"
+  dumpui s01; sleep 2; shot s01_settings_not_enabled; dumpui s01; T=$(uitext s01); note "texts: ${T:0:400}"
+  # first entry offers the personal dictionary once (1.x behaviour); Back shows the Settings home under the banner
+  if echo "$T" | grep -q "Personal dictionary"; then adb shell input keyevent KEYCODE_BACK; sleep 2; shot s01b_settings_home_not_enabled; dumpui s01b; T="$T$(uitext s01b)"; note "  after Back: $(uitext s01b | cut -c1-200)"; fi
   echo "$T" | grep -q "WrenBoard is turned off" && pass "banner when not enabled" || fail "banner when not enabled"
   echo "$T" | grep -q "Step 1\|Step 2\|Open Input Method Settings" && fail "old setup wall still shown" || pass "no setup wall (not enabled)"
-  echo "$T" | grep -qi "Keyboard\|Languages\|Typing" && pass "settings items reachable while not enabled" || fail "settings items not visible while not enabled"
+  echo "$T" | grep -q "Keyboard\|Typing" && pass "settings items reachable while not enabled" || fail "settings items not visible while not enabled"
   # a settings item is usable: open the first navigation row that is not the banner
-  XY=$(node_center s01 "Typing"); [ -z "$XY" ] && XY=$(node_center s01 "Keyboard &amp; Typing")
+  XY=$( [ -f shots/s01b.xml ] && node_center s01b "Typing"); [ -z "$XY" ] && XY=$(node_center s01 "Typing"); [ -z "$XY" ] && XY=$(node_center s01 "Keyboard &amp; Typing")
   if [ -n "$XY" ]; then adb shell input tap $XY; sleep 2; shot s02_settings_subpage_not_enabled; dumpui s02; note "subpage texts: $(uitext s02 | cut -c1-300)"; adb shell input keyevent KEYCODE_BACK; sleep 1; fi
   for i in 1 2 3 4 5; do adb shell ime enable "$IME" >/dev/null 2>&1; sleep 1; adb shell ime list -s | tr -d '\r' | grep -qx "$IME" && break; done
   adb shell am force-stop "$PKG"; sleep 1; adb shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1; sleep 6
@@ -280,7 +282,9 @@ if leg skin; then
   note "== SKIN: key preview box, letter long-press popup, shift states =="
   focus_target; clear_field; geom skin
   shot k10_letters_lower_or_auto
-  GXY=$(kxy label g) && { read -r X Y <<< "$GXY"; adb shell input motionevent DOWN $X $Y; sleep 0.45; shot k11_key_preview_g; release $X $Y; }
+  dbg "spint:pref_key_longpress_timeout=2500" 1.0   # hold long enough for the screenshot to catch the plain preview
+  GXY=$(kxy label g) && { read -r X Y <<< "$GXY"; adb shell input motionevent DOWN $X $Y; sleep 0.3; shot k11_key_preview_g; release $X $Y; }
+  dbg "sprm:pref_key_longpress_timeout" 1.0
   EXY=$(kxy label e) && { read -r X Y <<< "$EXY"; adb shell input motionevent DOWN $X $Y; sleep 1.4; shot k12_longpress_e_popup; release $X $Y; }
   clear_field
   E=$(elem s0); note "element at start: $E"
