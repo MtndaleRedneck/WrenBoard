@@ -112,6 +112,7 @@ import org.futo.inputmethod.latin.uix.LocalKeyboardScheme
 import org.futo.inputmethod.latin.uix.LocalManager
 import org.futo.inputmethod.latin.uix.PersistentActionState
 import org.futo.inputmethod.latin.uix.SettingsKey
+import org.futo.inputmethod.latin.uix.getSetting
 import org.futo.inputmethod.latin.uix.actions.emoji.EmojiItem
 import org.futo.inputmethod.latin.uix.actions.emoji.EmojiView
 import org.futo.inputmethod.latin.uix.settings.useDataStore
@@ -1165,7 +1166,11 @@ val EmojiAction = Action(
 
         state
     },
-    windowImpl = { manager, persistentState ->
+    windowImpl = windowImpl@{ manager, persistentState ->
+        // WrenBoard 1.2: SwiftKey-style emoji panel (WrenEmoji.kt); FUTO's panel stays behind the setting.
+        if (manager.getContext().getSetting(org.futo.inputmethod.latin.uix.actions.clipboard.WrenSwiftKeyPanels)) {
+            return@windowImpl WrenEmojiWindow(manager)
+        }
         object : ActionWindow() {
             private val searchText = mutableStateOf("")
             private val searching = mutableStateOf(false)

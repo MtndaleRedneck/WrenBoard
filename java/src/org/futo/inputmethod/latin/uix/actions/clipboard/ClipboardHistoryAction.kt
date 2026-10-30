@@ -1012,7 +1012,13 @@ val ClipboardHistoryAction = Action(
     },
     altPressImpl = PasteAction.simplePressImpl,
     persistentStateInitialization = PersistentStateInitialization.OnKeyboardLoad,
-    windowImpl = { manager, persistent ->
+    windowImpl = windowImpl@{ manager, persistent ->
+        // WrenBoard 1.2: SwiftKey-style clipboard (WrenClipboard.kt); FUTO's panel stays behind the setting.
+        if (manager.getContext().getSetting(WrenSwiftKeyPanels)) {
+            val wrenHistory = persistent as ClipboardHistoryManager
+            manager.getLifecycleScope().launch { wrenHistory.pruneOldItems() }
+            return@windowImpl WrenClipboardWindow(manager, wrenHistory)
+        }
         val searching = mutableStateOf(false)
         val searchText = mutableStateOf("")
         val unlocked = !manager.isDeviceLocked()

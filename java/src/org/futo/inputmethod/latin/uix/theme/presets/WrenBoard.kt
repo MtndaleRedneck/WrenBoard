@@ -97,6 +97,21 @@ private fun wrenKeyBackgrounds(context: android.content.Context) = KeyedBitmaps(
                 background = popupBox(context)
             )
         ),
+        // Key preview: a raised key-shaped box (not the tall balloon), lighter than the key with a light border.
+        KeyedBitmap(
+            qualifiers = setOf(KeyQualifier.Popup),
+            bitmap = KeyBackground(
+                foregroundColor = AccentOrange.toArgb(),
+                hintColor = HintGrey,
+                outlineColor = null,
+                background = keyGradient(context, 0xFF5E5E5E.toInt(), 0xFF262626.toInt()).apply {
+                    setStroke(
+                        TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 1.0f, context.resources.displayMetrics).toInt().coerceAtLeast(2),
+                        0xFFB4B4B4.toInt()
+                    )
+                }
+            )
+        ),
         KeyedBitmap(
             qualifiers = setOf(KeyQualifier.VisualStyle(KeyVisualStyle.MoreKey), KeyQualifier.Pressed),
             bitmap = KeyBackground(

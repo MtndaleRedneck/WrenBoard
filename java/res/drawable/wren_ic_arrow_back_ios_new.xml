@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- WrenBoard 1.2: Material Symbols Rounded "arrow_back_ios_new" (Apache License 2.0) -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="960"
+    android:viewportHeight="960">
+  <path android:fillColor="#FFFFFFFF" android:pathData="M382 480 676 774Q691 789 690.5 809.0Q690 829 675 844Q660 859 640.0 859.0Q620 859 605 844L297 537Q285 525 279.0 510.0Q273 495 273.0 480.0Q273 465 279.0 450.0Q285 435 297 423L605 115Q620 100 640.5 100.5Q661 101 676 116Q691 131 691.0 151.0Q691 171 676 186Z"/>
+</vector>

@@ -6,7 +6,7 @@
 set -u
 APK="$1"; TAPK="$2"
 PKG=com.wrenboard.keyboard; TPKG=com.wrenboard.imetarget
-LEGS=",${WB_LEGS:-setup,keyboard,period,caps,shift,clip,update},"
+LEGS=",${WB_LEGS:-setup,keyboard,period,caps,shift,clip,update,toolbar,skin,emoji,clipboard},"
 mkdir -p shots; R=shots/results.txt; : > "$R"
 FAILS=0
 note() { echo "$*" | tee -a "$R"; }
@@ -19,7 +19,7 @@ uitext() { sed 's/>/>\n/g' "shots/$1.xml" | grep -o 'text="[^"]*"' | sed 's/text
 node_center() { # node_center <xmlname> <exact text>
   sed 's/>/>\n/g' "shots/$1.xml" | grep "text=\"$2\"" | head -1 | grep -o 'bounds="\[[0-9]*,[0-9]*\]\[[0-9]*,[0-9]*\]"' | grep -o '[0-9]*' | tr '\n' ' ' | awk '{print int(($1+$3)/2), int(($2+$4)/2)}'
 }
-dbg() { adb shell am broadcast -a com.wrenboard.keyboard.WBDBG -p "$PKG" --es cmd "$1" >/dev/null 2>&1; sleep "${2:-0.6}"; }
+dbg() { adb shell "am broadcast -a com.wrenboard.keyboard.WBDBG -p $PKG --es cmd '$1'" >/dev/null 2>&1; sleep "${2:-0.6}"; }  # quoted for the device shell ('|' in seedupdate)
 geom() { adb logcat -c; dbg geom 1.0; adb logcat -d -s WBDBG:I > shots/geom_$1.txt; [ "${2:-use}" = use ] && cp shots/geom_$1.txt shots/geom.txt; return 0; }
 kxy() { python3 tools/wb12_kv.py shots/geom.txt xy KEY "$1" "$2"; }
 tapk() { local xy; xy=$(kxy label "$1") || { fail "no key labelled '$1' in geometry"; return 1; }; adb shell input tap $xy; sleep 0.35; }
@@ -146,8 +146,9 @@ if leg caps; then
   note "== CAPS LOCK word must not poison later suggestions (P0-2) =="
   clear_field; type_word ok; tapcode 32; clear_field
   E=$(elem c0); note "element at start: $E"
-  for t in 1 2 3 4; do [ "$E" = "3" ] && break; tapcode -1; E=$(elem c$t); note "after shift tap $t: element $E"; done
-  [ "$E" = "3" ] && pass "caps lock reached by tapping shift" || fail "caps lock not reached (element $E)"
+  # caps lock is element 3 or 4 (FUTO's KeyboardState does not tell them apart; both draw the caps-lock key)
+  for t in 1 2 3 4; do case "$E" in 3|4) break;; esac; tapcode -1; E=$(elem c$t); note "after shift tap $t: element $E"; done
+  case "$E" in 3|4) pass "caps lock reached by tapping shift (element $E)";; *) fail "caps lock not reached (element $E)";; esac
   shot c01_caps_lock
   type_word nsnana   # letters tapped at their positions; caps lock makes them NSNANA
   for t in 1 2 3; do [ "$E" = "0" ] && break; tapcode -1; E=$(elem cx$t); done
@@ -230,9 +231,112 @@ if leg skin; then
   clear_field
   E=$(elem s0); note "element at start: $E"
   for t in 1 2 3 4; do tapcode -1; E=$(elem s$t); case "$E" in 1|2) shot k13_shift_upper; break;; esac; done
-  for t in 1 2 3; do [ "$E" = "3" ] && break; tapcode -1; E=$(elem sl$t); done
-  [ "$E" = "3" ] && { shot k14_caps_lock; pass "caps lock reached for the screenshot"; } || note "INFO: caps lock not reached (element $E)"
+  for t in 1 2 3; do case "$E" in 3|4) break;; esac; tapcode -1; E=$(elem sl$t); done
+  case "$E" in 3|4) shot k14_caps_lock; pass "caps lock reached for the screenshot";; *) note "INFO: caps lock not reached (element $E)";; esac
   for t in 1 2 3; do [ "$E" = "0" ] && break; tapcode -1; E=$(elem so$t); done
+fi
+
+pos() { # pos <file> <tag regex> -> "cx cy" of the last WINDOW line matching
+  grep -E "WINDOW $2" "$1" | tail -1 | sed -n 's/.*cx=\([0-9-]*\) cy=\([0-9-]*\).*/\1 \2/p'
+}
+wlog() { adb logcat -d -s WBDBG:I | tr -d '\r' > "shots/$1.txt"; }
+
+if leg emoji; then
+  note "== EMOJI panel (SwiftKey replica): pages, Recents with Lock/Unlock, search, GIF tab =="
+  focus_target; clear_field
+  adb logcat -c; dbg "open:emoji" 2.5; wlog em0
+  shot e01_emoji_smileys
+  grep -q 'WINDOW open emoji' shots/em0.txt && pass "emoji panel opens" || fail "emoji panel did not open"
+  grep -q 'EMOJI page=Smileys' shots/em0.txt && pass "opens on the Smileys page" || fail "did not open on Smileys"
+  G=$(grep 'WINDOW EMOJIGRID' shots/em0.txt | tail -1); note "grid: $G"
+  GX=$(echo "$G" | sed -n 's/.*cx=\([0-9]*\).*/\1/p'); GY=$(echo "$G" | sed -n 's/.*cy=\([0-9]*\).*/\1/p')
+  GW=$(echo "$G" | sed -n 's/.* w=\([0-9]*\).*/\1/p'); GH=$(echo "$G" | sed -n 's/.* h=\([0-9]*\).*/\1/p')
+  if [ -n "$GW" ]; then
+    CW=$((GW/8)); RH=$(( 503 * 420 / 1600 )); LEFT=$((GX-GW/2)); TOP=$((GY-GH/2))
+    note "cell ${CW}x${RH} grid top-left $LEFT,$TOP"
+    # type three emojis from the first row so Recents has something
+    for c in 0 1 2; do adb shell input tap $((LEFT+CW*c+CW/2)) $((TOP+RH/2)); sleep 0.5; done
+    F=$(field); note "field after 3 emoji taps: '$F'"
+    [ -n "$F" ] && pass "tapping emojis types them" || fail "tapping emojis typed nothing"
+    # long-press an emoji that has skin tones (row 2 has hands on most fonts; take first cell of row 1 as fallback)
+    adb logcat -c
+    adb shell input motionevent DOWN $((LEFT+CW/2)) $((TOP+RH/2)); sleep 1.2; adb shell input motionevent UP $((LEFT+CW/2)) $((TOP+RH/2)); sleep 1.0
+    shot e02_longpress_popup; wlog em1
+    grep -q 'EMOJI popup' shots/em1.txt && pass "long-press opens the popup ($(grep 'EMOJI popup' shots/em1.txt | tail -1 | sed 's/.*EMOJI //'))" || fail "long-press opened no popup"
+    L=$(pos shots/em1.txt 'EMOJILOCKBTN')
+    if [ -n "$L" ]; then adb logcat -c; adb shell input tap $L; sleep 1.0; wlog em2
+      grep -q 'EMOJI lock' shots/em2.txt && pass "Lock locks the emoji" || fail "Lock did nothing"
+    else fail "no Lock button in the popup"; fi
+    # Recents page via its tab
+    adb logcat -c; dbg "close" 1.0; dbg "open:emoji" 2.0; wlog em3
+    T=$(pos shots/em3.txt 'EMOJITAB i=0 ')
+    if [ -n "$T" ]; then adb logcat -c; adb shell input tap $T; sleep 1.5; wlog em4; shot e03_recents_locked
+      grep -q 'EMOJI page=Recent' shots/em4.txt && pass "clock tab opens the separate Recents page" || fail "Recents page not shown"
+      R=$(grep 'EMOJI recents' shots/em4.txt | tail -1); note "$R"
+      echo "$R" | grep -q 'locked=[1-9]' && pass "locked emoji sits on Recents ($R)" || fail "no locked emoji on Recents ($R)"
+      # unlock: long-press the first (locked) cell, tap Unlock
+      adb logcat -c
+      adb shell input motionevent DOWN $((LEFT+CW/2)) $((TOP+RH/2)); sleep 1.2; adb shell input motionevent UP $((LEFT+CW/2)) $((TOP+RH/2)); sleep 1.0
+      shot e04_unlock_popup; wlog em5
+      grep -q 'locked=true' shots/em5.txt && pass "long-press on a locked emoji offers Unlock" || fail "popup on the locked emoji does not offer Unlock"
+      L=$(pos shots/em5.txt 'EMOJILOCKBTN'); [ -n "$L" ] && { adb logcat -c; adb shell input tap $L; sleep 1.0; wlog em6; grep -q 'EMOJI unlock' shots/em6.txt && pass "Unlock unlocks" || fail "Unlock did nothing"; }
+    else fail "no Recents tab position"; fi
+    # search
+    S=$(pos shots/em3.txt 'EMOJISEARCH')
+    if [ -n "$S" ]; then adb logcat -c; adb shell input tap $S; sleep 2.0; geom emsearch keep >/dev/null
+      for ch in h a p p y; do XY=$(python3 tools/wb12_kv.py shots/geom_emsearch.txt xy KEY label "$ch") && adb shell input tap $XY; sleep 0.3; done
+      sleep 1.0; wlog em7; shot e05_search_happy
+      Q=$(grep 'EMOJI search' shots/em7.txt | tail -1); note "$Q"
+      echo "$Q" | grep -q 'results=[1-9]' && pass "emoji search finds results ($Q)" || fail "emoji search found nothing ($Q)"
+    else fail "no search button position"; fi
+    adb logcat -c; dbg "close" 1.0; dbg "open:emoji" 2.0; wlog em8
+    GT=$(pos shots/em8.txt 'EMOJIGIFTAB'); [ -n "$GT" ] && { adb shell input tap $GT; sleep 1.2; shot e06_gif_tab; pass "GIF tab opens (placeholder)"; } || fail "no GIF tab"
+  else fail "no emoji grid geometry"; fi
+  dbg close 1.0
+fi
+
+if leg clipboard; then
+  note "== CLIPBOARD panel (SwiftKey replica): masonry, 3-dot menu, swipe delete with Undo, Clear all with confirmation =="
+  focus_target; clear_field
+  for t in "See_you_at_the_station_at_six" "https://www.example.com/a/long/sample/link/for/the/clipboard/check" "Shopping:_milk,_eggs,_bread,_coffee,_apples,_rice_and_a_few_onions_for_the_soup_on_Sunday" "AB12-CD34-EF56" "Meeting_moved_to_Thursday"; do
+    dbg "clipset:$t" 1.0
+  done
+  adb logcat -c; dbg "open:clipboard_history" 2.5; wlog cl0
+  shot cl01_clipboard
+  N=$(grep 'CLIP shown=' shots/cl0.txt | tail -1 | sed 's/.*shown=//'); note "clips shown: $N"
+  [ "${N:-0}" -ge 5 ] && pass "clipboard shows the copied clips ($N)" || fail "clipboard shows ${N:-0} clips"
+  D=$(pos shots/cl0.txt 'CLIPDOTS i=0 ')
+  if [ -n "$D" ]; then
+    adb logcat -c; adb shell input tap $D; sleep 1.2; wlog cl1; shot cl02_menu
+    M=$(grep 'WINDOW CLIPMENU' shots/cl1.txt | sed 's/.*name=\([A-Za-z]*\).*/\1/' | awk '!s[$0]++' | tr '\n' ' '); note "menu: $M"
+    [ "$M" = "Pin Paste Edit Delete " ] && pass "3-dot menu is Pin, Paste, Edit, Delete" || fail "3-dot menu is '$M'"
+    P=$(pos shots/cl1.txt 'CLIPMENU name=Pin'); [ -n "$P" ] && { adb logcat -c; adb shell input tap $P; sleep 1.2; wlog cl2; shot cl03_pinned
+      grep -q 'CLIPCARD i=[0-9]* pinned=true' shots/cl2.txt && pass "Pin pins the clip" || fail "Pin did not pin"; }
+  else fail "no 3-dot position"; fi
+  adb logcat -c; dbg close 0.8; dbg "open:clipboard_history" 2.0; wlog cl3
+  C=$(pos shots/cl3.txt 'CLIPCARD i=1 ')
+  if [ -n "$C" ]; then read -r X Y <<< "$C"
+    adb logcat -c; adb shell input swipe $X $Y $((X-600)) $Y 250; sleep 1.0; wlog cl4; shot cl04_swiped_undo
+    grep -q 'CLIP removed=1' shots/cl4.txt && pass "swipe deletes the clip" || fail "swipe did not delete"
+    U=$(pos shots/cl4.txt 'CLIPUNDO'); [ -n "$U" ] && { adb logcat -c; adb shell input tap $U; sleep 1.0; wlog cl5; shot cl05_after_undo
+      grep -q 'CLIP undo restored=1' shots/cl5.txt && pass "Undo brings the swiped clip back" || fail "Undo did not restore"; } || fail "no Undo bar after swipe"
+  else fail "no card position"; fi
+  adb logcat -c; dbg close 0.8; dbg "open:clipboard_history" 2.0; wlog cl6
+  D=$(pos shots/cl6.txt 'CLIPDOTS i=2 ')
+  if [ -n "$D" ]; then adb logcat -c; adb shell input tap $D; sleep 1.0; wlog cl7
+    P=$(pos shots/cl7.txt 'CLIPMENU name=Delete'); [ -n "$P" ] && { adb logcat -c; adb shell input tap $P; sleep 1.0; wlog cl8
+      grep -q 'CLIP removed=1' shots/cl8.txt && pass "menu Delete deletes" || fail "menu Delete did nothing"
+      U=$(pos shots/cl8.txt 'CLIPUNDO'); [ -n "$U" ] && { adb logcat -c; adb shell input tap $U; sleep 1.0; wlog cl9; grep -q 'CLIP undo restored=1' shots/cl9.txt && pass "Undo after menu Delete" || fail "Undo after menu Delete failed"; }; }
+  fi
+  adb logcat -c; dbg close 0.8; dbg "open:clipboard_history" 2.0; wlog cla
+  CA=$(pos shots/cla.txt 'CLIPCLEARALL')
+  if [ -n "$CA" ]; then adb logcat -c; adb shell input tap $CA; sleep 1.0; wlog clb; shot cl06_clear_all_confirm
+    B=$(pos shots/clb.txt 'DIALOGBTN text=Clear_all'); [ -n "$B" ] && pass "Clear all asks first" || fail "Clear all showed no confirmation"
+    [ -n "$B" ] && { adb logcat -c; adb shell input tap $B; sleep 1.2; wlog clc; shot cl07_cleared_undo
+      grep -q 'CLIP removed=' shots/clc.txt && pass "Clear all clears unpinned clips ($(grep 'CLIP removed=' shots/clc.txt | tail -1 | sed 's/.*CLIP //'))" || fail "Clear all did nothing"
+      U=$(pos shots/clc.txt 'CLIPUNDO'); [ -n "$U" ] && { adb logcat -c; adb shell input tap $U; sleep 1.0; wlog cld; grep -q 'CLIP undo restored' shots/cld.txt && pass "Undo after Clear all" || fail "Undo after Clear all failed"; }; }
+  else fail "no Clear all button"; fi
+  dbg close 1.0
 fi
 
 if leg update; then

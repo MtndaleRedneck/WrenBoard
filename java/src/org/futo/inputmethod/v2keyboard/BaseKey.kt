@@ -419,10 +419,14 @@ data class BaseKey(
         }
 
         var moreKeys = moreKeysBuilder.build(shifted)
-        if(attributes.fastMoreKeys == true && moreKeys.specs.isNotEmpty() && moreKeys.specs.none { it.mCode == code && code > 0 }) {
+        if(attributes.fastMoreKeys == true && moreKeys.specs.isNotEmpty()) {
+            // WrenBoard: when the list already places the key itself (quick period: ! , . ?), keep it in that
+            // place, marked so the duplicate filter does not drop it; otherwise put it first, as FUTO does.
+            val selfIndex = if(code > 0) moreKeys.specs.indexOfFirst { it.mCode == code } else -1
             moreKeys = moreKeys.copy(
                 specs = moreKeys.specs.toMutableList().apply {
-                    add(0, MoreKeySpec(expandedSpec ?: spec, false, params.mId.locale, false))
+                    val self = MoreKeySpec(expandedSpec ?: spec, false, params.mId.locale, false)
+                    if(selfIndex >= 0) set(selfIndex, self) else add(0, self)
                 }
             )
         }

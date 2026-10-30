@@ -455,7 +455,7 @@ class GeneralIME(val helper: IMEHelper) : IMEInterface, WordLearner, SuggestionS
             )
         }
 
-        showSuggestionStrip(words)
+        showSuggestionStrip(starterWordsIfNeeded(words, inputStyle, sequenceNumber))
         when(inputStyle) {
             SuggestedWords.INPUT_STYLE_TAIL_BATCH -> {
                 val updateBatch = {
@@ -795,8 +795,41 @@ class GeneralIME(val helper: IMEHelper) : IMEInterface, WordLearner, SuggestionS
     }
 
     override fun setNeutralSuggestionStrip() {
+        val starter = starterWordsIfNeeded(SuggestedWords.getEmptyInstance(), SuggestedWords.INPUT_STYLE_TYPING, sequenceId.get())
+        if (!starter.isEmpty) {
+            showSuggestionStrip(starter)
+            return
+        }
         inputLogic.setSuggestedWords(SuggestedWords.getEmptyInstance())
         helper.setNeutralSuggestionStrip(expandableCfg)
+    }
+
+    /**
+     * WrenBoard P0-7: an empty field shows starter words. The prediction path (dictionary and the user's own
+     * typing history, plus the transformer when it is on) is asked first; only when it offers nothing in an
+     * empty field do the plain starters below stand in, so the strip is never blank. Never in fields that
+     * take no suggestions (passwords and the like), and only while the setting is on.
+     */
+    private fun starterWordsIfNeeded(words: SuggestedWords, inputStyle: Int, sequenceNumber: Int): SuggestedWords {
+        try {
+            if (!words.isEmpty) return words
+            if (inputStyle == SuggestedWords.INPUT_STYLE_TAIL_BATCH || inputStyle == SuggestedWords.INPUT_STYLE_UPDATE_BATCH) return words
+            if (inputLogic.mWordComposer.isComposingWord) return words
+            if (!settings.current.needsToLookupSuggestions() || !settings.current.isSuggestionsEnabledPerUserSettings) return words
+            if (!helper.context.getSetting(StarterWordsSetting)) return words
+            if (!inputLogic.mConnection.isConnected) return words
+            val before = inputLogic.mConnection.getTextBeforeCursor(1, 0)
+            if (!before.isNullOrEmpty()) return words
+            val list = ArrayList<SuggestedWordInfo>()
+            listOf("I", "The", "You").forEach {
+                list.add(SuggestedWordInfo(it, "", SuggestedWordInfo.MAX_SCORE, SuggestedWordInfo.KIND_PREDICTION,
+                    Dictionary.DICTIONARY_HARDCODED, SuggestedWordInfo.NOT_AN_INDEX, SuggestedWordInfo.NOT_A_CONFIDENCE))
+            }
+            if (BuildConfig.DEBUG) Log.i("WBDBG", "STARTER fallback")
+            return SuggestedWords(list, null, null, false, false, false, inputStyle, sequenceNumber)
+        } catch (e: Exception) {
+            return words
+        }
     }
 
     override fun showSuggestionStrip(words: SuggestedWords?) {

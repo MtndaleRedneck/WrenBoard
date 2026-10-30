@@ -91,6 +91,11 @@ object WbDebug {
                             ime.setSettingBlocking(org.futo.inputmethod.updates.LAST_UPDATE_CHECK_FAILED, false)
                             Log.i(TAG, "SEEDED update ${parts[0]}")
                         }
+                        cmd.startsWith("clipset:") -> {
+                            // clipset:<text> : put text on the system clipboard (the history panel records it)
+                            val cm = ime.getSystemService(android.content.ClipboardManager::class.java)
+                            cm.setPrimaryClip(android.content.ClipData.newPlainText("wbdbg", cmd.removePrefix("clipset:").replace('_', ' ')))
+                        }
                         cmd.startsWith("settings:") -> {
                             org.futo.inputmethod.latin.uix.settings.SettingsActivity.openToNavDest(ime, cmd.removePrefix("settings:").ifEmpty { null })
                         }

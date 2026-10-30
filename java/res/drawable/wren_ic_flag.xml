@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- WrenBoard 1.2: Material Symbols Rounded "flag" (Apache License 2.0) -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="960"
+    android:viewportHeight="960">
+  <path android:fillColor="#FFFFFFFF" android:pathData="M280 560V800Q280 817 268.5 828.5Q257 840 240.0 840.0Q223 840 211.5 828.5Q200 817 200 800V200Q200 183 211.5 171.5Q223 160 240 160H527Q541 160 552.0 169.0Q563 178 566 192L576 240H760Q777 240 788.5 251.5Q800 263 800 280V600Q800 617 788.5 628.5Q777 640 760 640H553Q539 640 528.0 631.0Q517 622 514 608L504 560ZM586 560H720V320H543Q529 320 518.0 311.0Q507 302 504 288L494 240H280V480H537Q551 480 562.0 489.0Q573 498 576 512ZM500 400Q500 400 500.0 400.0Q500 400 500 400Q500 400 500.0 400.0Q500 400 500 400Z"/>
+</vector>

@@ -43,6 +43,10 @@ val AllActionsMap = mapOf(
     "left" to ArrowLeftAction,
     "right" to ArrowRightAction,
     "font_typer" to FontTyperAction,
+    // WrenBoard 1.2 (appended so existing action key codes do not move)
+    "gif" to GifAction,
+    "share" to ShareAction,
+    "info" to InfoAction,
 )
 
 val ActionToId = AllActionsMap.entries.associate { it.value to it.key }
@@ -264,13 +268,15 @@ fun String.toActionList(): List<Action> = split(",").mapNotNull { AllActionsMap[
 val DefaultActionSettings = mapOf(
     ActionCategory.ActionKey to listOf(EmojiAction),
     ActionCategory.PinnedKey to listOf(),
-    // Approved layout: seven inline toolbar actions in this order (emoji also stays on the bottom-row action key)
-    ActionCategory.Favorites to listOf(VoiceInputAction, EmojiAction, UndoAction, RedoAction, ClipboardHistoryAction, ThemeAction, SettingsAction),
-    ActionCategory.More to listOf(), // Remaining actions get populated automatically by ensureWellFormed
+    // WrenBoard 1.2 approved toolbar (render 03/10c): seven buttons then More, in this order
+    // (emoji also stays on the bottom-row action key)
+    ActionCategory.Favorites to listOf(ClipboardHistoryAction, EmojiAction, GifAction, VoiceInputAction, ShareAction, InfoAction, SettingsAction),
+    // Hidden behind More (render 10c); everything else not listed is populated by ensureWellFormed
+    ActionCategory.More to listOf(UndoAction, RedoAction, ThemeAction, TextEditAction),
     // Crossed out in the approved action list: stored in Settings (re-enable via the action editor)
     ActionCategory.Disabled to listOf(
         MemoryDebugAction, SystemVoiceInputAction, BugViewerAction,
-        CopyAction, CutAction, PasteAction, SelectAllAction, TextEditAction,
+        CopyAction, CutAction, PasteAction, SelectAllAction,
         KeyboardModeAction, FontTyperAction, SwitchLanguageAction,
         ArrowUpAction, ArrowDownAction, ArrowRightAction
     )
