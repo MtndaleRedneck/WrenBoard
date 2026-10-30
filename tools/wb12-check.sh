@@ -90,11 +90,16 @@ if leg setup; then
   XY=$(node_center s03 "Switch")
   if [ -n "$XY" ]; then adb shell input tap $XY; sleep 2; shot s04_switch_picker; dumpui s04; P=$(uitext s04); note "picker texts: ${P:0:300}"
     echo "$P" | grep -qi "keyboard\|input method\|WrenBoard" && pass "Switch opens the keyboard picker" || fail "Switch did not open the picker"
-    adb shell input keyevent KEYCODE_BACK; sleep 1
+    # pick WrenBoard in the picker, as a person would
+    WXY=$(node_center s04 "WrenBoard"); if [ -n "$WXY" ]; then adb shell input tap $WXY; sleep 2; else adb shell input keyevent KEYCODE_BACK; sleep 1; fi
+    note "  default IME after picking: $(adb shell settings get secure default_input_method | tr -d '\r')"
   else fail "no Switch button found"; fi
   adb shell input keyevent KEYCODE_HOME; sleep 1
+  # force-stop of the package that hosts the current keyboard makes Android fall back to another keyboard,
+  # so the keyboard is chosen again after the stop (a person never force-stops it).
+  adb shell am force-stop "$PKG"; sleep 1
   ensure_ime || note "  could not make WrenBoard the default keyboard"
-  adb shell am force-stop "$PKG"; adb shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1; sleep 6
+  adb shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1; sleep 6
   shot s05_settings_active; dumpui s05; T=$(uitext s05)
   if echo "$T" | grep -q "WrenBoard is turned off\|WrenBoard is not your keyboard"; then
     note "banner still up after relaunch; default IME is $(adb shell settings get secure default_input_method | tr -d '\r'); waiting 4 s"
@@ -365,8 +370,8 @@ fi
 if leg settings; then
   note "== SETTINGS tree (CP4): six groups + FUTO, each page opens =="
   ensure_ime; note "default IME: $(adb shell settings get secure default_input_method | tr -d '\r')"
-  focus_target   # the debug hook lives in the keyboard service, so bring it up first
-  adb shell am force-stop "$PKG"; adb shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1; sleep 6
+  adb shell input keyevent KEYCODE_HOME; sleep 1
+  opensettings "" 6
   shot st01_settings_home; dumpui st01; T=$(uitext st01)
   adb shell input swipe 540 1700 540 700 400; sleep 1.5; shot st01b_settings_home_scrolled; dumpui st01b; T="$T$(uitext st01b)"
   note "home: ${T:0:700}"
