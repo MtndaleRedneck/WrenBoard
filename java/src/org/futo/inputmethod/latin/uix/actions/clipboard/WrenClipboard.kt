@@ -1,5 +1,7 @@
 package org.futo.inputmethod.latin.uix.actions.clipboard
 
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.ui.input.pointer.pointerInput
 import android.view.View
 import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.BorderStroke
@@ -371,28 +373,36 @@ private fun WrenClipCard(w: WrenClipboardWindow, entry: ClipboardEntry, view: Vi
     val resources = context.resources
     val scope = rememberCoroutineScope()
     val offsetX = remember(entry) { Animatable(0f) }
+    val dragX = remember(entry) { mutableStateOf(0f) }
+    val dragging = remember(entry) { mutableStateOf(false) }
     val widthPx = remember { mutableStateOf(1f) }
     val shape = RoundedCornerShape(11.5.dp)
+    // Swipe a clip sideways to delete it (with Undo). The gesture is read on the card's resting slot (outside the
+    // offset), so the card moving under the finger cannot shrink or cancel the drag; a cancelled drag is judged
+    // the same way as a finished one, and the delete never waits on the slide-out animation.
+    val finishSwipe: () -> Unit = {
+        val x = dragX.value
+        dragging.value = false
+        if (abs(x) > 180f) {
+            w.removeWithUndo(listOf(entry), resources.getString(R.string.wren_clip_deleted))
+            scope.launch { offsetX.snapTo(x); try { offsetX.animateTo(if (x > 0) 1400f else -1400f) } catch (_: Exception) { } }
+        } else {
+            scope.launch { offsetX.snapTo(x); try { offsetX.animateTo(0f) } catch (_: Exception) { } }
+        }
+        dragX.value = 0f
+    }
 
     Box(
         Modifier
-            .offset { IntOffset(offsetX.value.roundToInt(), 0) }
-            .draggable(
-                orientation = Orientation.Horizontal,
-                state = rememberDraggableState { delta -> scope.launch { offsetX.snapTo(offsetX.value + delta) } },
-                onDragStopped = { velocity ->
-                    // Swipe a clip sideways to delete it (with Undo), as in SwiftKey.
-                    // Delete first: a late drag delta can cancel the slide-out animation, and the delete must not
-                    // depend on the animation finishing.
-                    if (abs(offsetX.value) > 180f || abs(velocity) > 2500f) {
-                        val target = if (offsetX.value + velocity / 10f > 0) 1400f else -1400f
-                        w.removeWithUndo(listOf(entry), resources.getString(R.string.wren_clip_deleted))
-                        try { offsetX.animateTo(target) } catch (_: Exception) { }
-                    } else {
-                        try { offsetX.animateTo(0f) } catch (_: Exception) { }
-                    }
-                }
-            )
+            .pointerInput(entry) {
+                detectHorizontalDragGestures(
+                    onDragStart = { dragging.value = true; dragX.value = offsetX.value },
+                    onDragEnd = { finishSwipe() },
+                    onDragCancel = { finishSwipe() },
+                    onHorizontalDrag = { change, delta -> change.consume(); dragX.value += delta }
+                )
+            }
+            .offset { IntOffset((if (dragging.value) dragX.value else offsetX.value).roundToInt(), 0) }
             .fillMaxWidth()
             .heightIn(min = 52.dp)
             .wbPos("CLIPCARD i=$index pinned=${entry.pinned}")
