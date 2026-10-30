@@ -12,4 +12,4 @@ Feature details are in [docs/WrenBoard.md](docs/WrenBoard.md). Problems or ideas
 
 ## License
 
-Modified from [FUTO Keyboard](https://github.com/futo-org/android-keyboard). [FUTO Source First License 1.1-kb](LICENSE.md). Not affiliated with FUTO.
+Modified from [FUTO Keyboard](https://github.com/futo-org/android-keyboard). [FUTO Source First License 1.1-kb](LICENSE.md). Not affiliated with FUTO or Microsoft SwiftKey.
