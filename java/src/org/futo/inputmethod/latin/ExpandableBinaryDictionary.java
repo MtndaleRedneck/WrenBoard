@@ -736,9 +736,16 @@ abstract public class ExpandableBinaryDictionary extends Dictionary {
         }
         loadBinaryDictionaryLocked();
         final BinaryDictionary binaryDictionary = getBinaryDictionary();
-        return binaryDictionary != null && isValidDictionaryLocked()
+        final boolean restored = binaryDictionary != null && isValidDictionaryLocked()
                 && matchesExpectedBinaryDictFormatVersionForThisType(
                         binaryDictionary.getFormatVersion());
+        if (restored) {
+            // The restore already reported success, so without this line the fallback would
+            // leave the pre-restore words in place with no trace. Diagnostic only, by design:
+            // no word contents, no file paths, no dialog.
+            Log.w(TAG, "Restored dictionary failed to open; reverted to the retained pre-restore copy");
+        }
+        return restored;
     }
 
     /**
