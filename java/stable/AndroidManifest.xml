@@ -1,6 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!-- WrenBoard 1.2: the update dialog downloads the release APK and hands it to the system installer -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>
+
     <application>
         <service
             android:name="org.futo.inputmethod.updates.UpdateCheckingService"

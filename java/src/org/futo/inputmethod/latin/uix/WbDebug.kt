@@ -81,6 +81,19 @@ object WbDebug {
                             PreferenceUtils.getDefaultSharedPreferences(ime).edit()
                                 .putBoolean(kv[0], kv.getOrNull(1) == "true").apply()
                         }
+                        cmd.startsWith("seedupdate:") -> {
+                            // seedupdate:<version>|<apk url> : store an update-check result as if the check had found it
+                            val parts = cmd.removePrefix("seedupdate:").split("|", limit = 2)
+                            val result = org.futo.inputmethod.updates.UpdateResult(
+                                org.futo.inputmethod.updates.versionStringToCode(parts[0]), parts.getOrElse(1) { "" }, parts[0]
+                            )
+                            ime.setSettingBlocking(org.futo.inputmethod.updates.LAST_UPDATE_CHECK_RESULT, kotlinx.serialization.json.Json.encodeToString(org.futo.inputmethod.updates.UpdateResult.serializer(), result))
+                            ime.setSettingBlocking(org.futo.inputmethod.updates.LAST_UPDATE_CHECK_FAILED, false)
+                            Log.i(TAG, "SEEDED update ${parts[0]}")
+                        }
+                        cmd.startsWith("settings:") -> {
+                            org.futo.inputmethod.latin.uix.settings.SettingsActivity.openToNavDest(ime, cmd.removePrefix("settings:").ifEmpty { null })
+                        }
                         cmd.startsWith("open:") -> {
                             val action = AllActionsMap[cmd.removePrefix("open:")]
                             if (action != null) ime.uixManager.debugOpenAction(action)
