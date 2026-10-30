@@ -74,6 +74,11 @@ val PredictiveTextMenu = UserSettingsMenu(
             navigateTo = "blacklist"
         ),
 
+        userSettingToggleDataStore(
+            title = R.string.wren_starter_words,
+            setting = org.futo.inputmethod.latin.uix.StarterWordsSetting
+        ),
+
         // TODO: It doesn't make a lot of sense in the case of having autocorrect on but show_suggestions off
         userSettingToggleSharedPrefs(
             title = R.string.auto_correction,

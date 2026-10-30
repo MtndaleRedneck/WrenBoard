@@ -95,7 +95,8 @@ data class SymbolsKey(val attributes: KeyAttributes = KeyAttributes()) : Templat
     override val templateKey: Key = BaseKey(
         spec = "!text/keylabel_to_symbol|!code/key_switch_alpha_symbol",
         moreKeys = SymbolsMoreKeys,
-        hint = " ",
+        // WrenBoard P0-4: no hint override, so the key shows its long-press (clipboard) glyph the same way the
+        // comma shows the mic.
         attributes = attributes + FunctionalAttributes
     )
 }
@@ -389,10 +390,14 @@ data class TemplateCurrencyKey(val currency: String) : AbstractKey {
 data class PeriodKey(
     val default: AbstractKey = BaseKey(".", hint = ",!?"),
     val alternative: AbstractKey = BaseKey(".", hint = ",!?",
+        // WrenBoard P0-1: the quick period popup reads ! , . ? from left to right (as in SwiftKey), in a fixed
+        // order, with the period itself as one of the four items.
         moreKeys = listOf(
-            "!text/keyspec_symbols_question",
+            "!fixedColumnOrder!4",
+            "!",
             "!text/keyspec_comma",
-            "!"),
+            ".",
+            "!text/keyspec_symbols_question"),
         attributes = KeyAttributes(moreKeyMode = MoreKeyMode.OnlyExplicit, fastMoreKeys = true)
     )
 ) : AbstractKey {

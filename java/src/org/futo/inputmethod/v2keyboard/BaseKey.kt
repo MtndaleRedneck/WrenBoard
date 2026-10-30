@@ -419,7 +419,7 @@ data class BaseKey(
         }
 
         var moreKeys = moreKeysBuilder.build(shifted)
-        if(attributes.fastMoreKeys == true && moreKeys.specs.isNotEmpty()) {
+        if(attributes.fastMoreKeys == true && moreKeys.specs.isNotEmpty() && moreKeys.specs.none { it.mCode == code && code > 0 }) {
             moreKeys = moreKeys.copy(
                 specs = moreKeys.specs.toMutableList().apply {
                     add(0, MoreKeySpec(expandedSpec ?: spec, false, params.mId.locale, false))

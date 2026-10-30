@@ -408,6 +408,8 @@ class LatinIME : InputMethodServiceCompose(), LatinIMELegacy.SuggestionStripCont
         imeManager.onCreate()
         latinIMELegacy.onCreate()
 
+        if(BuildConfig.DEBUG) org.futo.inputmethod.latin.uix.WbDebug.install(this)
+
         scheduleUpdateCheckingJob(this)
         launchJob { uixManager.showUpdateNoticeIfNeeded() }
 

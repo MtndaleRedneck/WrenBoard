@@ -201,7 +201,7 @@ class LanguageModel(
             return@withContext null
         }
 
-        var context = getContext(composeInfo, ngramContext)
+        var context = foldShoutedWords(getContext(composeInfo, ngramContext))
 
         composeInfo = safeguardComposeInfo(composeInfo)
         context = safeguardContext(context)
@@ -340,7 +340,7 @@ class LanguageModel(
         if(!loadModelIfNeeded()) return@withContext null
         if(composedData.mIsBatchMode) return@withContext null
         var composeInfo = getComposeInfo(composedData)
-        var context = getContext(composeInfo, ngramContext)
+        var context = foldShoutedWords(getContext(composeInfo, ngramContext))
 
         composeInfo = safeguardComposeInfo(composeInfo)
         context = safeguardContext(context)

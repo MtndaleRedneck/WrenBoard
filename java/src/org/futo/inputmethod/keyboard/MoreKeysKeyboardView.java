@@ -158,7 +158,10 @@ public class MoreKeysKeyboardView extends KeyboardView implements MoreKeysPanel 
 
             mKeyDetector.setExtraAllowance(0);
         } else {
-            mOriginX = CoordinateUtils.x(touchOrigin) - getDefaultCoordX();
+            // WrenBoard P0-1: map the finger against the panel exactly where it is drawn. The old origin was taken
+            // from the touch point, so a panel that had been moved (clamped at the keyboard edge, or centred on the
+            // key rather than on the finger) typed a different key than the one highlighted under the finger.
+            mOriginX = (int)container.getX() - CoordinateUtils.x(mCoordinates) + container.getPaddingLeft();
 
             // For basing off of touch position: CoordinateUtils.y(touchOrigin) - container.getMeasuredHeight()
             // Using container Y instead though
@@ -171,6 +174,10 @@ public class MoreKeysKeyboardView extends KeyboardView implements MoreKeysPanel 
             mKeyDetector.setExtraAllowance(extraAllowance);
         }
         controller.onShowMoreKeysPanel(this);
+        if (org.futo.inputmethod.latin.BuildConfig.DEBUG) {
+            org.futo.inputmethod.latin.uix.WbDebug.logMoreKeys(this, getKeyboard(), mOriginX, mOriginY,
+                    CoordinateUtils.x(mCoordinates), CoordinateUtils.y(mCoordinates), parentView);
+        }
         final MoreKeysKeyboardAccessibilityDelegate accessibilityDelegate = mAccessibilityDelegate;
         if (accessibilityDelegate != null
                 && AccessibilityUtils.getInstance().isAccessibilityEnabled()) {
