@@ -88,6 +88,13 @@ import kotlin.math.absoluteValue
 
 
 val IS_ALREADY_PAID = SettingsKey(booleanPreferencesKey("already_paid"), false)
+
+/**
+ * WrenBoard 1.2 (Ezzy, Oct 30: hide FUTO's payment prompts "as much as you can legally"): when true, FUTO's Payment
+ * row and its "Unpaid FUTO Keyboard" reminder card are not shown. Nothing is deleted: the payment screen, its route
+ * and the strings stay in the code. FUTO's license, copyright notices and credits are untouched and still shown.
+ */
+const val WrenHidePayment = true
 val IS_PAYMENT_PENDING = SettingsKey(booleanPreferencesKey("payment_pending"), false)
 val HAS_SEEN_PAID_NOTICE = SettingsKey(booleanPreferencesKey("seen_paid_notice"), false)
 val FORCE_SHOW_NOTICE = SettingsKey(booleanPreferencesKey("force_show_notice"), false)
@@ -238,7 +245,7 @@ fun UnpaidNoticeCondition(
                 // and not overridden by migration notice
                 && !isDisplayingMigrationNotice
 
-    if (force || displayCondition) {
+    if (force || (displayCondition && !WrenHidePayment)) {
         inner()
     }
 }

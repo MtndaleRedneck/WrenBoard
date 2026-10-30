@@ -13,7 +13,11 @@ ADB_BIN=$(type -P adb)
 # (two timed-out calls in a row and get-state no longer says device) every later call fails at once.
 rm -f shots/.dead shots/.tmo
 ( "$ADB_BIN" logcat -v threadtime -b main,system,crash "*:I" > shots/logcat_stream.txt 2>&1 ) & LCPID=$!
-trap 'kill $LCPID 2>/dev/null' EXIT
+HTPID=""
+if [ -n "${WB_LOCAL_APK_URL:-}" ]; then # fix1: serve this same debug APK to the emulator (adb reverse) for the update success case
+  ( cd "$(dirname "$APK")" && exec python3 -m http.server 8765 --bind 127.0.0.1 > /dev/null 2>&1 ) & HTPID=$!
+fi
+trap 'kill $LCPID $HTPID 2>/dev/null' EXIT
 adb() {
   [ -f shots/.dead ] && return 1
   timeout -k 5 60 "$ADB_BIN" "$@"; local rc=$?
@@ -102,8 +106,9 @@ if leg setup; then
   adb shell ime disable "$IME" >/dev/null 2>&1
   adb shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1; sleep 6
   dumpui s01; sleep 2; shot s01_settings_not_enabled; dumpui s01; T=$(uitext s01); note "texts: ${T:0:400}"
-  # first entry offers the personal dictionary once (1.x behaviour); Back shows the Settings home under the banner
-  if echo "$T" | grep -q "Personal dictionary"; then adb shell input keyevent KEYCODE_BACK; sleep 2; shot s01b_settings_home_not_enabled; dumpui s01b; T="$T$(uitext s01b)"; note "  after Back: $(uitext s01b | cut -c1-200)"; fi
+  # fix1: the 1.x first-entry Personal dictionary step is gone; the first open is the Settings home
+  echo "$T" | grep -q "Personal dictionary" && fail "first Settings open still lands on the Personal dictionary page" || pass "first Settings open goes straight to the Settings home (no dictionary page)"
+  echo "$T" | grep -q "Typing" && echo "$T" | grep -q "Backup" && pass "first Settings open shows the Settings home list" || fail "first Settings open is not the Settings home"
   echo "$T" | grep -q "WrenBoard is turned off" && pass "banner when not enabled" || fail "banner when not enabled"
   echo "$T" | grep -q "Step 1\|Step 2\|Open Input Method Settings" && fail "old setup wall still shown" || pass "no setup wall (not enabled)"
   echo "$T" | grep -q "Keyboard\|Typing" && pass "settings items reachable while not enabled" || fail "settings items not visible while not enabled"
@@ -165,6 +170,10 @@ if leg shift; then
   clear_field; type_word ok; tapcode 32
   type_word y; tapcode -1; type_word o; type_word u
   F=$(field); case "$F" in *" yOu") pass "y shift ou = yOu ('$F')";; *) fail "mid-word shift (wanted '... yOu', got '$F')";; esac
+  # fix1: with shift on, the number row types digits (SwiftKey behaviour)
+  clear_field; type_word a; tapcode -1; E=$(elem sn); geom shiftnum >/dev/null
+  if [ "$E" = 1 ]; then tapk 1 && { F=$(field); case "$F" in *a1) pass "shift on, number row key types 1 ('$F')";; *) fail "shift on, number row key typed '$F' (wanted 'a1')";; esac; }
+  else fail "shift tap mid-word did not give the shifted keyboard (element $E)"; fi
   clear_field
 fi
 
@@ -288,9 +297,30 @@ if leg skin; then
   EXY=$(kxy label e) && { read -r X Y <<< "$EXY"; adb shell input motionevent DOWN $X $Y; sleep 1.4; shot k12_longpress_e_popup; release $X $Y; }
   clear_field
   E=$(elem s0); note "element at start: $E"
-  for t in 1 2 3 4; do tapcode -1; E=$(elem s$t); case "$E" in 1|2) shot k13_shift_upper; break;; esac; done
-  for t in 1 2 3; do case "$E" in 3|4) break;; esac; tapcode -1; E=$(elem sl$t); done
-  case "$E" in 3|4) shot k14_caps_lock; pass "caps lock reached for the screenshot";; *) note "INFO: caps lock not reached (element $E)";; esac
+  numrow() { # numrow <geom file> -> the labels of the first ten keys of the top row, left to right
+    python3 - "$1" <<'PY'
+import re, sys
+keys = []
+for line in open(sys.argv[1], errors="ignore"):
+    m = re.search(r"WBDBG\s*:\s*KEY (.*)$", line.rstrip())
+    if m:
+        d = dict(kv.split("=", 1) for kv in m.group(1).split() if "=" in kv)
+        if "cy" in d and "cx" in d: keys.append(d)
+if keys:
+    top = min(int(k["cy"]) for k in keys)
+    row = sorted([k for k in keys if abs(int(k["cy"]) - top) < 20], key=lambda k: int(k["cx"]))
+    print("".join(k.get("label", "?") for k in row[:10]))
+PY
+  }
+  SHIFTED=""
+  for t in 1 2 3 4; do tapcode -1; E=$(elem s$t); case "$E" in 1|2) shot k13_shift_upper; SHIFTED=$t; break;; esac; done
+  if [ "$E" = 1 ]; then NR=$(numrow shots/geom_s$SHIFTED.txt); note "number row with shift on (element 1): $NR"
+    [ "$NR" = "1234567890" ] && pass "shift on: number row shows 1234567890" || fail "shift on: number row shows '$NR'"
+  else note "INFO: shift screenshot taken at element $E (automatic shift)"; fi
+  for t in 1 2 3; do case "$E" in 3|4) break;; esac; tapcode -1; E=$(elem sl$t); LT=$t; done
+  case "$E" in 3|4) shot k14_caps_lock; pass "caps lock reached for the screenshot"
+    NR=$(numrow shots/geom_sl${LT:-1}.txt); note "number row with caps lock: $NR"; [ "$NR" = "1234567890" ] && pass "caps lock: number row shows 1234567890" || fail "caps lock: number row shows '$NR'";;
+    *) note "INFO: caps lock not reached (element $E)";; esac
   for t in 1 2 3; do [ "$E" = "0" ] && break; tapcode -1; E=$(elem so$t); done
 fi
 
@@ -420,25 +450,98 @@ if leg update; then
     else fail "no Dismiss button on the update dialog"; fi
   else fail "update dialog did not open"; fi
   adb shell appops set "$PKG" REQUEST_INSTALL_PACKAGES allow >/dev/null 2>&1
-  dbg "seedupdate:99.0.0|https://github.com/MtndaleRedneck/WrenBoard/releases/download/v1.1.0/WrenBoard-1.1.apk" 1.5
-  opensettings update 3.0
-  shot u05_update_available; dumpui u05; T=$(uitext u05); note "dialog texts: ${T:0:300}"
-  XY=$(node_center u05 "Update")
-  if [ -n "$XY" ]; then
-    adb shell input tap $XY
-    INST=""
+  # fix1: the prompt must tell success, cancelling and a real failure apart, and a new prompt or attempt starts clean
+  noshout() { echo "$1" | grep -qi "fatal" && fail "$2: the prompt says 'Fatal' ('$(echo "$1" | cut -c1-160)')"; return 0; }
+  wait_installer() { # wait_installer <tag>: tap the prompt's Update, then wait for Android's installer to be in front
+    local i; INST=""
     for i in $(seq 1 45); do
       sleep 2
       FOC=$(adb shell dumpsys window 2>/dev/null | tr -d '\r' | grep -m1 'mCurrentFocus')
       case "$FOC" in *packageinstaller*|*PackageInstaller*) INST="$FOC"; break;; esac
       case "$FOC" in *chrome*|*browser*|*Browser*) break;; esac
     done
-    note "focus after Update: $FOC"
+    note "focus after Update ($1): $FOC"
+  }
+  installer_tap() { # installer_tap <xmlname> <button text>
+    local xy; dumpui "$1"; xy=$(node_center "$1" "$2"); [ -z "$xy" ] && xy=$(node_center "$1" "$(echo "$2" | tr a-z A-Z)")
+    [ -n "$xy" ] && { adb shell input tap $xy; return 0; }; note "no '$2' button on the installer: $(uitext "$1" | cut -c1-200)"; return 1
+  }
+  dlg_wait() { # dlg_wait <xmlname> <regex> [tries]: dump the screen until the text appears (taps an installer OK on the way)
+    local i; for i in $(seq 1 "${3:-10}"); do
+      dumpui "$1"; uitext "$1" | grep -q "$2" && return 0
+      local ok; ok=$(node_center "$1" "OK"); [ -n "$ok" ] && uitext "$1" | grep -qv "Update available" && adb shell input tap $ok
+      sleep 1.5
+    done; return 1
+  }
+  dbg "seedupdate:99.0.0|https://github.com/MtndaleRedneck/WrenBoard/releases/download/v1.1.0/WrenBoard-1.1.apk" 1.5
+  opensettings update 3.0
+  shot u05_update_available; dumpui u05; T=$(uitext u05); note "dialog texts: ${T:0:300}"
+  XY=$(node_center u05 "Update")
+  if [ -n "$XY" ]; then
+    adb shell input tap $XY; wait_installer first
     shot u06_after_update_tap; dumpui u06; note "screen texts: $(uitext u06 | cut -c1-300)"
     [ -n "$INST" ] && pass "Update downloaded in the app and opened the system installer" || fail "Update did not reach the system installer ($FOC)"
     echo "$FOC" | grep -qi "chrome\|browser" && fail "Update opened the browser"
-    adb shell input keyevent KEYCODE_BACK; sleep 1; adb shell input keyevent KEYCODE_BACK; sleep 1
+    # 1) cancel in Android's installer -> the prompt says so plainly; reopening the prompt starts clean
+    if [ -n "$INST" ] && installer_tap u06c "Cancel"; then
+      dlg_wait u07 "Update available" 8; sleep 1.5; dumpui u07; shot u07_after_installer_cancel; T7=$(uitext u07); note "after installer Cancel: ${T7:0:300}"
+      echo "$T7" | grep -q "Update cancelled." && pass "cancel in the installer shows 'Update cancelled.'" || fail "cancel in the installer did not show 'Update cancelled.'"
+      noshout "$T7" "after cancel"; echo "$T7" | grep -q "Update failed\|Update installed" && fail "cancel was reported as a failure or success"
+      adb shell input keyevent KEYCODE_BACK; sleep 1.5
+      opensettings update 3.0; dumpui u08; shot u08_reopened_after_cancel; T8=$(uitext u08); note "reopened after cancel: ${T8:0:300}"
+      if echo "$T8" | grep -q "Update available" && ! echo "$T8" | grep -q "cancelled\|failed\|Fatal\|Installing"; then pass "after cancel, the reopened prompt starts clean"; else fail "after cancel, the reopened prompt still shows the old attempt"; fi
+    else fail "could not cancel in the installer"; fi
+    # 2) a real failure: the installer refuses the release-signed 1.1 over this debug build -> plain failure words
+    XY=$(node_center u08 "Update")
+    if [ -n "$XY" ]; then
+      adb shell input tap $XY; wait_installer failure; shot u09a_installer_before_failure
+      if [ -n "$INST" ] && installer_tap u09i "Update"; then
+        dlg_wait u09 "Update failed\|Update installed\|Update cancelled\|Fatal" 20; sleep 1; dumpui u09; shot u09_after_install_failure; T9=$(uitext u09); note "after installer refused: ${T9:0:300}"
+        echo "$T9" | grep -q "Update failed" && pass "a real install failure shows plain 'Update failed' words" || fail "a real install failure did not show 'Update failed'"
+        noshout "$T9" "after failure"; echo "$T9" | grep -q "Update installed\|cancelled" && fail "failure was reported as success or cancel"
+        adb logcat -d -s InstallReceiver:I | tr -d '\r' | tail -4 > shots/u09_installreceiver.txt
+        # retry: reopen the prompt (clean), tap Update again, the installer comes back
+        adb shell input keyevent KEYCODE_BACK; sleep 1.5
+        opensettings update 3.0; dumpui u10; shot u10_reopened_after_failure; T10=$(uitext u10); note "reopened after failure: ${T10:0:300}"
+        if echo "$T10" | grep -q "Update available" && ! echo "$T10" | grep -q "failed\|cancelled\|Fatal\|Installing"; then pass "after a failure, the reopened prompt starts clean"; else fail "after a failure, the reopened prompt still shows the old attempt"; fi
+        XY=$(node_center u10 "Update")
+        if [ -n "$XY" ]; then adb shell input tap $XY; wait_installer retry; shot u11_retry_installer
+          [ -n "$INST" ] && pass "retry after a failure reaches the installer again" || fail "retry after a failure did not reach the installer"
+          [ -n "$INST" ] && installer_tap u11c "Cancel"; sleep 2; dumpui u11; noshout "$(uitext u11)" "after retry cancel"
+          adb shell input keyevent KEYCODE_BACK; sleep 1
+        else fail "no Update button after a failure"; fi
+      else fail "the installer did not come up for the failure case"; fi
+    else fail "no Update button on the reopened prompt"; fi
   else fail "no Update button with a seeded newer release"; fi
+  # 3) a download failure, then Update tapped again on the same prompt (each attempt starts with no leftover words)
+  dbg "seedupdate:99.0.0|https://github.com/MtndaleRedneck/WrenBoard/releases/download/v1.1.0/wb12-no-such-file.apk" 1.5
+  opensettings update 3.0; dumpui u12a; XY=$(node_center u12a "Update")
+  if [ -n "$XY" ]; then
+    adb shell input tap $XY; dlg_wait u12 "Download failed" 15; shot u12_download_failed; T12=$(uitext u12); note "download failure: ${T12:0:300}"
+    echo "$T12" | grep -q "Download failed" && pass "a failed download says 'Download failed' in the prompt" || fail "a failed download was not reported"
+    noshout "$T12" "download failure"
+    adb logcat -c; XY=$(node_center u12 "Update"); [ -n "$XY" ] && adb shell input tap $XY; sleep 6
+    N=$(adb logcat -d -s UpdateScreen:I | tr -d '\r' | grep -c "Update attempt .* started"); dumpui u13; T13=$(uitext u13); note "retry on the same prompt: attempts started=$N; ${T13:0:200}"
+    [ "$N" -ge 1 ] && echo "$T13" | grep -q "Download failed" && pass "Update tapped again after a failed download starts a new attempt" || fail "retry on the same prompt did not start a new attempt"
+    adb shell input keyevent KEYCODE_BACK; sleep 1
+  else fail "no Update button for the download-failure case"; fi
+  # 4) success: the same debug build served over the emulator link, installed over itself
+  if [ -n "${WB_LOCAL_APK_URL:-}" ]; then
+    adb reverse tcp:8765 tcp:8765 >/dev/null 2>&1
+    dbg "seedupdate:99.0.0|$WB_LOCAL_APK_URL" 1.5
+    LUT0=$(adb shell dumpsys package "$PKG" | tr -d '\r' | grep -m1 lastUpdateTime | sed 's/^ *//')
+    opensettings update 3.0; dumpui u14a; XY=$(node_center u14a "Update")
+    if [ -n "$XY" ]; then
+      adb logcat -c; adb shell input tap $XY; wait_installer success; shot u14_success_installer
+      if [ -n "$INST" ] && installer_tap u14i "Update"; then
+        LUT1="$LUT0"; for i in $(seq 1 45); do sleep 2; LUT1=$(adb shell dumpsys package "$PKG" | tr -d '\r' | grep -m1 lastUpdateTime | sed 's/^ *//'); [ "$LUT1" != "$LUT0" ] && break; done
+        sleep 4; shot u15_after_success; adb logcat -d | tr -d '\r' | grep "InstallReceiver\|UpdateScreen" | tail -8 > shots/u15_success_log.txt
+        note "lastUpdateTime before: $LUT0 | after: $LUT1"; note "success log: $(tr '\n' ' ' < shots/u15_success_log.txt | cut -c1-500)"
+        if [ "$LUT1" != "$LUT0" ] && grep -q "Received status 0 " shots/u15_success_log.txt; then pass "Update installed over itself and the installer answered success"; else fail "the success install was not confirmed"; fi
+        grep -qi "fatal" shots/u15_success_log.txt && fail "success logged as fatal"
+      else fail "the installer did not come up for the success case"; fi
+    else fail "no Update button for the success case"; fi
+  else note "INFO: no local APK served; success path covered by unit tests only"; fi
   adb shell input keyevent KEYCODE_HOME; sleep 1
 fi
 
@@ -451,7 +554,7 @@ if leg settings; then
   dumpui st00
   # the update leg left a seeded 99.0.0 behind; a person would answer the prompt, so skip that version here
   if uitext st00 | grep -q "Update available"; then XY=$(node_center st00 "Skip this version"); [ -n "$XY" ] && { adb shell input tap $XY; sleep 2; note "  skipped the seeded update prompt"; }; dumpui st00; fi
-  uitext st00 | grep -q "Personal dictionary" && { note "  first-entry personal dictionary page is up; going back to the home"; adb shell input keyevent KEYCODE_BACK; sleep 2; }
+  uitext st00 | grep -q "Personal dictionary" && fail "Settings opened on the Personal dictionary page"
   shot st01_settings_home; dumpui st01; T=$(uitext st01)
   adb shell input swipe 540 1700 540 700 400; sleep 1.5; shot st01b_settings_home_scrolled; dumpui st01b; T="$T$(uitext st01b)"
   note "home: ${T:0:700}"
@@ -472,6 +575,25 @@ if leg settings; then
   # FUTO page must still reach FUTO's own screens
   opensettings "" 2; opensettings wren_futo 3.5; dumpui st_futo2
   for w in "Languages" "Swipe" "Actions"; do uitext st_futo2 | grep -q "$w" && pass "FUTO page keeps $w" || fail "FUTO page lost $w"; done
+  # fix1: FUTO's Payment row is hidden; Help and Credits (FUTO's attribution) stay
+  adb shell input swipe 540 1900 540 600 400; sleep 1.5; shot st08b_wren_futo_scrolled; dumpui st_futo3
+  FU="$(uitext st_futo2)$(uitext st_futo3)"; note "FUTO page (top + scrolled): ${FU:0:500}"
+  echo "$FU" | grep -q "Payment\|Pay for FUTO\|Unpaid" && fail "FUTO page still shows a payment row" || pass "FUTO page has no Payment row"
+  echo "$FU" | grep -q "Help" && echo "$FU" | grep -q "Credits" && pass "FUTO page keeps Help and Credits" || fail "FUTO page lost Help or Credits"
+  # Personal dictionary is still in Settings (Typing page, Words card) and opens
+  opensettings wren_typing 3.5; FOUND=""
+  for i in 1 2 3; do dumpui st_ty$i; XY=$(node_center st_ty$i "Personal dictionary"); [ -n "$XY" ] && { FOUND=1; break; }; adb shell input swipe 540 1900 540 700 400; sleep 1.5; done
+  if [ -n "$FOUND" ]; then shot st09_typing_personal_dictionary_row; adb shell input tap $XY; sleep 2.5; dumpui st_pd; shot st10_personal_dictionary_page; note "personal dictionary page: $(uitext st_pd | cut -c1-200)"
+    uitext st_pd | grep -q "Personal dictionary" && pass "Personal dictionary row in Typing opens its page" || fail "Personal dictionary row did not open its page"
+  else fail "no Personal dictionary row on the Typing page"; fi
+  # the "Unpaid FUTO Keyboard" reminder stays hidden even when forced on in FUTO's plain Settings style
+  focus_target; dbg "dsbool:force_show_notice=true" 1.0; dbg "dsbool:wren_settings_style=false" 1.0
+  adb shell input keyevent KEYCODE_HOME; sleep 1; opensettings "" 4; dumpui st_plain; shot st11_futo_style_home_forced_notice
+  adb shell input swipe 540 1900 540 700 400; sleep 1.5; dumpui st_plain2; PL="$(uitext st_plain)$(uitext st_plain2)"; note "FUTO-style home, notice forced: ${PL:0:500}"
+  if echo "$PL" | grep -q "Languages\|Swipe\|Actions"; then
+    echo "$PL" | grep -q "Unpaid\|Payment\|Pay for FUTO" && fail "payment reminder or row shows in FUTO's plain style" || pass "no payment reminder or row in FUTO's plain style, even with the reminder forced"
+  else note "INFO: FUTO plain style did not come up (${PL:0:120})"; fi
+  focus_target; dbg "dsbool:force_show_notice=false" 1.0; dbg "dsbool:wren_settings_style=true" 1.0
   adb shell input keyevent KEYCODE_HOME
 fi
 

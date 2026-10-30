@@ -157,7 +157,8 @@ val HomeScreenLite = UserSettingsMenu(
             navigateTo = "payment",
             icon = R.drawable.dollar_sign,
         ).copy(visibilityCheck = {
-            useDataStoreValue(IS_ALREADY_PAID) == false
+            // WrenBoard 1.2: FUTO's Payment row is hidden from people (WrenHidePayment); the screen itself stays in the code.
+            !WrenHidePayment && useDataStoreValue(IS_ALREADY_PAID) == false
         }, appearInSearchIfVisibilityCheckFailed = false),
         //}
 
@@ -201,16 +202,9 @@ fun HomeScreen(navController: NavHostController = rememberNavController()) {
     val isDeveloper = useDataStoreValue(IS_DEVELOPER)
     val isPaid = useDataStoreValue(IS_ALREADY_PAID)
 
-    // Upfront dictionary: offer the personal dictionary once, on first entry
-    val (dictOnboardingDone, setDictOnboardingDone) = useDataStore(
-        key = DictionaryOnboardingDone.key, default = DictionaryOnboardingDone.default
-    )
-    LaunchedEffect(Unit) {
-        if(!dictOnboardingDone) {
-            setDictOnboardingDone(true)
-            navController.navigate("pdict")
-        }
-    }
+    // WrenBoard 1.2 (Ezzy, Oct 30): Settings opens straight to its home. The 1.x "upfront dictionary" step that
+    // opened the Personal dictionary once on first entry is gone (it was WrenBoard's, not FUTO's); the Personal
+    // dictionary page itself is still in Settings. DictionaryOnboardingDone is no longer read.
 
     // Prompt on entry when a newer version is known and not skipped
     val (updateInfo, _) = useDataStore(key = LAST_UPDATE_CHECK_RESULT, default = "")

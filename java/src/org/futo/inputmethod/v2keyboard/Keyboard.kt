@@ -106,11 +106,22 @@ data class Row(
     }
 }
 
+/**
+ * WrenBoard 1.2 (Ezzy, Oct 30: "do whatever SwiftKey has"): with shift on, the default number row keeps showing and
+ * typing 1 2 3 4 5 6 7 8 9 0, as it already did with caps lock. Reference: Ezzy's own screen recording of SwiftKey
+ * shows digits on the number row with shift on and with caps lock on. Set to false for FUTO's shifted !@#$%^&*().
+ * Long-press on the number keys is unchanged.
+ */
+const val WrenShiftKeepsNumberRowDigits = true
+private const val FutoShiftedNumberRow = "!@#$%^&*()"
+private fun numberRowShifted(i: Int, c: Char): String =
+    if (WrenShiftKeepsNumberRowDigits) c.toString() else FutoShiftedNumberRow[i].toString()
+
 val DefaultNumberRow = Row(
     numbers = "1234567890".mapIndexed { i, c ->
         CaseSelector(
             normal = BaseKey(c.toString()),
-            shiftedManually = BaseKey("!@#$%^&*()"[i].toString()),
+            shiftedManually = BaseKey(numberRowShifted(i, c)),
             shiftLocked = BaseKey(c.toString())
         )
     }
@@ -120,7 +131,7 @@ val DefaultNumberRowClassic = Row(
     numbers = "1234567890".mapIndexed { i, c ->
         CaseSelector(
             normal = BaseKey(c.toString()),
-            shiftedManually = BaseKey("!@#$%^&*()"[i].toString()),
+            shiftedManually = BaseKey(numberRowShifted(i, c)),
             shiftLocked = BaseKey(c.toString())
         )
     },
