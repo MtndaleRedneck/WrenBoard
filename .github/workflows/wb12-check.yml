@@ -38,7 +38,7 @@ jobs:
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;28.2.13676358"
       - uses: gradle/actions/setup-gradle@v4
       - name: Build stable DEBUG APK (x86_64 only)
-        run: ./gradlew --no-daemon assembleStableDebug -Pandroid.injected.build.abi=x86_64
+        run: ./gradlew --no-daemon assembleStableDebug -Pandroid.injected.build.abi=x86_64 -Pandroid.injected.testOnly=false
       - name: Build ime-target APK
         run: bash tools/ime-target/build.sh
       - name: Stage APKs at fixed paths

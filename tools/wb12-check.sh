@@ -170,9 +170,10 @@ if leg keyboard; then
   grep 'STARTER' shots/_s.txt | tail -3 | sed 's/^.*WBDBG *: /  /' | tee -a "$R"
   shot k01b_starter_words_from_history
   echo "$S2" | grep -qi "zebra" && pass "starter words come from typing history ($S2)" || fail "starter words did not pick up typing history (got '$S2')"
+  [ "$(echo "$S2" | tr '|' '\n' | wc -l)" -le 3 ] && echo "$S2" | grep -q "|I|\||I$" && pass "history word first, I/The/You fill the rest ($S2)" || fail "empty-field strip is not history + I/The/You ($S2)"
   dbg "dsbool:wren_starter_words=false" 1.0; adb logcat -c; focus_target; sleep 2; S3=$(sugg); note "starter words with the toggle off: [$S3]"
   shot k01c_starter_words_toggle_off
-  echo "$S3" | grep -qi "zebra\|The" && fail "starter words still shown with the toggle off ($S3)" || pass "toggle off: no starter words in an empty field"
+  [ -z "$S3" ] && pass "toggle off: no starter words in an empty field" || fail "starter words still shown with the toggle off ($S3)"
   dbg "dsbool:wren_starter_words=true" 1.0
 fi
 
