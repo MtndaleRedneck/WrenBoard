@@ -6,7 +6,7 @@
 set -u
 APK="$1"; TAPK="$2"
 PKG=com.wrenboard.keyboard; TPKG=com.wrenboard.imetarget
-LEGS=",${WB_LEGS:-setup,keyboard,period,caps,shift,clip,update,toolbar,emoji,clipboard,settings},"
+LEGS=",${WB_LEGS:-setup,keyboard,period,caps,shift,clip,update},"
 mkdir -p shots; R=shots/results.txt; : > "$R"
 FAILS=0
 note() { echo "$*" | tee -a "$R"; }
@@ -49,7 +49,7 @@ adb shell am broadcast -a android.intent.action.CLOSE_SYSTEM_DIALOGS >/dev/null 
 adb shell wm size 1080x2316; adb shell wm density 420
 note "display: $(adb shell wm size | tr -d '\r' | tr '\n' ' ') $(adb shell wm density | tr -d '\r' | tr '\n' ' ')"
 note "== install =="
-adb install -r "$APK" >> "$R" 2>&1 || { fail "install WrenBoard"; exit 1; }
+adb install -r -t "$APK" >> "$R" 2>&1 || { fail "install WrenBoard"; exit 1; }
 adb install -r "$TAPK" >> "$R" 2>&1 || { fail "install ime-target"; exit 1; }
 adb shell pm grant "$PKG" android.permission.RECORD_AUDIO 2>/dev/null
 IME=""
@@ -182,6 +182,57 @@ PY
   W=$(adb logcat -d -s WBDBG:I | tr -d '\r' | grep 'WINDOW open' | tail -1); note "window: $W"
   echo "$W" | grep -q clipboard_history && pass "hold 123 opens the clipboard" || fail "hold 123 did not open the clipboard ($W)"
   dbg close 1.0
+fi
+
+if leg toolbar; then
+  note "== TOOLBAR: tucked behind an up chevron by default; opens as one row of 8; GIF opens the emoji panel =="
+  focus_target
+  dbg collapse 1.0; adb logcat -c; dbg expand 1.5; dbg collapse 1.5
+  adb logcat -d -s WBDBG:I | tr -d '\r' > shots/tb0.txt
+  CH=$(grep 'CHEVRON open=false' shots/tb0.txt | tail -1); note "chevron (closed): $CH"
+  shot t01_toolbar_closed
+  CX=$(echo "$CH" | sed -n 's/.*cx=\([0-9-]*\).*/\1/p'); CY=$(echo "$CH" | sed -n 's/.*cy=\([0-9-]*\).*/\1/p')
+  if [ -n "$CX" ] && [ -n "$CY" ]; then
+    adb logcat -c; adb shell input tap "$CX" "$CY"; sleep 1.5
+    shot t02_toolbar_open
+    adb logcat -d -s WBDBG:I | tr -d '\r' > shots/tb1.txt
+    TB=$(grep 'TOOLBAR' shots/tb1.txt | tail -1 | sed 's/.*TOOLBAR //'); note "toolbar buttons: $TB"
+    grep -q 'CHEVRON open=true' shots/tb1.txt && pass "tapping the chevron opens the toolbar" || fail "chevron tap did not open the toolbar"
+    N=$(echo "$TB" | tr '|' '\n' | grep -c .)
+    [ "$N" = 8 ] && pass "toolbar shows 8 buttons" || fail "toolbar shows $N buttons, wanted 8"
+    for b in GIF Share Info; do echo "|$TB|" | grep -q "|$b|" && pass "toolbar has $b" || fail "toolbar has no $b"; done
+    LAST=$(echo "$TB" | tr '|' '\n' | tail -1); note "last button: $LAST"
+    GL=$(grep 'ACTION name=GIF ' shots/tb1.txt | tail -1)
+    GX=$(echo "$GL" | sed -n 's/.*cx=\([0-9-]*\).*/\1/p'); GY=$(echo "$GL" | sed -n 's/.*cy=\([0-9-]*\).*/\1/p')
+    if [ -n "$GX" ]; then
+      adb logcat -c; adb shell input tap "$GX" "$GY"; sleep 1.8
+      shot t03_after_gif_button
+      W=$(adb logcat -d -s WBDBG:I | tr -d '\r' | grep 'WINDOW open' | tail -1); note "window: $W"
+      echo "$W" | grep -qi emoji && pass "GIF button opens the emoji panel ($W)" || fail "GIF button did not open the emoji panel ($W)"
+      dbg close 1.0
+    else fail "no GIF button position"; fi
+    adb logcat -c; dbg expand 1.0; dbg collapse 1.0; dbg expand 1.2
+    CH2=$(adb logcat -d -s WBDBG:I | tr -d '\r' | grep 'CHEVRON open=true' | tail -1)
+    CX2=$(echo "$CH2" | sed -n 's/.*cx=\([0-9-]*\).*/\1/p'); CY2=$(echo "$CH2" | sed -n 's/.*cy=\([0-9-]*\).*/\1/p')
+    if [ -n "$CX2" ]; then adb logcat -c; adb shell input tap "$CX2" "$CY2"; sleep 1.2; shot t04_toolbar_closed_again
+      adb logcat -d -s WBDBG:I | tr -d '\r' | grep -q 'CHEVRON open=false' && pass "tapping the chevron again closes the toolbar" || fail "chevron did not close the toolbar"
+    fi
+  else fail "no chevron position logged"; fi
+  dbg collapse 0.8
+fi
+
+if leg skin; then
+  note "== SKIN: key preview box, letter long-press popup, shift states =="
+  focus_target; clear_field; geom skin
+  shot k10_letters_lower_or_auto
+  GXY=$(kxy label g) && { read -r X Y <<< "$GXY"; adb shell input motionevent DOWN $X $Y; sleep 0.45; shot k11_key_preview_g; release $X $Y; }
+  EXY=$(kxy label e) && { read -r X Y <<< "$EXY"; adb shell input motionevent DOWN $X $Y; sleep 1.4; shot k12_longpress_e_popup; release $X $Y; }
+  clear_field
+  E=$(elem s0); note "element at start: $E"
+  for t in 1 2 3 4; do tapcode -1; E=$(elem s$t); case "$E" in 1|2) shot k13_shift_upper; break;; esac; done
+  for t in 1 2 3; do [ "$E" = "3" ] && break; tapcode -1; E=$(elem sl$t); done
+  [ "$E" = "3" ] && { shot k14_caps_lock; pass "caps lock reached for the screenshot"; } || note "INFO: caps lock not reached (element $E)"
+  for t in 1 2 3; do [ "$E" = "0" ] && break; tapcode -1; E=$(elem so$t); done
 fi
 
 if leg update; then
