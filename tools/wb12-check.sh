@@ -6,7 +6,7 @@
 set -u
 APK="$1"; TAPK="$2"
 PKG=com.wrenboard.keyboard; TPKG=com.wrenboard.imetarget
-LEGS=",${WB_LEGS:-setup,keyboard,period,caps,shift,clip,update,toolbar,skin,emoji,clipboard},"
+LEGS=",${WB_LEGS:-setup,keyboard,period,caps,shift,clip,update,toolbar,skin,emoji,clipboard,settings},"
 mkdir -p shots; R=shots/results.txt; : > "$R"
 FAILS=0
 note() { echo "$*" | tee -a "$R"; }
@@ -65,7 +65,7 @@ if leg setup; then
   echo "$T" | grep -q "Step 1\|Step 2\|Open Input Method Settings" && fail "old setup wall still shown" || pass "no setup wall (not enabled)"
   echo "$T" | grep -qi "Keyboard\|Languages\|Typing" && pass "settings items reachable while not enabled" || fail "settings items not visible while not enabled"
   # a settings item is usable: open the first navigation row that is not the banner
-  XY=$(node_center s01 "Languages &amp; Models"); [ -z "$XY" ] && XY=$(node_center s01 "Keyboard &amp; Typing")
+  XY=$(node_center s01 "Typing"); [ -z "$XY" ] && XY=$(node_center s01 "Keyboard &amp; Typing")
   if [ -n "$XY" ]; then adb shell input tap $XY; sleep 2; shot s02_settings_subpage_not_enabled; dumpui s02; note "subpage texts: $(uitext s02 | cut -c1-300)"; adb shell input keyevent KEYCODE_BACK; sleep 1; fi
   adb shell ime enable "$IME" >/dev/null 2>&1
   adb shell am force-stop "$PKG"; adb shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1; sleep 6
@@ -80,6 +80,11 @@ if leg setup; then
   adb shell ime set "$IME" >/dev/null 2>&1
   adb shell am force-stop "$PKG"; adb shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1; sleep 6
   shot s05_settings_active; dumpui s05; T=$(uitext s05)
+  if echo "$T" | grep -q "WrenBoard is turned off\|WrenBoard is not your keyboard"; then
+    note "banner still up after relaunch; default IME is $(adb shell settings get secure default_input_method | tr -d '\r'); waiting 4 s"
+    sleep 4; adb shell am force-stop "$PKG"; adb shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1; sleep 6
+    shot s05b_settings_active_retry; dumpui s05; T=$(uitext s05)
+  fi
   echo "$T" | grep -q "WrenBoard is turned off\|WrenBoard is not your keyboard" && fail "banner still shown when active" || pass "no banner when active"
   adb shell input keyevent KEYCODE_HOME
 fi
@@ -96,7 +101,8 @@ python3 tools/wb12_kv.py shots/geom.txt list KEY > shots/keys_letters.txt
 
 if leg keyboard; then
   note "== KEYBOARD: starter words, 123 hint =="
-  S=$(sugg); note "suggestions in empty field: [$S]"
+  sleep 1.5; S=$(sugg); note "suggestions in empty field: [$S]"
+  grep 'STARTER' shots/_s.txt | tail -5 | sed 's/^.*WBDBG *: /  /' | tee -a "$R"
   [ -n "$S" ] && pass "starter words shown in an empty field ($S)" || fail "empty field shows no starter words"
   XY=$(kxy code -3 2>/dev/null || true); note "123 key at: $XY"
   clear_field
@@ -272,8 +278,8 @@ if leg emoji; then
     T=$(pos shots/em3.txt 'EMOJITAB i=0 ')
     if [ -n "$T" ]; then adb logcat -c; adb shell input tap $T; sleep 1.5; wlog em4; shot e03_recents_locked
       grep -q 'EMOJI page=Recent' shots/em4.txt && pass "clock tab opens the separate Recents page" || fail "Recents page not shown"
-      R=$(grep 'EMOJI recents' shots/em4.txt | tail -1); note "$R"
-      echo "$R" | grep -q 'locked=[1-9]' && pass "locked emoji sits on Recents ($R)" || fail "no locked emoji on Recents ($R)"
+      RC=$(grep 'EMOJI recents' shots/em4.txt | tail -1 | sed 's/.*EMOJI //'); note "$RC"
+      echo "$RC" | grep -q 'locked=[1-9]' && pass "locked emoji sits on Recents ($RC)" || fail "no locked emoji on Recents ($RC)"
       # unlock: long-press the first (locked) cell, tap Unlock
       adb logcat -c
       adb shell input motionevent DOWN $((LEFT+CW/2)) $((TOP+RH/2)); sleep 1.2; adb shell input motionevent UP $((LEFT+CW/2)) $((TOP+RH/2)); sleep 1.0
@@ -297,6 +303,7 @@ fi
 
 if leg clipboard; then
   note "== CLIPBOARD panel (SwiftKey replica): masonry, 3-dot menu, swipe delete with Undo, Clear all with confirmation =="
+  dbg "dsbool:enableClipboardHistory=true" 1.0   # clipboard history is off in a fresh install (FUTO default)
   focus_target; clear_field
   for t in "See_you_at_the_station_at_six" "https://www.example.com/a/long/sample/link/for/the/clipboard/check" "Shopping:_milk,_eggs,_bread,_coffee,_apples,_rice_and_a_few_onions_for_the_soup_on_Sunday" "AB12-CD34-EF56" "Meeting_moved_to_Thursday"; do
     dbg "clipset:$t" 1.0
@@ -339,6 +346,27 @@ if leg clipboard; then
   dbg close 1.0
 fi
 
+if leg settings; then
+  note "== SETTINGS tree (CP4): six groups + FUTO, each page opens =="
+  adb shell am force-stop "$PKG"; adb shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1; sleep 6
+  shot st01_settings_home; dumpui st01; T=$(uitext st01); note "home: ${T:0:500}"
+  ok=1; for w in "Keyboard" "Typing" "Voice" "Clipboard &amp; emoji" "Backup" "About" "FUTO"; do echo "$T" | grep -q "$w" || { ok=0; note "missing on home: $w"; }; done
+  [ $ok = 1 ] && pass "home shows the six groups and FUTO" || fail "home is missing groups"
+  echo "$T" | grep -qi "swiftkey" && fail "the word SwiftKey appears in Settings" || pass "no SwiftKey text on the home"
+  n=2
+  for d in wren_keyboard wren_typing voiceInput wren_clipemoji wren_backup about wren_futo; do
+    dbg "settings:$d" 3.0
+    shot "st0${n}_$d"; dumpui "st_$d"; P=$(uitext "st_$d"); note "$d: ${P:0:400}"
+    echo "$P" | grep -qi "swiftkey" && fail "SwiftKey text on $d"
+    [ -n "$P" ] && pass "$d opens" || fail "$d shows nothing"
+    n=$((n+1))
+  done
+  # FUTO page must still reach FUTO's own screens
+  dbg "settings:wren_futo" 3.0; dumpui st_futo2
+  for w in "Languages" "Swipe" "Actions"; do uitext st_futo2 | grep -q "$w" && pass "FUTO page keeps $w" || fail "FUTO page lost $w"; done
+  adb shell input keyevent KEYCODE_HOME
+fi
+
 if leg update; then
   note "== UPDATE dialog: Back and Dismiss close it; Update downloads in the app and opens the system installer =="
   adb shell input keyevent KEYCODE_HOME; sleep 1
@@ -355,7 +383,7 @@ if leg update; then
     else fail "no Dismiss button on the update dialog"; fi
   else fail "update dialog did not open"; fi
   adb shell appops set "$PKG" REQUEST_INSTALL_PACKAGES allow >/dev/null 2>&1
-  dbg "seedupdate:99.0.0|https://github.com/MtndaleRedneck/WrenBoard/releases/download/v1.0.0/WrenBoard-1.0.apk" 1.5
+  dbg "seedupdate:99.0.0|https://github.com/MtndaleRedneck/WrenBoard/releases/download/v1.1.0/WrenBoard-1.1.apk" 1.5
   dbg "settings:update" 3.0
   shot u05_update_available; dumpui u05; T=$(uitext u05); note "dialog texts: ${T:0:300}"
   XY=$(node_center u05 "Update")

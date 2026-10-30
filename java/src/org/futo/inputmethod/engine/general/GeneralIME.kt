@@ -810,16 +810,22 @@ class GeneralIME(val helper: IMEHelper) : IMEInterface, WordLearner, SuggestionS
      * empty field do the plain starters below stand in, so the strip is never blank. Never in fields that
      * take no suggestions (passwords and the like), and only while the setting is on.
      */
+    private fun starterSkip(why: String): Boolean {
+        if (BuildConfig.DEBUG) Log.i("WBDBG", "STARTER skip $why")
+        return true
+    }
+
     private fun starterWordsIfNeeded(words: SuggestedWords, inputStyle: Int, sequenceNumber: Int): SuggestedWords {
         try {
             if (!words.isEmpty) return words
             if (inputStyle == SuggestedWords.INPUT_STYLE_TAIL_BATCH || inputStyle == SuggestedWords.INPUT_STYLE_UPDATE_BATCH) return words
-            if (inputLogic.mWordComposer.isComposingWord) return words
-            if (!settings.current.needsToLookupSuggestions() || !settings.current.isSuggestionsEnabledPerUserSettings) return words
-            if (!helper.context.getSetting(StarterWordsSetting)) return words
-            if (!inputLogic.mConnection.isConnected) return words
+            if (inputLogic.mWordComposer.isComposingWord && starterSkip("composing")) return words
+            if (!settings.current.needsToLookupSuggestions() && starterSkip("field takes no suggestions")) return words
+            if (!settings.current.isSuggestionsEnabledPerUserSettings && starterSkip("suggestions off")) return words
+            if (!helper.context.getSetting(StarterWordsSetting) && starterSkip("setting off")) return words
+            if (!inputLogic.mConnection.isConnected && starterSkip("not connected")) return words
             val before = inputLogic.mConnection.getTextBeforeCursor(1, 0)
-            if (!before.isNullOrEmpty()) return words
+            if (!before.isNullOrEmpty() && starterSkip("text before cursor")) return words
             val list = ArrayList<SuggestedWordInfo>()
             listOf("I", "The", "You").forEach {
                 list.add(SuggestedWordInfo(it, "", SuggestedWordInfo.MAX_SCORE, SuggestedWordInfo.KIND_PREDICTION,
@@ -828,6 +834,7 @@ class GeneralIME(val helper: IMEHelper) : IMEInterface, WordLearner, SuggestionS
             if (BuildConfig.DEBUG) Log.i("WBDBG", "STARTER fallback")
             return SuggestedWords(list, null, null, false, false, false, inputStyle, sequenceNumber)
         } catch (e: Exception) {
+            starterSkip("error ${e.javaClass.simpleName}: ${e.message}")
             return words
         }
     }

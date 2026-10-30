@@ -678,6 +678,27 @@
     <string name="wren_action_share">Share</string>
     <string name="wren_action_info">Info</string>
     <string name="wren_about_title">About WrenBoard</string>
+    <string name="wren_set_keyboard">Keyboard</string>
+    <string name="wren_set_keyboard_sub">Theme, toolbar buttons, rows, height, sound</string>
+    <string name="wren_set_typing">Typing</string>
+    <string name="wren_set_typing_sub">Shift, autocorrect, suggestions, my dictionary</string>
+    <string name="wren_set_voice">Voice</string>
+    <string name="wren_set_voice_sub">Built-in offline voice model</string>
+    <string name="wren_set_clip_emoji">Clipboard &amp; emoji</string>
+    <string name="wren_set_clip_emoji_sub">Clipboard history, emoji recents and locks</string>
+    <string name="wren_set_backup">Backup</string>
+    <string name="wren_set_backup_sub">Export and import your settings and words</string>
+    <string name="wren_set_about">About</string>
+    <string name="wren_set_about_sub">Check for updates, license and credits</string>
+    <string name="wren_set_futo">FUTO</string>
+    <string name="wren_set_futo_sub">Swipe typing, languages, actions, theme editor, advanced and developer settings, license notice</string>
+    <string name="wren_set_toolbar_buttons">Toolbar buttons</string>
+    <string name="wren_set_suggestions">Suggestions</string>
+    <string name="wren_set_suggestions_sub">Autocorrect, learning, starter words</string>
+    <string name="wren_set_clear_emoji_recents">Clear emoji recents</string>
+    <string name="wren_set_unlock_all_emojis">Unlock all emojis</string>
+    <string name="wren_set_locked_count">%1$d locked</string>
+    <string name="wren_set_style">WrenBoard look for Settings</string>
     <string name="wren_back">Back</string>
     <string name="wren_undo">Undo</string>
     <string name="wren_clip_save">Save</string>
@@ -691,16 +712,17 @@
     <string name="wren_clip_paste">Paste</string>
     <string name="wren_clip_edit">Edit</string>
     <string name="wren_clip_delete">Delete</string>
+    <string name="wren_emoji_tab">Emoji</string>
+    <string name="wren_gif_tab">GIF</string>
     <string name="wren_search_emojis">Search emojis</string>
     <string name="wren_search_gifs">Search GIFs</string>
     <string name="wren_emoji_lock">Lock</string>
     <string name="wren_emoji_unlock">Unlock</string>
-    <string name="wren_gif_not_connected">No GIF source connected yet</string>
     <string name="wren_gif_recents">Recents</string>
     <string name="wren_gif_happy">Happy</string>
     <string name="wren_gif_sad">Sad</string>
     <string name="wren_gif_laugh">Laugh</string>
-    <string name="wren_swiftkey_panels">SwiftKey-style emoji and clipboard panels</string>
+    <string name="wren_swiftkey_panels">WrenBoard emoji and clipboard panels</string>
 
     <!-- Credits menu -->
     <string name="credits_menu_title">Credits</string>

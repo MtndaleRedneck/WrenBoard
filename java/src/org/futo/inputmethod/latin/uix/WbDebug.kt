@@ -81,6 +81,12 @@ object WbDebug {
                             PreferenceUtils.getDefaultSharedPreferences(ime).edit()
                                 .putBoolean(kv[0], kv.getOrNull(1) == "true").apply()
                         }
+                        cmd.startsWith("dsbool:") -> {
+                            // dsbool:<datastore key>=<true|false>, e.g. dsbool:enableClipboardHistory=true
+                            val kv = cmd.removePrefix("dsbool:").split("=")
+                            ime.setSettingBlocking(androidx.datastore.preferences.core.booleanPreferencesKey(kv[0]), kv.getOrNull(1) == "true")
+                            Log.i(TAG, "DSBOOL ${kv[0]}=${kv.getOrNull(1)}")
+                        }
                         cmd.startsWith("seedupdate:") -> {
                             // seedupdate:<version>|<apk url> : store an update-check result as if the check had found it
                             val parts = cmd.removePrefix("seedupdate:").split("|", limit = 2)

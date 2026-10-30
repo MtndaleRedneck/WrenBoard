@@ -174,7 +174,7 @@ class SettingsActivity : ComponentActivity(), DynamicThemeProviderOwner {
         setContent {
             DataStoreCacheProvider {
                 SharedPrefsCacheProvider {
-                    UixThemeAuto {
+                    WrenSettingsTheme {
                         Surface(
                             modifier = Modifier
                                 .fillMaxSize(),
