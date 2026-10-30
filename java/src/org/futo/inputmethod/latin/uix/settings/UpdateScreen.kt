@@ -55,6 +55,8 @@ import org.futo.inputmethod.updates.SKIPPED_UPDATE_VERSION
 import org.futo.inputmethod.updates.UpdateResult
 import org.futo.inputmethod.updates.openURI
 import java.io.ByteArrayOutputStream
+import java.net.HttpURLConnection
+import java.net.URL
 import java.io.InputStream
 import java.io.OutputStream
 
@@ -113,26 +115,17 @@ private suspend fun install(scope: CoroutineScope, context: Context, inputStream
         val sessionId = packageInstaller.createSession(params);
         session = packageInstaller.openSession(sessionId)
 
-        if(UpdateStatus.downloadedUpdate == null) {
-            UpdateStatus.downloadedUpdate = ByteArrayOutputStream(dataLength.toInt()).use { outputStream ->
-                inputStream.copyToOutputStream(dataLength, outputStream) { progress ->
-                    val progressText = "${(progress * 100.0f).toInt()}%";
-                    if (lastProgressText != progressText) {
-                        lastProgressText = progressText
-
-                        updateStatusText("Downloading... $progressText")
-                    }
-                }
-
-                // Note: .use will close the outputStream, but closing has no effect
-                // on ByteArrayOutputStream
-                outputStream
-            }
-        }
-
-
+        // WrenBoard 1.2: stream the download straight into the install session (the release APK is
+        // about 130 MB; holding it in memory first risks running out of memory on the phone).
         session.openWrite("package", 0, dataLength).use { sessionStream ->
-            UpdateStatus.downloadedUpdate!!.writeTo(sessionStream)
+            inputStream.copyToOutputStream(dataLength, sessionStream) { progress ->
+                val progressText = "${(progress * 100.0f).toInt()}%";
+                if (lastProgressText != progressText) {
+                    lastProgressText = progressText
+
+                    updateStatusText("Downloading... $progressText")
+                }
+            }
             session.fsync(sessionStream)
         };
 
@@ -166,31 +159,55 @@ private suspend fun install(scope: CoroutineScope, context: Context, inputStream
 private suspend fun downloadAndInstall(scope: CoroutineScope, context: Context, updateResult: UpdateResult, updateStatusText: (String) -> Unit) = GlobalScope.launch(Dispatchers.IO) {
     UpdateStatus.isDownloading.value = true
 
-    var inputStream: InputStream? = null;
+    var inputStream: InputStream? = null
+    var connection: HttpURLConnection? = null
     try {
-        // TODO: Move this code to a different source directory so we can enable or disable
-        // it per build flavor (e.g. so nightly can have update checking)
+        // WrenBoard 1.2: download the release APK inside the app (GitHub redirects the asset URL to its
+        // file host, so redirects are followed by hand), then hand it to Android's installer, which shows
+        // the system install prompt. Same release asset the update check found; nothing about the check changes.
+        var url = URL(updateResult.apkUrl)
+        var hops = 0
+        while (true) {
+            val c = (url.openConnection() as HttpURLConnection).apply {
+                instanceFollowRedirects = false
+                connectTimeout = 15000
+                readTimeout = 30000
+                setRequestProperty("User-Agent", "WrenBoard-Update")
+                setRequestProperty("Accept", "application/octet-stream")
+            }
+            val code = c.responseCode
+            if (code in 300..399 && hops < 6) {
+                val location = c.getHeaderField("Location") ?: throw Exception("redirect without a location")
+                c.disconnect()
+                url = URL(url, location)
+                hops++
+                continue
+            }
+            if (code !in 200..299) {
+                c.disconnect()
+                throw Exception("server answered $code")
+            }
+            connection = c
+            break
+        }
 
-        /*val httpClient = OkHttpClient()
-        val request = Request.Builder().method("GET", null).url(updateResult.apkUrl).build()
-
-        val response = httpClient.newCall(request).execute()
-        val body = response.body
-        if (response.isSuccessful && body != null) {
-            inputStream = body.byteStream();
-            val dataLength = body.contentLength();
-            install(scope, context, inputStream, dataLength, updateStatusText)
-        } else {*/
-            throw Exception("Failed to download latest version of app.");
-        //}
+        val dataLength = connection!!.contentLengthLong
+        if (dataLength <= 0L) throw Exception("download size unknown")
+        withContext(Dispatchers.Main) { updateStatusText("Downloading... 0%") }
+        UpdateStatus.downloadedUpdate = null
+        inputStream = connection!!.inputStream
+        install(scope, context, inputStream!!, dataLength) { text ->
+            scope.launch(Dispatchers.Main) { updateStatusText(text) }
+        }
     } catch (e: Throwable) {
-        Log.w("UpdateScreen", "Exception thrown while downloading and installing latest version of app.", e);
+        Log.w("UpdateScreen", "Exception thrown while downloading and installing latest version of app.", e)
         withContext(Dispatchers.Main) {
-            updateStatusText("Failed to download update: ${e.message}");
-            context.openURI(updateResult.apkUrl)
+            // Stay in the app and say what failed (1.1 threw here and opened the browser).
+            updateStatusText("Download failed: ${e.message ?: e.javaClass.simpleName}")
         }
     } finally {
-        inputStream?.close();
+        try { inputStream?.close() } catch (_: Throwable) { }
+        connection?.disconnect()
         UpdateStatus.isDownloading.value = false
     }
 }
@@ -220,9 +237,9 @@ fun UpdateDialog(navController: NavHostController) {
     if(lastUpdateResult == null || !lastUpdateResult.isNewer()) {
         if(lastCheckFailed) {
             // The check failed (no network, a server error, or no release published yet): do not claim "up to date".
-            InfoDialog(title = "Update check failed", body = "WrenBoard could not confirm whether an update is available. There may be no network, or no release is published yet. Use \"Check for updates manually\" in Settings to open the releases page.")
+            InfoDialog(title = "Update check failed", body = "WrenBoard could not confirm whether an update is available. There may be no network, or no release is published yet. Use \"Check for updates manually\" in Settings to open the releases page.", navController = navController)
         } else {
-            InfoDialog(title = "Up-to-date", body = "As of the last update check, the app is up to date.")
+            InfoDialog(title = "Up-to-date", body = "As of the last update check, the app is up to date.", navController = navController)
         }
     } else {
         AlertDialog(
@@ -245,13 +262,16 @@ fun UpdateDialog(navController: NavHostController) {
                         Text(text = statusText.value)
                     }
                 } else {
-                    Text(text = "A new version ${lastUpdateResult.nextVersionString} is available, would you like to update?")
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        Text(text = "A new version ${lastUpdateResult.nextVersionString} is available, would you like to update?")
+                        if (statusText.value.isNotEmpty()) Text(text = statusText.value)
+                    }
                 }
             },
             onDismissRequest = {
-                if(!isDownloading.value) {
-                    navController.navigateUp()
-                }
+                // WrenBoard 1.2: Back always closes the dialog (a running download carries on and the
+                // install prompt still appears when it finishes).
+                navController.navigateUp()
             },
             confirmButton = {
                 TextButton(onClick = {
@@ -278,7 +298,7 @@ fun UpdateDialog(navController: NavHostController) {
                     }
                     TextButton(onClick = {
                         navController.navigateUp()
-                    }, enabled = !isDownloading.value) {
+                    }) {
                         Text(stringResource(R.string.autoupdater_dismiss_update))
                     }
                 }

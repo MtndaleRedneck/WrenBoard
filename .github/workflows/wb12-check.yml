@@ -43,8 +43,11 @@ jobs:
         run: bash tools/ime-target/build.sh
       - name: Stage APKs at fixed paths
         run: |
-          find build/outputs/apk -name '*.apk' -print
-          cp "$(find build/outputs/apk -name '*debug*.apk' | head -1)" wb-debug.apk
+          # with an injected ABI, AGP may leave the APK under build/intermediates instead of build/outputs
+          find build -name '*.apk' -not -path '*/ime-target/*' -print | sed 's/^/::notice::apk /'
+          APK=$(find build/outputs/apk build/intermediates -name '*.apk' 2>/dev/null | grep -i debug | grep -v -i androidTest | head -1)
+          [ -n "$APK" ] || { echo "::error::no debug APK found"; exit 1; }
+          cp "$APK" wb-debug.apk
           ls -la wb-debug.apk tools/ime-target/out/imetarget.apk
           python3 -c 'import PIL' 2>/dev/null || python3 -m pip install --quiet --break-system-packages pillow || true
       - name: Enable KVM
@@ -69,4 +72,6 @@ jobs:
           retention-days: 14
       - name: Results
         if: always()
-        run: cat shots/results.txt || true
+        run: |
+          cat shots/results.txt || true
+          grep -E '^(FAIL|RESULT)' shots/results.txt 2>/dev/null | head -40 | sed 's/^/::warning::/' || true

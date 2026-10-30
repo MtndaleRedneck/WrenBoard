@@ -6,7 +6,7 @@
 set -u
 APK="$1"; TAPK="$2"
 PKG=com.wrenboard.keyboard; TPKG=com.wrenboard.imetarget
-LEGS=",${WB_LEGS:-setup,keyboard,period,caps,shift,clip,toolbar,emoji,clipboard,settings},"
+LEGS=",${WB_LEGS:-setup,keyboard,period,caps,shift,clip,update,toolbar,emoji,clipboard,settings},"
 mkdir -p shots; R=shots/results.txt; : > "$R"
 FAILS=0
 note() { echo "$*" | tee -a "$R"; }
@@ -182,6 +182,44 @@ PY
   W=$(adb logcat -d -s WBDBG:I | tr -d '\r' | grep 'WINDOW open' | tail -1); note "window: $W"
   echo "$W" | grep -q clipboard_history && pass "hold 123 opens the clipboard" || fail "hold 123 did not open the clipboard ($W)"
   dbg close 1.0
+fi
+
+if leg update; then
+  note "== UPDATE dialog: Back and Dismiss close it; Update downloads in the app and opens the system installer =="
+  adb shell input keyevent KEYCODE_HOME; sleep 1
+  dbg "settings:" 8.0          # Settings opens and runs its own update check first
+  dbg "settings:update" 3.0
+  shot u01_update_dialog_first; dumpui u01; T=$(uitext u01); note "dialog texts: ${T:0:300}"
+  if echo "$T" | grep -q "Up-to-date\|Update check failed\|Update available"; then
+    adb shell input keyevent KEYCODE_BACK; sleep 1.5; dumpui u02; T2=$(uitext u02)
+    echo "$T2" | grep -q "Up-to-date\|Update check failed\|Update available" && fail "Back did not close the update dialog" || pass "Back closes the update dialog"
+    dbg "settings:update" 3.0; dumpui u03
+    XY=$(node_center u03 "Dismiss")
+    if [ -n "$XY" ]; then adb shell input tap $XY; sleep 1.5; dumpui u04; T4=$(uitext u04)
+      echo "$T4" | grep -q "Up-to-date\|Update check failed\|Update available" && fail "Dismiss did not close the update dialog" || pass "Dismiss closes the update dialog"
+    else fail "no Dismiss button on the update dialog"; fi
+  else fail "update dialog did not open"; fi
+  adb shell appops set "$PKG" REQUEST_INSTALL_PACKAGES allow >/dev/null 2>&1
+  dbg "seedupdate:99.0.0|https://github.com/MtndaleRedneck/WrenBoard/releases/download/v1.0.0/WrenBoard-1.0.apk" 1.5
+  dbg "settings:update" 3.0
+  shot u05_update_available; dumpui u05; T=$(uitext u05); note "dialog texts: ${T:0:300}"
+  XY=$(node_center u05 "Update")
+  if [ -n "$XY" ]; then
+    adb shell input tap $XY
+    INST=""
+    for i in $(seq 1 45); do
+      sleep 2
+      FOC=$(adb shell dumpsys window 2>/dev/null | tr -d '\r' | grep -m1 'mCurrentFocus')
+      case "$FOC" in *packageinstaller*|*PackageInstaller*) INST="$FOC"; break;; esac
+      case "$FOC" in *chrome*|*browser*|*Browser*) break;; esac
+    done
+    note "focus after Update: $FOC"
+    shot u06_after_update_tap; dumpui u06; note "screen texts: $(uitext u06 | cut -c1-300)"
+    [ -n "$INST" ] && pass "Update downloaded in the app and opened the system installer" || fail "Update did not reach the system installer ($FOC)"
+    echo "$FOC" | grep -qi "chrome\|browser" && fail "Update opened the browser"
+    adb shell input keyevent KEYCODE_BACK; sleep 1; adb shell input keyevent KEYCODE_BACK; sleep 1
+  else fail "no Update button with a seeded newer release"; fi
+  adb shell input keyevent KEYCODE_HOME; sleep 1
 fi
 
 note "== logcat crashes =="
