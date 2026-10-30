@@ -1,0 +1,49 @@
+name: publish-1.2.0
+on:
+  push:
+    branches: [release-publish-1.2.0]
+permissions:
+  contents: write
+  actions: read
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: WrenBoard-baseline-apk
+          run-id: 41128815002
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: art
+      - name: Verify exact signed bytes
+        run: |
+          set -e
+          ls -l art
+          f=$(ls art/*.apk | head -1)
+          sum=$(sha256sum "$f" | cut -d' ' -f1)
+          size=$(stat -c %s "$f")
+          echo "file=$f sha256=$sum size=$size"
+          test "$sum" = "6327eaa42bb665ce7a44dff603fe4964f3d73678e338a12324d8d139a7394d51"
+          test "$size" = "129307564"
+          cp "$f" WrenBoard-1.2.apk
+          BT=$(ls -d $ANDROID_HOME/build-tools/* | sort -V | tail -1)
+          $BT/apksigner verify --print-certs WrenBoard-1.2.apk | tee signer.txt
+          grep -q 'ad41ab713027aca87389019721d102d67cacaae349cc625aa14f76240801f7fc' signer.txt
+      - name: Guard - no existing v1.2.0
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if gh release view v1.2.0 >/dev/null 2>&1; then echo "v1.2.0 already exists"; exit 1; fi
+      - name: Create release v1.2.0 at 37f2b10
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create v1.2.0 WrenBoard-1.2.apk --target 37f2b10eddf11785b84391c36bdfc7b5ebf59540 --title "WrenBoard 1.2" --notes-file .github/release-notes-1.2.0.md --latest
+      - name: Readback
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh api repos/${{ github.repository }}/releases/latest --jq '{tag:.tag_name,draft:.draft,pre:.prerelease,assets:[.assets[]|{name,size,url:.browser_download_url}]}'
+          curl -sSL -o dl.apk "https://github.com/${{ github.repository }}/releases/download/v1.2.0/WrenBoard-1.2.apk"
+          sha256sum dl.apk
