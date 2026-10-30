@@ -36,7 +36,7 @@ alive() { # the emulator's adb link has dropped mid-run twice; try to bring it b
   local st; st=$(timeout 10 "$ADB_BIN" get-state 2>/dev/null | tr -d '\r')
   [ "$st" = device ] && { rm -f shots/.dead; : > shots/.tmo; return 0; }
   echo "adb state '$st' before leg $1; reconnecting" | tee -a "$R"
-  { echo "  host: $(pgrep -af 'qemu-system|emulator' | cut -c1-120 | head -3 | tr '\n' ';')"; echo "  mem: $(free -m | sed -n 2p)"; tail -40 shots/logcat_stream.txt 2>/dev/null | sed 's/^/  lc: /'; } >> "$R"
+  { echo "  host: $(pgrep -af 'qemu-system|emulator' | cut -c1-120 | head -3 | tr '\n' ';')"; echo "  mem: $(free -m | sed -n 2p)"; sudo -n dmesg 2>/dev/null | tail -12 | sed 's/^/  dmesg: /'; tail -40 shots/logcat_stream.txt 2>/dev/null | sed 's/^/  lc: /'; } >> "$R"
   timeout 20 "$ADB_BIN" reconnect offline >/dev/null 2>&1; sleep 5
   timeout 90 "$ADB_BIN" wait-for-device >/dev/null 2>&1
   st=$(timeout 10 "$ADB_BIN" get-state 2>/dev/null | tr -d '\r'); echo "adb state now '$st'" | tee -a "$R"

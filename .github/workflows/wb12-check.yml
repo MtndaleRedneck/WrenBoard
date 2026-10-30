@@ -65,6 +65,7 @@ jobs:
           profile: Nexus 6
           ram-size: 4096M
           heap-size: 576M
+          emulator-options: -no-window -gpu swangle_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none
           disable-animations: true
           script: WB_LEGS="${{ inputs.legs }}" bash tools/wb12-check.sh wb-debug.apk tools/ime-target/out/imetarget.apk
       - uses: actions/upload-artifact@v4
