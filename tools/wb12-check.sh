@@ -462,6 +462,7 @@ if leg settings; then
     [ -n "$P" ] && pass "$d opens" || fail "$d shows nothing"
     n=$((n+1))
   done
+  for w in LOOK LAYOUT FEEL; do uitext st_wren_keyboard | grep -q "$w" && pass "Keyboard page has the $w card" || fail "Keyboard page lacks the $w card"; done
   # FUTO page must still reach FUTO's own screens
   opensettings "" 2; opensettings wren_futo 3.5; dumpui st_futo2
   for w in "Languages" "Swipe" "Actions"; do uitext st_futo2 | grep -q "$w" && pass "FUTO page keeps $w" || fail "FUTO page lost $w"; done
