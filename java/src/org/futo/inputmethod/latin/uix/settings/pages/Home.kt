@@ -157,8 +157,7 @@ val HomeScreenLite = UserSettingsMenu(
             navigateTo = "payment",
             icon = R.drawable.dollar_sign,
         ).copy(visibilityCheck = {
-            // WrenBoard 1.2: FUTO's Payment row is hidden from people (WrenHidePayment); the screen itself stays in the code.
-            !WrenHidePayment && useDataStoreValue(IS_ALREADY_PAID) == false
+            useDataStoreValue(IS_ALREADY_PAID) == false
         }, appearInSearchIfVisibilityCheckFailed = false),
         //}
 
