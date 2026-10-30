@@ -3,10 +3,15 @@ package org.futo.inputmethod.engine.general
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
-/** WrenBoard 1.2 fix1b: starter words come from typing history, with I/The/You only when there is none. */
+/** WrenBoard 1.2 fix1b: starter words come from typing history; I/The/You only fill what history does not. */
 class WrenStarterWordsTest {
-    @Test fun historyWordsWinOverFallback() {
-        assertEquals(listOf("Zebra", "Hello"), WrenStarterWords.choose(listOf("Zebra", "Hello"), enabled = true))
+    @Test fun historyWordsComeFirst() {
+        assertEquals(listOf("Zebra", "Hello", "Thanks"), WrenStarterWords.choose(listOf("Zebra", "Hello", "Thanks", "Ok"), enabled = true))
+    }
+
+    @Test fun shortHistoryIsFilledWithFallbackWithoutDuplicates() {
+        assertEquals(listOf("zebra", "I", "The"), WrenStarterWords.choose(listOf("zebra"), enabled = true))
+        assertEquals(listOf("the", "I", "You"), WrenStarterWords.choose(listOf("the"), enabled = true))
     }
 
     @Test fun noHistoryGivesFallback() {

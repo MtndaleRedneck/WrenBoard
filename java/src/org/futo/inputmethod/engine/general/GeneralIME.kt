@@ -817,32 +817,36 @@ class GeneralIME(val helper: IMEHelper) : IMEInterface, WordLearner, SuggestionS
 
     private fun starterWordsIfNeeded(words: SuggestedWords, inputStyle: Int, sequenceNumber: Int): SuggestedWords {
         try {
-            if (!words.isEmpty) {
-                if (BuildConfig.DEBUG && inputStyle == SuggestedWords.INPUT_STYLE_BEGINNING_OF_SENTENCE_PREDICTION)
-                    Log.i("WBDBG", "STARTER predicted ${(0 until words.size()).joinToString("|") { words.getWord(it) }}")
-                return words
-            }
+            // only an empty field is touched; everything else is FUTO's strip as it came
+            val quiet = !words.isEmpty
+            fun skip(why: String) = quiet || starterSkip(why)
             if (inputStyle == SuggestedWords.INPUT_STYLE_TAIL_BATCH || inputStyle == SuggestedWords.INPUT_STYLE_UPDATE_BATCH) return words
-            if (inputLogic.mWordComposer.isComposingWord && starterSkip("composing")) return words
-            if (!settings.current.needsToLookupSuggestions() && starterSkip("field takes no suggestions")) return words
-            if (!settings.current.isSuggestionsEnabledPerUserSettings && starterSkip("suggestions off")) return words
-            if (!helper.context.getSetting(StarterWordsSetting) && starterSkip("setting off")) return words
-            if (!inputLogic.mConnection.isConnected && starterSkip("not connected")) return words
+            if (inputLogic.mWordComposer.isComposingWord && skip("composing")) return words
+            if (!settings.current.needsToLookupSuggestions() && skip("field takes no suggestions")) return words
+            if (!settings.current.isSuggestionsEnabledPerUserSettings && skip("suggestions off")) return words
+            if (!inputLogic.mConnection.isConnected && skip("not connected")) return words
             val before = inputLogic.mConnection.getTextBeforeCursor(1, 0)
-            if (!before.isNullOrEmpty() && starterSkip("text before cursor")) return words
+            if (!before.isNullOrEmpty() && skip("text before cursor")) return words
+            // Empty field. Keep only the person's own typing-history words from FUTO's prediction, fill the rest with
+            // I / The / You; toggle off leaves the strip empty (WrenStarterWords).
+            val enabled = helper.context.getSetting(StarterWordsSetting)
+            val fromHistory = words.mSuggestedWordInfoList.filter { it.mSourceDict?.mDictType == Dictionary.TYPE_USER_HISTORY }
+            val chosen = WrenStarterWords.choose(fromHistory.map { it.mWord }, enabled)
+            if (BuildConfig.DEBUG) Log.i("WBDBG", "STARTER ${if (!enabled) "setting off" else if (fromHistory.isEmpty()) "fallback" else "history"} [${chosen.joinToString("|")}] from [${(0 until words.size()).joinToString("|") { words.getWord(it) }}]")
+            if (chosen.isEmpty()) return SuggestedWords.getEmptyInstance()
             val list = ArrayList<SuggestedWordInfo>()
-            // the prediction path (the person's own history at the start of a field) gave nothing: plain fallback
-            WrenStarterWords.choose(emptyList(), enabled = true).forEach {
-                list.add(SuggestedWordInfo(it, "", SuggestedWordInfo.MAX_SCORE, SuggestedWordInfo.KIND_PREDICTION,
-                    Dictionary.DICTIONARY_HARDCODED, SuggestedWordInfo.NOT_AN_INDEX, SuggestedWordInfo.NOT_A_CONFIDENCE))
+            chosen.forEach { w ->
+                list.add(fromHistory.firstOrNull { it.mWord == w } ?: SuggestedWordInfo(w, "", SuggestedWordInfo.MAX_SCORE,
+                    SuggestedWordInfo.KIND_PREDICTION, Dictionary.DICTIONARY_HARDCODED, SuggestedWordInfo.NOT_AN_INDEX,
+                    SuggestedWordInfo.NOT_A_CONFIDENCE))
             }
-            if (BuildConfig.DEBUG) Log.i("WBDBG", "STARTER fallback")
             return SuggestedWords(list, null, null, false, false, false, inputStyle, sequenceNumber)
         } catch (e: Exception) {
             starterSkip("error ${e.javaClass.simpleName}: ${e.message}")
             return words
         }
     }
+
 
     override fun showSuggestionStrip(words: SuggestedWords?) {
         inputLogic.setSuggestedWords(words)
