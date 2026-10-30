@@ -382,12 +382,14 @@ private fun WrenClipCard(w: WrenClipboardWindow, entry: ClipboardEntry, view: Vi
                 state = rememberDraggableState { delta -> scope.launch { offsetX.snapTo(offsetX.value + delta) } },
                 onDragStopped = { velocity ->
                     // Swipe a clip sideways to delete it (with Undo), as in SwiftKey.
+                    // Delete first: a late drag delta can cancel the slide-out animation, and the delete must not
+                    // depend on the animation finishing.
                     if (abs(offsetX.value) > 180f || abs(velocity) > 2500f) {
                         val target = if (offsetX.value + velocity / 10f > 0) 1400f else -1400f
-                        offsetX.animateTo(target)
                         w.removeWithUndo(listOf(entry), resources.getString(R.string.wren_clip_deleted))
+                        try { offsetX.animateTo(target) } catch (_: Exception) { }
                     } else {
-                        offsetX.animateTo(0f)
+                        try { offsetX.animateTo(0f) } catch (_: Exception) { }
                     }
                 }
             )

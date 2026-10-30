@@ -7,7 +7,7 @@ on:
         required: false
         default: ""
       focus:
-        description: "learn = learn-restore + real-data export legs; upgrade = published 1.0 -> branch APK install-over data preservation"
+        description: "learn = learn-restore + real-data export legs; upgrade = published 1.1 -> branch APK install-over data preservation"
         required: false
         default: ""
 jobs:
@@ -46,12 +46,12 @@ jobs:
           echo "Using build run $RID"
           gh run download "$RID" -n WrenBoard-baseline-apk -D apk
           ls -la apk/
-      - name: Get published 1.0 APK (upgrade focus only)
+      - name: Get published 1.1 APK (upgrade focus only; the v1.0.0 release asset is retired)
         if: inputs.focus == 'upgrade'
         run: |
           mkdir -p apk10
-          curl -L -o apk10/WrenBoard-1.0.apk https://github.com/MtndaleRedneck/WrenBoard/releases/download/v1.0.0/WrenBoard-1.0.apk
-          echo "d8efe5c5013e3f3493aeeb2f95eb30f715055ce4750387c18da2f4831ca072e8  apk10/WrenBoard-1.0.apk" | sha256sum -c -
+          curl -L -o apk10/WrenBoard-1.1.apk https://github.com/MtndaleRedneck/WrenBoard/releases/download/v1.1.0/WrenBoard-1.1.apk
+          echo "6b665ec1622b72443a1436271f18899539efbd89fb675fc860241d6220411a2b  apk10/WrenBoard-1.1.apk" | sha256sum -c -
           ls -la apk10/
       - name: Generate import-regression fixtures
         run: python3 tools/make_fixtures.py tools/ime-target/fixtures
