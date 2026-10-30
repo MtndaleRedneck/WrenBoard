@@ -108,8 +108,9 @@ if leg setup; then
   # a settings item is usable: open the first navigation row that is not the banner
   XY=$(node_center s01 "Typing"); [ -z "$XY" ] && XY=$(node_center s01 "Keyboard &amp; Typing")
   if [ -n "$XY" ]; then adb shell input tap $XY; sleep 2; shot s02_settings_subpage_not_enabled; dumpui s02; note "subpage texts: $(uitext s02 | cut -c1-300)"; adb shell input keyevent KEYCODE_BACK; sleep 1; fi
-  adb shell ime enable "$IME" >/dev/null 2>&1
-  adb shell am force-stop "$PKG"; adb shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1; sleep 6
+  for i in 1 2 3 4 5; do adb shell ime enable "$IME" >/dev/null 2>&1; sleep 1; adb shell ime list -s | tr -d '\r' | grep -qx "$IME" && break; done
+  adb shell am force-stop "$PKG"; sleep 1; adb shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1; sleep 6
+  for i in 1 2 3; do dumpui s03; uitext s03 | grep -q "WrenBoard is not your keyboard" && break; sleep 3; done
   shot s03_settings_enabled_not_active; dumpui s03; T=$(uitext s03); note "texts: ${T:0:300}"
   echo "$T" | grep -q "WrenBoard is not your keyboard" && pass "banner when enabled but not active" || fail "banner when enabled but not active"
   echo "$T" | grep -q "Step 2" && fail "Step 2 wall still shown" || pass "no Step 2 wall"
@@ -371,7 +372,9 @@ if leg clipboard; then
   adb logcat -c; dbg close 0.8; dbg "open:clipboard_history" 2.0; wlog cl3
   C=$(pos shots/cl3.txt 'CLIPCARD i=1 ')
   if [ -n "$C" ]; then read -r X Y <<< "$C"
-    adb logcat -c; adb shell input swipe $X $Y $((X-600)) $Y 250; sleep 1.0; wlog cl4; shot cl04_swiped_undo
+    adb logcat -c; adb shell input swipe $X $Y $((X-600)) $Y 300; sleep 1.5; wlog cl4
+    grep -q 'CLIP removed=1' shots/cl4.txt || { sleep 1.5; wlog cl4; }
+    shot cl04_swiped_undo
     grep -q 'CLIP removed=1' shots/cl4.txt && pass "swipe deletes the clip" || fail "swipe did not delete"
     U=$(pos shots/cl4.txt 'CLIPUNDO'); [ -n "$U" ] && { adb logcat -c; adb shell input tap $U; sleep 1.0; wlog cl5; shot cl05_after_undo
       grep -q 'CLIP undo restored=1' shots/cl5.txt && pass "Undo brings the swiped clip back" || fail "Undo did not restore"; } || fail "no Undo bar after swipe"
@@ -441,7 +444,10 @@ if leg settings; then
   adb shell input keyevent KEYCODE_HOME; sleep 1
   opensettings "" 6
   note "  adb state after opening Settings: $(timeout 10 "$ADB_BIN" get-state 2>&1 | tr -d '\r')"
-  dumpui st00; uitext st00 | grep -q "Personal dictionary" && { note "  first-entry personal dictionary page is up; going back to the home"; adb shell input keyevent KEYCODE_BACK; sleep 2; }
+  dumpui st00
+  # the update leg left a seeded 99.0.0 behind; a person would answer the prompt, so skip that version here
+  if uitext st00 | grep -q "Update available"; then XY=$(node_center st00 "Skip this version"); [ -n "$XY" ] && { adb shell input tap $XY; sleep 2; note "  skipped the seeded update prompt"; }; dumpui st00; fi
+  uitext st00 | grep -q "Personal dictionary" && { note "  first-entry personal dictionary page is up; going back to the home"; adb shell input keyevent KEYCODE_BACK; sleep 2; }
   shot st01_settings_home; dumpui st01; T=$(uitext st01)
   adb shell input swipe 540 1700 540 700 400; sleep 1.5; shot st01b_settings_home_scrolled; dumpui st01b; T="$T$(uitext st01b)"
   note "home: ${T:0:700}"
