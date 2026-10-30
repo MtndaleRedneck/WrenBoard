@@ -11,6 +11,7 @@
 set -u
 APK="$1"
 TARGET_APK="$2"
+UPGRADE_APK="${3:-}"  # focus=upgrade only: branch build installed over the published APK ($1)
 PKG="com.wrenboard.keyboard"
 TPKG="com.wrenboard.imetarget"
 mkdir -p shots
@@ -232,6 +233,10 @@ clear_field
 note "GATE: PASS (focused EditText + WrenBoard keyboard pixels + validated key mapping)"
 
 cp "$GEOM" shots/geom_letters.json
+if [ "${WB_FOCUS:-}" = upgrade ]; then
+  note "FOCUS=upgrade: the Phase A gate ran against the PUBLISHED 1.0 APK; running the install-over data-preservation leg only"
+  source tools/ime-upgrade.sh
+fi
 if [ "${WB_FOCUS:-}" = caps ]; then
   note "FOCUS=caps: shift long-press only. Source: shift has moreKeys [!noPanelAutoMoreKey!, key_capslock]; PointerTracker.onLongPressed auto-commits the first more-key with no panel after config_longpress_shift_lock_timeout=1200 ms (stationary hold, no slide)."
   SH=$(jq -r '.keys.shift | "\(.[0]) \(.[1])"' "$GEOM")

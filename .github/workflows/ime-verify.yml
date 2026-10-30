@@ -7,7 +7,7 @@ on:
         required: false
         default: ""
       focus:
-        description: "learn = only the learn-restore and the real-learned-data export/fresh-install legs"
+        description: "learn = learn-restore + real-data export legs; upgrade = published 1.0 -> branch APK install-over data preservation"
         required: false
         default: ""
 jobs:
@@ -46,6 +46,13 @@ jobs:
           echo "Using build run $RID"
           gh run download "$RID" -n WrenBoard-baseline-apk -D apk
           ls -la apk/
+      - name: Get published 1.0 APK (upgrade focus only)
+        if: inputs.focus == 'upgrade'
+        run: |
+          mkdir -p apk10
+          curl -L -o apk10/WrenBoard-1.0.apk https://github.com/MtndaleRedneck/WrenBoard/releases/download/v1.0.0/WrenBoard-1.0.apk
+          echo "d8efe5c5013e3f3493aeeb2f95eb30f715055ce4750387c18da2f4831ca072e8  apk10/WrenBoard-1.0.apk" | sha256sum -c -
+          ls -la apk10/
       - name: Generate import-regression fixtures
         run: python3 tools/make_fixtures.py tools/ime-target/fixtures
       - name: Build ime-target APK (deterministic EditText target)
@@ -64,7 +71,12 @@ jobs:
           arch: x86_64
           profile: Nexus 6
           disable-animations: true
-          script: WB_FOCUS=${{ inputs.focus }} bash tools/ime-verify.sh apk/*.apk tools/ime-target/out/imetarget.apk
+          script: |
+            if [ "${{ inputs.focus }}" = upgrade ]; then
+              WB_FOCUS=upgrade bash tools/ime-verify.sh apk10/*.apk tools/ime-target/out/imetarget.apk apk/*.apk
+            else
+              WB_FOCUS=${{ inputs.focus }} bash tools/ime-verify.sh apk/*.apk tools/ime-target/out/imetarget.apk
+            fi
       - uses: actions/upload-artifact@v4
         if: always()
         with:
