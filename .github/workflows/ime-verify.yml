@@ -71,12 +71,7 @@ jobs:
           arch: x86_64
           profile: Nexus 6
           disable-animations: true
-          script: |
-            if [ "${{ inputs.focus }}" = upgrade ]; then
-              WB_FOCUS=upgrade bash tools/ime-verify.sh apk10/*.apk tools/ime-target/out/imetarget.apk apk/*.apk
-            else
-              WB_FOCUS=${{ inputs.focus }} bash tools/ime-verify.sh apk/*.apk tools/ime-target/out/imetarget.apk
-            fi
+          script: if [ "${{ inputs.focus }}" = upgrade ]; then WB_FOCUS=upgrade bash tools/ime-verify.sh apk10/*.apk tools/ime-target/out/imetarget.apk apk/*.apk; else WB_FOCUS=${{ inputs.focus }} bash tools/ime-verify.sh apk/*.apk tools/ime-target/out/imetarget.apk; fi
       - uses: actions/upload-artifact@v4
         if: always()
         with:
