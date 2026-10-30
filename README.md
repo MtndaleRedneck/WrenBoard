@@ -1,4 +1,4 @@
-<p align="center"><img src="java/res/drawable-nodpi/wrenboard_logo.png" alt="WrenBoard icon" width="96"></p>
+<p align="center"><img src="docs/readme-icon.png" alt="WrenBoard icon" width="96"></p>
 
 # WrenBoard
 
