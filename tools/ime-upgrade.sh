@@ -33,9 +33,16 @@ learn_word z o r b l a x
 sleep 8   # more than the 5 s delayed flush
 predict_slots zorblax z o r b l; HU=$PR
 if [ "$HU" = BLOCKED ]; then note "INCONCLUSIVE(harness): pre-upgrade prediction check blocked (focus/typing not verified)"; elif [ -n "$HU" ]; then note "PASS: typed learned word 'zorblax' is offered as a prediction from 'zorbl' on published 1.0 (slot:field = '$HU')"; else note "FAIL-or-INCONCLUSIVE: no suggestion slot produced 'zorblax' on published 1.0 after typing it 3 times (see shots learn_preup_zorblax_*; check frames to tell app from harness)"; fi
+# Learned words only reach disk when the input session ENDS (onFinishInput -> delayedSync ->
+# 5 s -> flushUserHistoryDictionaries; identical in 1.0 and the branch). End the session like
+# real usage (HOME) and wait out the flush before snapshotting, or the upgrade below would be
+# tested against words that were never on disk.
+adb shell input keyevent KEYCODE_HOME; sleep 7
 adb_ready root; sleep 2
 if adb shell id 2>/dev/null | grep -q "uid=0"; then
   note "pre-upgrade dict dir: $(adb shell "ls -l $ULDIR" | tr -d '\r' | tr '\n' ';')"
+  HB_PRE=$(adb shell "ls $ULDIR/*.header $ULDIR/*.body 2>/dev/null" | tr -d '\r' | tr '\n' ' ')
+  if [ -z "$HB_PRE" ]; then note "FAIL: PREMISE - learned dictionary never reached disk on 1.0 before the upgrade; run invalid, no upgrade verdict"; exit 1; fi
   adb shell "md5sum $ULDIR/* 2>/dev/null" | tr -d '\r' > shots/up_dict_pre.md5; sed 's/^/    pre: /' shots/up_dict_pre.md5 | tee -a "$R"
   adb shell "find /data/data/$PKG/shared_prefs /data/data/$PKG/files -type f 2>/dev/null | sort" | tr -d '\r' > shots/up_files_pre.txt
   note "pre-upgrade app file count: $(wc -l < shots/up_files_pre.txt | tr -d ' ')"
