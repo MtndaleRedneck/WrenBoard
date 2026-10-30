@@ -8,6 +8,8 @@ import android.content.Context
 import android.content.ContextWrapper
 import android.content.Intent
 import android.content.pm.PackageInstaller
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import android.view.WindowManager
 import androidx.compose.foundation.layout.Column
@@ -52,6 +54,7 @@ import org.futo.inputmethod.updates.InstallReceiver
 import org.futo.inputmethod.updates.LAST_UPDATE_CHECK_FAILED
 import org.futo.inputmethod.updates.LAST_UPDATE_CHECK_RESULT
 import org.futo.inputmethod.updates.SKIPPED_UPDATE_VERSION
+import org.futo.inputmethod.updates.UpdateAttempts
 import org.futo.inputmethod.updates.UpdateResult
 import org.futo.inputmethod.updates.openURI
 import java.io.ByteArrayOutputStream
@@ -99,6 +102,12 @@ object UpdateStatus {
     val isDownloading = mutableStateOf(false)
     val downloadText = mutableStateOf("")
 
+    /** WrenBoard 1.2: the words under the prompt belong to one attempt at a time (see UpdateAttempts). */
+    val attempts = UpdateAttempts(publish = { words ->
+        if (Looper.myLooper() == Looper.getMainLooper()) downloadText.value = words
+        else Handler(Looper.getMainLooper()).post { downloadText.value = words }
+    })
+
     var downloadedUpdate: ByteArrayOutputStream? = null
 
     /** WrenBoard 1.2: the version Settings already prompted for in this app session, so a dismissed
@@ -106,14 +115,13 @@ object UpdateStatus {
     @Volatile var promptedVersion: Int = -1
 }
 
-private suspend fun install(scope: CoroutineScope, context: Context, inputStream: InputStream, dataLength: Long, updateStatusText: (String) -> Unit) {
+private suspend fun install(context: Context, attempt: Long, inputStream: InputStream, dataLength: Long) {
     var lastProgressText = "";
     var session: PackageInstaller.Session? = null;
 
     try {
-        //Log.i("UpdateScreen", "Hooked InstallReceiver.onReceiveResult.")
-        InstallReceiver.onReceiveResult.onEach { message -> updateStatusText("Fatal error: $message") }.launchIn(scope)
-
+        // WrenBoard 1.2: the installer's answer comes back through InstallReceiver with this attempt's token
+        // (1.1 prefixed every answer, success included, with "Fatal error:" and never cleared it).
         val packageInstaller: PackageInstaller = context.packageManager.packageInstaller;
         val params = PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL);
         val sessionId = packageInstaller.createSession(params);
@@ -127,92 +135,85 @@ private suspend fun install(scope: CoroutineScope, context: Context, inputStream
                 if (lastProgressText != progressText) {
                     lastProgressText = progressText
 
-                    updateStatusText("Downloading... $progressText")
+                    UpdateStatus.attempts.post(attempt, "Downloading... $progressText")
                 }
             }
             session.fsync(sessionStream)
         };
 
-        val intent = Intent(context, InstallReceiver::class.java);
-        val pendingIntent = getBroadcast(context, 0, intent, FLAG_MUTABLE or FLAG_UPDATE_CURRENT);
+        val intent = Intent(context, InstallReceiver::class.java)
+            .putExtra(InstallReceiver.EXTRA_ATTEMPT, attempt);
+        // One PendingIntent per attempt (its own request code), so an older session's result keeps its own token.
+        val pendingIntent = getBroadcast(context, (attempt and 0x7fffffffL).toInt(), intent, FLAG_MUTABLE or FLAG_UPDATE_CURRENT);
         val statusReceiver = pendingIntent.intentSender;
 
         session.commit(statusReceiver);
         session.close();
 
-        withContext(Dispatchers.Main) {
-            updateStatusText("Installing update")
-            //_textProgress.text = "";
-            //_text.text = context.resources.getText(R.string.installing_update);
-        }
+        UpdateStatus.attempts.post(attempt, "Installing update")
     } catch (e: Throwable) {
         Log.w("UpdateScreen", "Exception thrown while downloading and installing latest version of app.", e);
         session?.abandon();
-        withContext(Dispatchers.Main) {
-            updateStatusText("Failed to install update")
-        }
-    } finally {
-        withContext(Dispatchers.Main) {
-            Log.i("UpdateScreen", "Keep screen on unset install")
-            //window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-        }
+        UpdateStatus.attempts.fail(attempt, "Update failed.")
     }
 }
 
 @DelicateCoroutinesApi
-private suspend fun downloadAndInstall(scope: CoroutineScope, context: Context, updateResult: UpdateResult, updateStatusText: (String) -> Unit) = GlobalScope.launch(Dispatchers.IO) {
+private fun downloadAndInstall(context: Context, updateResult: UpdateResult) {
+    if (UpdateStatus.isDownloading.value) return
+    val attempt = UpdateStatus.attempts.start()
     UpdateStatus.isDownloading.value = true
+    Log.i("UpdateScreen", "Update attempt $attempt started")
 
-    var inputStream: InputStream? = null
-    var connection: HttpURLConnection? = null
-    try {
-        // WrenBoard 1.2: download the release APK inside the app (GitHub redirects the asset URL to its
-        // file host, so redirects are followed by hand), then hand it to Android's installer, which shows
-        // the system install prompt. Same release asset the update check found; nothing about the check changes.
-        var url = URL(updateResult.apkUrl)
-        var hops = 0
-        while (true) {
-            val c = (url.openConnection() as HttpURLConnection).apply {
-                instanceFollowRedirects = false
-                connectTimeout = 15000
-                readTimeout = 30000
-                setRequestProperty("User-Agent", "WrenBoard-Update")
-                setRequestProperty("Accept", "application/octet-stream")
+    GlobalScope.launch(Dispatchers.IO) {
+        var inputStream: InputStream? = null
+        var connection: HttpURLConnection? = null
+        try {
+            // WrenBoard 1.2: download the release APK inside the app (GitHub redirects the asset URL to its
+            // file host, so redirects are followed by hand), then hand it to Android's installer, which shows
+            // the system install prompt. Same release asset the update check found; nothing about the check changes.
+            var url = URL(updateResult.apkUrl)
+            var hops = 0
+            while (true) {
+                val c = (url.openConnection() as HttpURLConnection).apply {
+                    instanceFollowRedirects = false
+                    connectTimeout = 15000
+                    readTimeout = 30000
+                    setRequestProperty("User-Agent", "WrenBoard-Update")
+                    setRequestProperty("Accept", "application/octet-stream")
+                }
+                val code = c.responseCode
+                if (code in 300..399 && hops < 6) {
+                    val location = c.getHeaderField("Location") ?: throw Exception("redirect without a location")
+                    c.disconnect()
+                    url = URL(url, location)
+                    hops++
+                    continue
+                }
+                if (code !in 200..299) {
+                    c.disconnect()
+                    throw Exception("server answered $code")
+                }
+                connection = c
+                break
             }
-            val code = c.responseCode
-            if (code in 300..399 && hops < 6) {
-                val location = c.getHeaderField("Location") ?: throw Exception("redirect without a location")
-                c.disconnect()
-                url = URL(url, location)
-                hops++
-                continue
-            }
-            if (code !in 200..299) {
-                c.disconnect()
-                throw Exception("server answered $code")
-            }
-            connection = c
-            break
-        }
 
-        val dataLength = connection!!.contentLengthLong
-        if (dataLength <= 0L) throw Exception("download size unknown")
-        withContext(Dispatchers.Main) { updateStatusText("Downloading... 0%") }
-        UpdateStatus.downloadedUpdate = null
-        inputStream = connection!!.inputStream
-        install(scope, context, inputStream!!, dataLength) { text ->
-            scope.launch(Dispatchers.Main) { updateStatusText(text) }
-        }
-    } catch (e: Throwable) {
-        Log.w("UpdateScreen", "Exception thrown while downloading and installing latest version of app.", e)
-        withContext(Dispatchers.Main) {
+            val dataLength = connection!!.contentLengthLong
+            if (dataLength <= 0L) throw Exception("download size unknown")
+            UpdateStatus.attempts.post(attempt, "Downloading... 0%")
+            UpdateStatus.downloadedUpdate = null
+            inputStream = connection!!.inputStream
+            install(context, attempt, inputStream!!, dataLength)
+        } catch (e: Throwable) {
+            Log.w("UpdateScreen", "Exception thrown while downloading and installing latest version of app.", e)
             // Stay in the app and say what failed (1.1 threw here and opened the browser).
-            updateStatusText("Download failed: ${e.message ?: e.javaClass.simpleName}")
+            UpdateStatus.attempts.fail(attempt, "Download failed: ${e.message ?: e.javaClass.simpleName}")
+        } finally {
+            try { inputStream?.close() } catch (_: Throwable) { }
+            connection?.disconnect()
+            UpdateStatus.attempts.downloadEnded(attempt)
+            withContext(Dispatchers.Main) { UpdateStatus.isDownloading.value = false }
         }
-    } finally {
-        try { inputStream?.close() } catch (_: Throwable) { }
-        connection?.disconnect()
-        UpdateStatus.isDownloading.value = false
     }
 }
 
@@ -235,8 +236,11 @@ fun UpdateDialog(navController: NavHostController) {
     }
 
     val isDownloading = UpdateStatus.isDownloading
-    val showSpinner = remember { mutableStateOf(true) }
     val statusText = UpdateStatus.downloadText
+    // WrenBoard 1.2: a newly opened prompt starts clean; an earlier cancelled or failed attempt's words are gone and
+    // its late installer result can no longer land here. A download that is still running keeps its progress.
+    remember { UpdateStatus.attempts.openPrompt() }
+    val showSpinner = statusText.value.isEmpty() || statusText.value.endsWith("%")
 
     if(lastUpdateResult == null || !lastUpdateResult.isNewer()) {
         if(lastCheckFailed) {
@@ -257,7 +261,7 @@ fun UpdateDialog(navController: NavHostController) {
                 if(isDownloading.value) {
                     KeepScreenOn()
                     Column(modifier = Modifier.fillMaxWidth()) {
-                        if(showSpinner.value) {
+                        if(showSpinner) {
                             CircularProgressIndicator(
                                 modifier = Modifier.align(Alignment.CenterHorizontally),
                                 color = MaterialTheme.colorScheme.onSurface
@@ -279,13 +283,7 @@ fun UpdateDialog(navController: NavHostController) {
             },
             confirmButton = {
                 TextButton(onClick = {
-                    GlobalScope.launch { downloadAndInstall(scope.lifecycleScope, context, lastUpdateResult) {
-                        statusText.value = it
-
-                        if(!it.endsWith("%")) {
-                            showSpinner.value = false
-                        }
-                    } }
+                    downloadAndInstall(context.applicationContext, lastUpdateResult)
                 }, enabled = !isDownloading.value) {
                     Text(stringResource(R.string.autoupdater_perform_update))
                 }

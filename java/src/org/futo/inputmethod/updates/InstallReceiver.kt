@@ -16,11 +16,25 @@ class InstallReceiver : BroadcastReceiver() {
 
     companion object {
         val onReceiveResult = MutableSharedFlow<String>(0)
+
+        /** WrenBoard 1.2: the update attempt a result belongs to rides the installer's result intent. */
+        const val EXTRA_ATTEMPT = "com.wrenboard.keyboard.UPDATE_ATTEMPT"
     }
 
     override fun onReceive(context: Context, intent: Intent) {
         val status = intent.getIntExtra(PackageInstaller.EXTRA_STATUS, -1)
-        Log.i(TAG, "Received status $status.")
+        val attempt = intent.getLongExtra(EXTRA_ATTEMPT, -1L)
+        Log.i(TAG, "Received status $status for update attempt $attempt.")
+
+        // WrenBoard 1.2: success, the person cancelling and a real failure are told apart, and a result from an
+        // attempt that is no longer the current one (an older tap, a closed prompt, a previous app process) is ignored.
+        if (status != PackageInstaller.STATUS_PENDING_USER_ACTION) {
+            val shown = org.futo.inputmethod.latin.uix.settings.UpdateStatus.attempts.installerResult(
+                attempt, status, intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE)
+            )
+            Log.i(TAG, if (shown) "Update attempt $attempt: ${UpdateAttempts.outcomeFor(status)}"
+                       else "Ignored a result for update attempt $attempt (current ${org.futo.inputmethod.latin.uix.settings.UpdateStatus.attempts.currentToken}).")
+        }
 
         GlobalScope.launch {
             when (status) {
