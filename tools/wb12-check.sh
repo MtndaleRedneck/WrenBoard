@@ -42,6 +42,16 @@ longpress_slide() { # longpress_slide <x> <y> <hold s> <x2> <y2>  (down, hold, s
   adb shell input motionevent MOVE "$mx" "$my"; sleep 0.15
   adb shell input motionevent MOVE "$4" "$5"; sleep 0.3
 }
+ensure_ime() { # make WrenBoard the enabled + default keyboard, retrying (ime set right after the picker can be ignored)
+  local d i
+  for i in 1 2 3 4 5; do
+    adb shell ime enable "$IME" >/dev/null 2>&1; adb shell ime set "$IME" >/dev/null 2>&1; sleep 1.5
+    d=$(adb shell settings get secure default_input_method | tr -d '\r')
+    [ "$d" = "$IME" ] && return 0
+    note "  default IME is $d, retrying ime set ($i)"
+  done
+  return 1
+}
 release() { adb shell input motionevent UP "$1" "$2"; sleep 0.6; }
 
 adb shell settings put global hide_error_dialogs 1 >/dev/null 2>&1
@@ -77,7 +87,8 @@ if leg setup; then
     echo "$P" | grep -qi "keyboard\|input method\|WrenBoard" && pass "Switch opens the keyboard picker" || fail "Switch did not open the picker"
     adb shell input keyevent KEYCODE_BACK; sleep 1
   else fail "no Switch button found"; fi
-  adb shell ime set "$IME" >/dev/null 2>&1
+  adb shell input keyevent KEYCODE_HOME; sleep 1
+  ensure_ime || note "  could not make WrenBoard the default keyboard"
   adb shell am force-stop "$PKG"; adb shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1; sleep 6
   shot s05_settings_active; dumpui s05; T=$(uitext s05)
   if echo "$T" | grep -q "WrenBoard is turned off\|WrenBoard is not your keyboard"; then
@@ -89,7 +100,7 @@ if leg setup; then
   adb shell input keyevent KEYCODE_HOME
 fi
 
-adb shell ime enable "$IME" >/dev/null 2>&1; adb shell ime set "$IME" >/dev/null 2>&1
+ensure_ime
 note "default IME: $(adb shell settings get secure default_input_method | tr -d '\r')"
 adb logcat -c
 focus_target
@@ -101,7 +112,7 @@ python3 tools/wb12_kv.py shots/geom.txt list KEY > shots/keys_letters.txt
 
 if leg keyboard; then
   note "== KEYBOARD: starter words, 123 hint =="
-  sleep 1.5; S=$(sugg); note "suggestions in empty field: [$S]"
+  adb logcat -c; focus_target; sleep 2; S=$(sugg); note "suggestions in empty field: [$S]"
   grep 'STARTER' shots/_s.txt | tail -5 | sed 's/^.*WBDBG *: /  /' | tee -a "$R"
   [ -n "$S" ] && pass "starter words shown in an empty field ($S)" || fail "empty field shows no starter words"
   XY=$(kxy code -3 2>/dev/null || true); note "123 key at: $XY"
@@ -348,8 +359,12 @@ fi
 
 if leg settings; then
   note "== SETTINGS tree (CP4): six groups + FUTO, each page opens =="
+  ensure_ime; note "default IME: $(adb shell settings get secure default_input_method | tr -d '\r')"
+  focus_target   # the debug hook lives in the keyboard service, so bring it up first
   adb shell am force-stop "$PKG"; adb shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1; sleep 6
-  shot st01_settings_home; dumpui st01; T=$(uitext st01); note "home: ${T:0:500}"
+  shot st01_settings_home; dumpui st01; T=$(uitext st01)
+  adb shell input swipe 540 1700 540 700 400; sleep 1.5; shot st01b_settings_home_scrolled; dumpui st01b; T="$T$(uitext st01b)"
+  note "home: ${T:0:700}"
   ok=1; for w in "Keyboard" "Typing" "Voice" "Clipboard &amp; emoji" "Backup" "About" "FUTO"; do echo "$T" | grep -q "$w" || { ok=0; note "missing on home: $w"; }; done
   [ $ok = 1 ] && pass "home shows the six groups and FUTO" || fail "home is missing groups"
   echo "$T" | grep -qi "swiftkey" && fail "the word SwiftKey appears in Settings" || pass "no SwiftKey text on the home"
@@ -368,6 +383,7 @@ if leg settings; then
 fi
 
 if leg update; then
+  ensure_ime; focus_target
   note "== UPDATE dialog: Back and Dismiss close it; Update downloads in the app and opens the system installer =="
   adb shell input keyevent KEYCODE_HOME; sleep 1
   dbg "settings:" 8.0          # Settings opens and runs its own update check first

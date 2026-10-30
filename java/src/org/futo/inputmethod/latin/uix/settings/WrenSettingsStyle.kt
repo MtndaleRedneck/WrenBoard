@@ -148,9 +148,9 @@ fun WrenNavRow(
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f)) {
                 Text(title, color = WrenSettingsColors.Title, fontSize = 18.sp, fontWeight = FontWeight.Medium, lineHeight = 23.sp)
-                if (subtitle != null) Text(subtitle, color = WrenSettingsColors.Sub, fontSize = 13.sp, lineHeight = 17.sp, modifier = Modifier.padding(top = 2.dp))
+                if (subtitle != null) Text(subtitle, color = WrenSettingsColors.Sub, fontSize = 12.5.sp, lineHeight = 16.sp, modifier = Modifier.padding(top = 2.dp))
             }
-            Icon(painterResource(R.drawable.wren_ic_chevron_right), contentDescription = null, tint = WrenSettingsColors.Chevron, modifier = Modifier.padding(horizontal = 12.dp).size(23.dp))
+            Icon(painterResource(R.drawable.wren_ic_chevron_right), contentDescription = null, tint = WrenSettingsColors.Chevron, modifier = Modifier.padding(start = 4.dp, end = 10.dp).size(20.dp))
         }
         if (divider) Box(Modifier.padding(start = 72.dp).fillMaxWidth().height(0.8.dp).background(WrenSettingsColors.Divider))
     }
