@@ -812,6 +812,7 @@ Default is %1$s</string>
     <string name="voicebar_listening">Listening</string>
     <string name="voicebar_working">Processing</string>
     <string name="voicebar_close">Close voice input</string>
+    <string name="voicebar_mic_generic">Microphone</string>
     <string name="voicebar_bluetooth_mic">Bluetooth mic</string>
     <string name="voicebar_phone_mic">Phone mic</string>
     <string name="voicebar_switch_mic">Switch microphone, currently %1$s</string>
