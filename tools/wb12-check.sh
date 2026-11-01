@@ -6,7 +6,7 @@
 set -u
 APK="$1"; TAPK="$2"
 PKG=com.wrenboard.keyboard; TPKG=com.wrenboard.imetarget
-LEGS=",${WB_LEGS:-setup,keyboard,period,caps,shift,clip,update,toolbar,skin,emoji,clipboard,settings},"
+LEGS=",${WB_LEGS:-setup,keyboard,period,caps,shift,clip,update,toolbar,skin,symbols,emoji,clipboard,settings},"
 mkdir -p shots; R=shots/results.txt; : > "$R"
 ADB_BIN=$(type -P adb)
 # a dead emulator must not hang the run: each call is bounded, and once the link is confirmed gone
@@ -91,7 +91,8 @@ release() { adb shell input motionevent UP "$1" "$2"; sleep 0.6; }
 
 adb shell settings put global hide_error_dialogs 1 >/dev/null 2>&1
 adb shell am broadcast -a android.intent.action.CLOSE_SYSTEM_DIALOGS >/dev/null 2>&1
-adb shell wm size 1080x2316; adb shell wm density 420
+WB_SIZE="${WB_SIZE:-1080x2316}"; WB_DENSITY="${WB_DENSITY:-420}"
+adb shell wm size "$WB_SIZE"; adb shell wm density "$WB_DENSITY"
 note "display: $(adb shell wm size | tr -d '\r' | tr '\n' ' ') $(adb shell wm density | tr -d '\r' | tr '\n' ' ')"
 note "== install =="
 adb install -r -t "$APK" >> "$R" 2>&1 || { fail "install WrenBoard"; exit 1; }
@@ -346,6 +347,18 @@ pos() { # pos <file> <tag regex> -> "cx cy" of the last WINDOW line matching
 wlog() { adb logcat -d -s WBDBG:I | tr -d '\r' > "shots/$1.txt"; }
 
 
+if leg symbols; then
+  note "== SYMBOLS: 123 page shot (no checks, screenshot for review) =="
+  focus_target
+  geom letters
+  tapcode -3 || true
+  sleep 1.2
+  geom symbols keep
+  shot k15_symbols_page
+  tapcode -3 || true
+  sleep 1
+fi
+
 if leg emoji; then
   note "== EMOJI panel (SwiftKey replica): pages, Recents with Lock/Unlock, search, GIF tab =="
   focus_target; clear_field
@@ -357,7 +370,7 @@ if leg emoji; then
   GX=$(echo "$G" | sed -n 's/.*cx=\([0-9]*\).*/\1/p'); GY=$(echo "$G" | sed -n 's/.*cy=\([0-9]*\).*/\1/p')
   GW=$(echo "$G" | sed -n 's/.* w=\([0-9]*\).*/\1/p'); GH=$(echo "$G" | sed -n 's/.* h=\([0-9]*\).*/\1/p')
   if [ -n "$GW" ]; then
-    CW=$((GW/8)); RH=$(( 503 * 420 / 1600 )); LEFT=$((GX-GW/2)); TOP=$((GY-GH/2))
+    CW=$((GW/8)); RH=$(( 503 * ${WB_DENSITY:-420} / 1600 )); LEFT=$((GX-GW/2)); TOP=$((GY-GH/2))
     note "cell ${CW}x${RH} grid top-left $LEFT,$TOP"
     # type three emojis from the first row so Recents has something
     for c in 0 1 2; do adb shell input tap $((LEFT+CW*c+CW/2)) $((TOP+RH/2)); sleep 0.5; done
