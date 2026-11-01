@@ -317,19 +317,22 @@ if leg textedit; then
   AA=$(adb logcat -d -s WBDBG:I | tr -d '\r' | grep 'ACTION name=All_Actions' | tail -1)
   AX=$(echo "$AA" | sed -n 's/.*cx=\([0-9-]*\).*/\1/p'); AY=$(echo "$AA" | sed -n 's/.*cy=\([0-9-]*\).*/\1/p')
   if [ -n "$AX" ]; then
-    adb shell input tap "$AX" "$AY"; sleep 1.8
-    dumpui textedit_00_allactions
-    B=$(grep -o '<node[^>]*text="Text Editor"[^>]*/>' shots/textedit_00_allactions.xml | head -1 | grep -o 'bounds="\[[0-9]*,[0-9]*\]\[[0-9]*,[0-9]*\]"')
-    note "Text Editor node: $B"
-    TBX=$(echo "$B" | sed 's/bounds="\[\([0-9]*\),\([0-9]*\)\]\[\([0-9]*\),\([0-9]*\)\]"/echo $(( (\1+\3)\/2 )) $(( (\2+\4)\/2 ))/e')
-    if [ -n "$TBX" ]; then
-      adb shell input tap $TBX; sleep 1.8
+    adb logcat -c; adb shell input tap "$AX" "$AY"; sleep 1.8
+    shot textedit_00_allactions
+    TE=""
+    for i in 1 2 3; do
+      TE=$(adb logcat -d -s WBDBG:I | tr -d '\r' | grep 'ACTION name=Text_Editor' | tail -1)
+      [ -n "$TE" ] && break
+      adb shell input swipe 540 2100 540 1300 300; sleep 1.2
+    done
+    note "Text Editor tile: $TE"
+    TX=$(echo "$TE" | sed -n 's/.*cx=\([0-9-]*\).*/\1/p'); TY=$(echo "$TE" | sed -n 's/.*cy=\([0-9-]*\).*/\1/p')
+    if [ -n "$TX" ]; then
+      adb shell input tap "$TX" "$TY"; sleep 1.8
       shot textedit_01_panel
-      dumpui textedit_01
-      grep -q 'Text Editor' shots/textedit_01.xml && note "text-edit panel open" || note "text-edit panel not confirmed in dump"
     else
       shot textedit_01_panel
-      note "no Text Editor node in all-actions dump; captured raw"
+      note "no Text Editor tile position; captured raw"
     fi
     dbg close 1.0
   else
