@@ -1,5 +1,11 @@
 package org.futo.inputmethod.updates
 
+import org.futo.inputmethod.latin.uix.settings.SettingsActivity
+
+import kotlinx.coroutines.Dispatchers
+
+import kotlinx.coroutines.CoroutineScope
+
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
@@ -105,7 +111,14 @@ fun Context.openURI(uri: String, newTask: Boolean = false) {
 }
 
 fun Context.openManualUpdateCheck() {
-    openURI(RELEASES_PAGE_URL, newTask = true)
+    // WrenBoard 1.3 (teardown item 16): 1.2 opened the releases page in the browser. Run the same check the
+    // automatic path uses, then open the in-app update screen, which reads the fresh result when it lands.
+    Toast.makeText(this, R.string.updates_card_checking, Toast.LENGTH_SHORT).show()
+    val appContext = applicationContext
+    CoroutineScope(Dispatchers.Main.immediate).launch {
+        checkForUpdateAndSaveToPreferences(appContext)
+        SettingsActivity.openToNavDest(appContext, "update")
+    }
 }
 
 @Composable

@@ -66,7 +66,7 @@ private val darkScheme = extendedDarkColorScheme(
 private fun keyGradient(context: android.content.Context, top: Int, bottom: Int): GradientDrawable {
     val radiusPx = TypedValue.applyDimension(
         TypedValue.COMPLEX_UNIT_DIP,
-        7.0f,
+        4.0f,
         context.resources.displayMetrics
     )
     return GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, intArrayOf(top, bottom)).apply {
@@ -176,7 +176,9 @@ private fun wrenKeyBackgrounds(context: android.content.Context) = KeyedBitmaps(
                 hintColor = HintGrey,
                 outlineColor = 0xFF0E0E0E.toInt(),
                 outlineWidth = 1.dp,
-                background = keyGradient(context, 0xFF3E3E3E.toInt(), 0xFF060606.toInt())
+                // WrenBoard 1.3 (teardown item 1): the old top (#3E3E3E) sat 2 levels off the #3C3C3C board,
+            // so the key top vanished. #4C4C4C keeps the charcoal look but reads as a full button box.
+            background = keyGradient(context, 0xFF4C4C4C.toInt(), 0xFF060606.toInt())
             )
         ),
     )
@@ -197,7 +199,8 @@ val WrenBoardTheme = ThemeOption(
         extended = darkScheme.extended.copy(
             advancedThemeOptions = AdvancedThemeOptions(
                 keyRoundness = 0.78f,
-                textSizeMultiplier = 0.88f,
+                // WrenBoard 1.3 (teardown items 7/8): 0.88 shrank every key glyph and icon below SwiftKey's.
+                textSizeMultiplier = 1.0f,
                 // Symbols sit centred above the letter, as on Ezzy's phone, SwiftKey and the approved render.
                 centerHints = true,
                 keyBorders = true,

@@ -170,6 +170,7 @@
     <string name="updates_card_up_to_date">WrenBoard checks for new versions automatically.</string>
     <string name="updates_card_view_update">View update</string>
     <string name="updates_card_check_now">Check now</string>
+    <string name="updates_card_checking">Checking for updates…</string>
     <string name="updates_card_skip">Skip this version</string>
     <string name="feedback_card_title">Feedback</string>
     <string name="feedback_card_body">Report a problem or suggest an idea. Nothing is sent without your review.</string>
@@ -727,6 +728,13 @@
     <string name="wren_clip_delete">Delete</string>
     <string name="wren_emoji_tab">Emoji</string>
     <string name="wren_gif_tab">GIF</string>
+    <string name="wren_cd_back">Back</string>
+    <string name="wren_cd_enter">Enter</string>
+    <string name="wren_cd_backspace">Backspace</string>
+    <string name="wren_cd_clear">Clear</string>
+    <string name="wren_cd_recent">Recent emojis</string>
+    <string name="wren_cd_lock_emoji">Lock emoji</string>
+    <string name="wren_cd_unlock_emoji">Unlock emoji</string>
     <string name="wren_search_emojis">Search emojis</string>
     <string name="wren_search_gifs">Search GIFs</string>
     <string name="wren_emoji_lock">Lock</string>

@@ -100,9 +100,15 @@ object WrenPanelColors {
     val UndoBar = Color(0xFF2B2A29)
 }
 
-/** Panel heights measured at 1080 px wide / 420 dpi (2.625 px per dp): clipboard 1124 px, emoji 1365 px. */
-val WrenClipboardPanelHeight: Dp = 428.dp
-val WrenEmojiPanelHeight: Dp = 520.dp
+/** Panel heights were 428/520 dp converted at 2.625 px/dp (1080 px, 420 dpi, screen 882 dp tall). On Ezzy's
+ * 480 dpi phone the screen is only 772 dp tall, so fixed dp panels covered ~14% more of it (teardown items 3/9).
+ * Keep the reference FRACTION of the screen instead, so every density lands at the same size. */
+private fun wrenScreenHeightDp(): Float {
+    val dm = android.content.res.Resources.getSystem().displayMetrics
+    return dm.heightPixels / dm.density
+}
+val WrenClipboardPanelHeight: Dp get() = (wrenScreenHeightDp() * (428f / 882f)).dp
+val WrenEmojiPanelHeight: Dp get() = (wrenScreenHeightDp() * (520f / 882f)).dp
 val WrenPanelSearchHeight: Dp = 64.dp
 
 /** One removal that can still be undone: the entries and where they were in the history list. */
