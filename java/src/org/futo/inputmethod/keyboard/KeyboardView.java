@@ -585,7 +585,19 @@ public class KeyboardView extends View {
             canvas.drawText(
                     hintLabel, 0, hintLabel.length(), hintX, hintBaseline + adjustmentY, paint);
         } else if(hintIcon != null) {
-            final float size = kdc.getHintSize();
+            float size = kdc.getHintSize();
+
+            // WrenBoard 1.4 (123-key clipboard overlap): on keys that also show a centered text
+            // label, cap the hint icon so its bottom edge clears the label's top edge by the
+            // hint padding (SwiftKey keeps the secondary glyph clearly separated).
+            if (label != null && icon == null) {
+                paint.setTextSize(kdc.getTextSize());
+                final float labelTop = labelBaseline - TypefaceUtils.getReferenceCharHeight(paint);
+                final float maxHintBottom = labelTop - keyHintPaddingY;
+                if (keyHintPaddingY + size > maxHintBottom) {
+                    size = Math.max(maxHintBottom - keyHintPaddingY, size * 0.5f);
+                }
+            }
 
             int iconWidth = (int)size;
             int iconHeight = (int)size;
