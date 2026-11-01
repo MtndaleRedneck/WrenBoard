@@ -89,6 +89,22 @@ ensure_ime() { # make WrenBoard the enabled + default keyboard, retrying (ime se
 }
 release() { adb shell input motionevent UP "$1" "$2"; sleep 0.6; }
 
+numrow() { # numrow <geom file> -> the labels of the first ten keys of the top row, left to right
+  python3 - "$1" <<'PY'
+import re, sys
+keys = []
+for line in open(sys.argv[1], errors="ignore"):
+  m = re.search(r"WBDBG\s*:\s*KEY (.*)$", line.rstrip())
+  if m:
+      d = dict(kv.split("=", 1) for kv in m.group(1).split() if "=" in kv)
+      if "cy" in d and "cx" in d: keys.append(d)
+if keys:
+  top = min(int(k["cy"]) for k in keys)
+  row = sorted([k for k in keys if abs(int(k["cy"]) - top) < 20], key=lambda k: int(k["cx"]))
+  print("".join(k.get("label", "?") for k in row[:10]))
+PY
+}
+
 adb shell settings put global hide_error_dialogs 1 >/dev/null 2>&1
 adb shell am broadcast -a android.intent.action.CLOSE_SYSTEM_DIALOGS >/dev/null 2>&1
 WB_SIZE="${WB_SIZE:-1080x2316}"; WB_DENSITY="${WB_DENSITY:-420}"
@@ -422,21 +438,6 @@ if leg skin; then
   EXY=$(kxy label e) && { read -r X Y <<< "$EXY"; adb shell input motionevent DOWN $X $Y; sleep 1.4; shot k12_longpress_e_popup; release $X $Y; }
   clear_field
   E=$(elem s0); note "element at start: $E"
-  numrow() { # numrow <geom file> -> the labels of the first ten keys of the top row, left to right
-    python3 - "$1" <<'PY'
-import re, sys
-keys = []
-for line in open(sys.argv[1], errors="ignore"):
-    m = re.search(r"WBDBG\s*:\s*KEY (.*)$", line.rstrip())
-    if m:
-        d = dict(kv.split("=", 1) for kv in m.group(1).split() if "=" in kv)
-        if "cy" in d and "cx" in d: keys.append(d)
-if keys:
-    top = min(int(k["cy"]) for k in keys)
-    row = sorted([k for k in keys if abs(int(k["cy"]) - top) < 20], key=lambda k: int(k["cx"]))
-    print("".join(k.get("label", "?") for k in row[:10]))
-PY
-  }
   SHIFTED=""
   for t in 1 2 3 4; do tapcode -1; E=$(elem s$t); case "$E" in 1|2) shot k13_shift_upper; SHIFTED=$t; break;; esac; done
   if [ "$E" = 1 ]; then NR=$(numrow shots/geom_s$SHIFTED.txt); note "number row with shift on (element 1): $NR"
@@ -604,7 +605,7 @@ if leg emoji; then
           if [ -n "$G2W" ]; then
             C2W=$((G2W/8)); L2=$((G2X-G2W/2)); T2Y=$((G2Y-G2H/2))
             # no locked emoji at this point (unlocked above), so the wave hand is the FIRST cell
-            adb shell input motionevent DOWN $((L2+C2W/2)) $((T2Y+RH/2)); sleep 1.2; shot e07_skin_tone_popup; wlog em11
+            adb shell input motionevent DOWN $((L2+C2W/2)) $((T2Y+RH/2)); sleep 2.2; shot e07_skin_tone_popup; wlog em11
             adb shell input motionevent UP $((L2+C2W/2)) $((T2Y+RH/2)); sleep 0.6
             PM=$(grep 'EMOJI popup' shots/em11.txt | tail -1 | sed 's/.*EMOJI //')
             echo "$PM" | grep -q 'variants=[2-9]' && pass "skin-tone variants popup ($PM)" || note "skin-tone popup: $PM"
@@ -615,6 +616,33 @@ if leg emoji; then
     else note "skin-tone capture: no search button"; fi
   else fail "no emoji grid geometry"; fi
   dbg close 1.0
+fi
+
+if leg extras; then
+  note "== EXTRAS: digit/symbol previews, auto-capital, strip cases =="
+  focus_target; clear_field; geom extras
+  dbg "spint:pref_key_longpress_timeout=2500" 1.0
+  # digit preview: hold the 5 key
+  FXY=$(kxy label 5) && { read -r X Y <<< "$FXY"; adb shell input motionevent DOWN $X $Y; sleep 0.3; shot x01_digit_preview_5; release $X $Y; } || note "no 5 key position"
+  # symbol preview: symbols page, hold the = key (or first symbol found)
+  tapcode -3 >/dev/null || true; sleep 1.0; geom extras_sym >/dev/null
+  SXY=$(kxy label '=' 2>/dev/null || kxy label '+' 2>/dev/null || true)
+  [ -n "$SXY" ] && { read -r X Y <<< "$SXY"; adb shell input motionevent DOWN $X $Y; sleep 0.3; shot x02_symbol_preview; release $X $Y; } || note "no symbol key position for preview"
+  dbg "sprm:pref_key_longpress_timeout" 1.0
+  tapcode -3 >/dev/null || true; sleep 1.0
+  # auto-capital: type a sentence ending, check shift auto-engages (uppercase labels in geom)
+  clear_field; type_word hello; tapcode 32 >/dev/null; tapk "." >/dev/null 2>&1 || tapcode 46 >/dev/null; tapcode 32 >/dev/null; sleep 0.8
+  geom autocap keep >/dev/null
+  ROW=$(numrow shots/geom_autocap.txt 2>/dev/null || true)
+  note "top letter row after 'hello. ': $ROW"
+  case "$ROW" in *QWERTY*) pass "auto-capital engages shift after sentence end";; *qwerty*) note "auto-capital did NOT engage after sentence end (row: $ROW)";; *) note "auto-capital row unreadable: $ROW";; esac
+  shot x03_autocap_after_sentence
+  # strip cases: multi-suggestion strip vs no-suggestion strip
+  clear_field; type_word zebr; sleep 1.0; shot x04_strip_suggestions
+  S=$(sugg); note "strip with 'zebr': $S"
+  clear_field; type_word zqxwv; sleep 1.0; shot x05_strip_no_suggestion
+  S2=$(sugg); note "strip with 'zqxwv': $S2"
+  clear_field
 fi
 
 if leg clipboard; then
