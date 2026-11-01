@@ -748,8 +748,16 @@ data class LayoutEngine(
         }
     }
 
-    private fun addRowAlignLeft(idx: Int, row: List<LayoutEntry>, y: Int, height: Int)
-            = addRow(idx, row, 0.0f, y, height)
+    private fun addRowAlignLeft(idx: Int, row: List<LayoutEntry>, y: Int, height: Int) {
+        // WrenBoard 1.4 SwiftKey parity (side margins): center the few leftover pixels so the
+        // outer margins are symmetric (3/3 instead of 0/6 at 1080x2400/480). One-handed and
+        // split halves keep their deliberate flush anchoring.
+        val x = if (!isSplitLayout && !isOneHandedLayout) {
+            val leftover = params.mId.mWidth - row.sumOf { it.widthPx.toDouble() }.toFloat()
+            if (leftover > 0.0f) leftover / 2.0f else 0.0f
+        } else 0.0f
+        addRow(idx, row, x, y, height)
+    }
 
     private fun addRowAlignRight(idx: Int, row: List<LayoutEntry>, y: Int, height: Int) {
         val startingOffset = params.mId.mWidth - row.sumOf { it.widthPx.toDouble() }.toFloat()
