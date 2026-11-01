@@ -6,7 +6,7 @@
 set -u
 APK="$1"; TAPK="$2"
 PKG=com.wrenboard.keyboard; TPKG=com.wrenboard.imetarget
-LEGS=",${WB_LEGS:-setup,keyboard,period,leftedge,caps,shift,clip,update,toolbar,textedit,skin,symbols,emoji,clipboard,settings},"
+LEGS=",${WB_LEGS:-setup,keyboard,period,leftedge,caps,shift,clip,update,toolbar,textedit,skin,symbols,states,emoji,clipboard,settings},"
 mkdir -p shots; R=shots/results.txt; : > "$R"
 ADB_BIN=$(type -P adb)
 # a dead emulator must not hang the run: each call is bounded, and once the link is confirmed gone
@@ -435,6 +435,35 @@ if leg symbols; then
   shot k15_symbols_page
   tapcode -3 || true
   sleep 1
+fi
+
+if leg states; then
+  note "== STATES: press states, 123 page 2, voice strip (SwiftKey-parity views, evidence capture) =="
+  focus_target; geom letters >/dev/null
+  read -r SX SY <<< "$(kxy code 32)"
+  adb shell input motionevent DOWN "$SX" "$SY"; sleep 0.5; shot states_space_press; adb shell input motionevent UP "$SX" "$SY"; sleep 0.3
+  read -r BX BY <<< "$(kxy code -5)"
+  adb shell input motionevent DOWN "$BX" "$BY"; sleep 0.5; shot states_backspace_press; adb shell input motionevent UP "$BX" "$BY"; sleep 0.3
+  clear_field
+  tapcode -3 >/dev/null || true; sleep 1.2
+  geom sym2 >/dev/null
+  P2=$(kxy label '{&=' 2>/dev/null || true)
+  if [ -n "$P2" ]; then
+    adb shell input tap $P2; sleep 1.0; shot states_123_page2
+  else
+    shot states_123_page2; note "no page-2 switch key found in symbols geom"
+  fi
+  tapcode -3 >/dev/null || true; sleep 1.0
+  adb logcat -c; dbg expand 1.5
+  VI=$(adb logcat -d -s WBDBG:I | tr -d '\r' | grep 'ACTION name=Voice_Input' | tail -1)
+  VX=$(echo "$VI" | sed -n 's/.*cx=\([0-9-]*\).*/\1/p'); VY=$(echo "$VI" | sed -n 's/.*cy=\([0-9-]*\).*/\1/p')
+  if [ -n "$VX" ]; then
+    adb shell input tap "$VX" "$VY"; sleep 2.5; shot states_voice_strip
+    adb shell input keyevent 4; sleep 0.8
+  else
+    shot states_voice_strip; note "no Voice_Input tile position"
+  fi
+  dbg collapse 1.0; focus_target; clear_field
 fi
 
 if leg emoji; then
