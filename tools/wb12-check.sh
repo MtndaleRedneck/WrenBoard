@@ -659,6 +659,27 @@ if leg settings; then
   adb shell input keyevent KEYCODE_HOME
 fi
 
+if leg voiceshot; then
+  note "== VOICESHOT: the real voice panel inside the keyboard at ${WB_SIZE}/${WB_DENSITY} (Tab 1.3 item 44: pill clamp on keyboard-height panels) =="
+  focus_target
+  dbg expand 1.0
+  # RecognizeViews.kt:126-131 shows "Using Built-in mic" only when Bluetooth is available OR preferred;
+  # the emulator has no BT adapter, so set the user-preference flag to exercise the toast + clamped pill.
+  dbg dsbool:prefer_bluetooth_recording=true 0.5
+  adb logcat -c
+  dbg open:voice_input 4.0
+  shot v01_voice_panel_keyboard
+  adb logcat -d -s WBDBG:I | tr -d '\r' > shots/v01_voice_panel.log
+  grep -q 'CMD open:voice_input' shots/v01_voice_panel.log && pass "debug open:voice_input accepted" || fail "open:voice_input not seen in WBDBG"
+  grep -qi 'CMD open:voice_input failed' shots/v01_voice_panel.log && fail "open:voice_input threw (see v01_voice_panel.log)"
+  note "display check: $(adb shell wm size | tr -d '\r') $(adb shell wm density | tr -d '\r')"
+  adb shell pidof "$PKG" >/dev/null && pass "app alive with the voice panel open" || fail "app died after open:voice_input"
+  dbg close 1.0
+  dbg dsbool:prefer_bluetooth_recording=false 0.3
+  dbg collapse 0.5
+  shot v02_voice_panel_closed
+fi
+
 note "== logcat crashes =="
 adb logcat -d -b crash > shots/crash.txt 2>&1
 C=$(grep -c "FATAL EXCEPTION" shots/crash.txt); [ "$C" -eq 0 ] && pass "no FATAL EXCEPTION in crash buffer" || fail "$C FATAL EXCEPTION(s) in crash buffer"
