@@ -220,9 +220,24 @@ if [ "$GRC" -ne 0 ]; then
   note "GEOMETRY-RECOVERY: attempt 2 kbd_geom exit: $GRC (hard gate unchanged: nonzero = FAIL-EARLY)"
   [ "$GRC" -ne 0 ] && { cat shots/kbd_geom.err >> "$R"; fail_early "keyboard pixels not confirmed after one recovery (kbd_geom rc=$GRC)"; }
 fi
+geom_missing() { local k m=""; for k in q w e r t y u i o p a s d f g h j k l z x c v b n m space enter; do jq -e ".keys.\"$k\"" "$GEOM" >/dev/null 2>&1 || m="$m $k"; done; echo "$m"; }
 NBANDS=$(jq '.bands | length' "$GEOM"); NKEYS=$(jq '.keys | length' "$GEOM")
 note "geometry: bands=$NBANDS mapped-keys=$NKEYS toolbar=$(jq -c '.toolbar' "$GEOM")"
 [ "$NBANDS" -lt 4 ] && fail_early "too few keyboard bands ($NBANDS)"
+MISSING=$(geom_missing)
+if [ -n "$MISSING" ]; then
+  note "geometry incomplete (missing:$MISSING) - keyboard likely still animating in; settling and re-shooting once"
+  sleep 4
+  shot 02_keyboard_settled
+  dump > shots/ui_keyboard.xml 2>/dev/null
+  geom_rebuild 02_keyboard_settled 02_keyboard_overlay
+  GRC=$?
+  [ "$GRC" -ne 0 ] && { cat shots/kbd_geom.err >> "$R"; fail_early "kbd_geom rc=$GRC after settle re-shoot"; }
+  NBANDS=$(jq '.bands | length' "$GEOM"); NKEYS=$(jq '.keys | length' "$GEOM")
+  note "geometry after settle: bands=$NBANDS mapped-keys=$NKEYS"
+  MISSING=$(geom_missing)
+  [ -n "$MISSING" ] && fail_early "geometry still incomplete after settle (missing:$MISSING)"
+fi
 dim "geometry-built"
 # mapping self-validation: geometry says where q is; tapping it must type q
 clear_field
