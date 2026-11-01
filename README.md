@@ -1,3 +1,5 @@
+<p align="center"><img src="docs/readme-icon.png" alt="WrenBoard icon" width="96"></p>
+
 # WrenBoard
 
 A customized FUTO Keyboard for Android that combines selected features from FUTO Keyboard and SwiftKey.
