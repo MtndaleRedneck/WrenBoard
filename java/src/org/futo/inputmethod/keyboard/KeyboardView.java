@@ -485,6 +485,19 @@ public class KeyboardView extends View {
                 labelBaseline += kdc.getTextSize() * 0.1f;
             }
 
+            // WrenBoard 1.4 (123-key hint/label spacing): when a key shows a hint icon
+            // above a text label, place the label below the hint with the hint padding
+            // as the gap, at every density and keyboard height, instead of shrinking
+            // the hint (SwiftKey keeps the secondary glyph at its normal size and the
+            // label clearly below it).
+            if (hintIcon != null) {
+                final float minLabelTop = keyHintPaddingY + kdc.getHintSize() + keyHintPaddingY;
+                labelBaseline = minLabelTop + labelCharHeight;
+                if (labelBaseline > keyHeight - 1.0f) {
+                    labelBaseline = Math.max(centerY + labelCharHeight / 2.0f, keyHeight - 1.0f);
+                }
+            }
+
             // Horizontal label text alignment
             if (key.isAlignLabelOffCenter()) {
                 // The label is placed off center of the key. Used mainly on "phone number" layout.
@@ -587,9 +600,9 @@ public class KeyboardView extends View {
         } else if(hintIcon != null) {
             float size = kdc.getHintSize();
 
-            // WrenBoard 1.4 (123-key clipboard overlap): on keys that also show a centered text
-            // label, cap the hint icon so its bottom edge clears the label's top edge by the
-            // hint padding (SwiftKey keeps the secondary glyph clearly separated).
+            // WrenBoard 1.4: labels on hint-icon keys are moved below the hint (see the
+            // label block above), so the hint keeps its normal size. Shrink only as a
+            // last resort when a key is too short for both (extreme keyboard heights).
             if (label != null && icon == null) {
                 paint.setTextSize(kdc.getTextSize());
                 final float labelTop = labelBaseline - TypefaceUtils.getReferenceCharHeight(paint);
