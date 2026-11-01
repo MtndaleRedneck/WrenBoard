@@ -402,7 +402,7 @@ data class PeriodKey(
             "!fixedColumnOrder!3",
             "?",
             "!text/keyspec_comma",
-            "!text/keyspec_symbols_question"),
+            "!"),
         attributes = KeyAttributes(moreKeyMode = MoreKeyMode.OnlyExplicit)
     ),
     val alternative: AbstractKey = BaseKey(".", hint = ",!?",
