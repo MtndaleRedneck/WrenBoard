@@ -85,6 +85,7 @@ import org.futo.inputmethod.latin.uix.settings.useDataStore
 import org.futo.inputmethod.latin.uix.settings.useDataStoreValue
 import org.futo.inputmethod.latin.uix.theme.LocalCompatEmojiFamily
 import org.futo.inputmethod.latin.uix.theme.LocalCompatEmojiTypeface
+import org.futo.inputmethod.latin.uix.theme.emojiCompatText
 import org.futo.inputmethod.latin.uix.theme.emojiNeedsCompat
 
 /** Emojis locked to the top of the Recents page, newest lock last. No limit (Ezzy, Oct 30). */
@@ -181,7 +182,7 @@ private fun EmojiGlyph(text: String, sizeDp: Float, modifier: Modifier = Modifie
     val family = LocalCompatEmojiFamily.current
     val fontSize = with(LocalDensity.current) { sizeDp.dp.toSp() }
     Text(
-        text,
+        if (emojiNeedsCompat(text, typeface)) emojiCompatText(text, typeface) else text,
         fontSize = fontSize,
         lineHeight = fontSize,
         textAlign = TextAlign.Center,

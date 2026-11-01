@@ -68,12 +68,21 @@ private var compatPaint = TextPaint().apply {
     textSize = 64f
 }
 private var compatCache = mutableMapOf<String, Int>()
+private var compatTextCache = mutableMapOf<String, String>()
+
+/** The string without U+FE0E/U+FE0F variation selectors. */
+private val String.withoutVariationSelectors: String get() = replace(Regex("[\uFE0E\uFE0F]"), "")
+
 private fun putCompatCache(emoji: String, compatTypeface: Typeface?): Int {
     compatPaint.typeface = compatTypeface
 
     return when {
         systemPaint.hasGlyph(emoji) -> 0
         compatPaint.hasGlyph(emoji) -> 1
+        // WrenBoard 1.3 (teardown item 34): fully-qualified emoji sequences end in U+FE0F, which the bundled
+        // subset font does not map, so hasGlyph failed (face in clouds rendered as a white square). Probe
+        // again without variation selectors; the font's GSUB ligates the core sequence.
+        emoji.contains('\uFE0F') && compatPaint.hasGlyph(emoji.withoutVariationSelectors) -> 1
         else -> 2
     }
 }
@@ -81,6 +90,17 @@ fun emojiNeedsCompat(emoji: String, compatTypeface: Typeface?): Boolean =
     compatCache.getOrPut(emoji) { putCompatCache(emoji, compatTypeface) } == 1
 fun emojiShouldShow(emoji: String, compatTypeface: Typeface?): Boolean =
     compatCache.getOrPut(emoji) { putCompatCache(emoji, compatTypeface) } != 2
+
+/** The string to render for [emoji] when drawing with the compat font: the original when the font covers it,
+ * otherwise the variation-selector-stripped form whose core sequence the font ligates (teardown item 34). */
+fun emojiCompatText(emoji: String, compatTypeface: Typeface?): String =
+    compatTextCache.getOrPut(emoji) {
+        if (compatTypeface != null && emoji.contains('\uFE0F')) {
+            compatPaint.typeface = compatTypeface
+            val stripped = emoji.withoutVariationSelectors
+            if (!compatPaint.hasGlyph(emoji) && compatPaint.hasGlyph(stripped)) stripped else emoji
+        } else emoji
+    }
 
 @Composable
 fun UixThemeWrapper(colorScheme: KeyboardColorScheme, content: @Composable () -> Unit) {

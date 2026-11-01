@@ -43,4 +43,8 @@ data class AdvancedThemeOptions(
     val hintWeight: Float? = null,
 
     val centerHints: Boolean = false,
+
+    /** Draw the small transformer/swipe source markers under suggestions. WrenBoard 1.3 (teardown item 5):
+     *  Ezzy wants the orange transformer marker gone on the WrenBoard theme. */
+    val showSuggestionSourceIndicators: Boolean = true,
 )

@@ -14,6 +14,12 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import org.futo.inputmethod.latin.uix.TextEditPopupActivity
+import org.futo.inputmethod.latin.R
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.painterResource
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -187,6 +193,29 @@ class SettingsActivity : ComponentActivity(), DynamicThemeProviderOwner {
                                     doublePackage.value
                                 ) {
                                     SettingsNavigator(navController = navController)
+                                }
+                                // WrenBoard 1.3 (teardown item 42): SwiftKey-style floating try-keyboard
+                                // button on every Settings page, once the keyboard is set up.
+                                if (inputMethodEnabled.value && inputMethodSelected.value) {
+                                    val fabContext = androidx.compose.ui.platform.LocalContext.current
+                                    androidx.compose.material3.FloatingActionButton(
+                                        onClick = {
+                                            val intent = Intent()
+                                            intent.setClass(fabContext, TextEditPopupActivity::class.java)
+                                            intent.setFlags(
+                                                Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                                            )
+                                            fabContext.startActivity(intent)
+                                        },
+                                        modifier = Modifier
+                                            .align(androidx.compose.ui.Alignment.BottomEnd)
+                                            .padding(16.dp)
+                                    ) {
+                                        androidx.compose.material3.Icon(
+                                            painterResource(R.drawable.wren_ic_keyboard),
+                                            contentDescription = stringResource(R.string.settings_try_typing_here)
+                                        )
+                                    }
                                 }
                             }
                         }

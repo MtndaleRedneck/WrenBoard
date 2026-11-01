@@ -63,13 +63,36 @@ private val darkScheme = extendedDarkColorScheme(
     hintColor=Color(0xFFB0B0B0),
 )
 
+/** Lighten [c] toward white by [f] (0..1). */
+private fun lighten(c: Int, f: Float): Int {
+    val r = android.graphics.Color.red(c) + ((255 - android.graphics.Color.red(c)) * f).toInt()
+    val g = android.graphics.Color.green(c) + ((255 - android.graphics.Color.green(c)) * f).toInt()
+    val b = android.graphics.Color.blue(c) + ((255 - android.graphics.Color.blue(c)) * f).toInt()
+    return android.graphics.Color.rgb(r, g, b)
+}
+
+/** Gradient key box with SwiftKey's thin light line along the top edge (WrenBoard 1.3, teardown item 1).
+ *  The line shade is interim, pending Tab's measured SwiftKey pixels. */
+private class TopLineGradientDrawable(top: Int, bottom: Int, private val radiusPx: Float, dm: android.util.DisplayMetrics) :
+    GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, intArrayOf(top, bottom)) {
+    private val linePaint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+        color = lighten(top, 0.30f)
+        strokeWidth = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 1.0f, dm).coerceAtLeast(1f)
+    }
+    override fun draw(canvas: android.graphics.Canvas) {
+        super.draw(canvas)
+        val y = bounds.top + linePaint.strokeWidth * 1.5f
+        canvas.drawLine(bounds.left + radiusPx, y, bounds.right - radiusPx, y, linePaint)
+    }
+}
+
 private fun keyGradient(context: android.content.Context, top: Int, bottom: Int): GradientDrawable {
     val radiusPx = TypedValue.applyDimension(
         TypedValue.COMPLEX_UNIT_DIP,
         4.0f,
         context.resources.displayMetrics
     )
-    return GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, intArrayOf(top, bottom)).apply {
+    return TopLineGradientDrawable(top, bottom, radiusPx, context.resources.displayMetrics).apply {
         shape = GradientDrawable.RECTANGLE
         cornerRadius = radiusPx
     }
@@ -201,6 +224,8 @@ val WrenBoardTheme = ThemeOption(
                 keyRoundness = 0.78f,
                 // WrenBoard 1.3 (teardown items 7/8): 0.88 shrank every key glyph and icon below SwiftKey's.
                 textSizeMultiplier = 1.0f,
+                // WrenBoard 1.3 (teardown item 5): no orange transformer marker under suggestions.
+                showSuggestionSourceIndicators = false,
                 // Symbols sit centred above the letter, as on Ezzy's phone, SwiftKey and the approved render.
                 centerHints = true,
                 keyBorders = true,

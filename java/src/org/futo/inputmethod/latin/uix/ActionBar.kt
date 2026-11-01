@@ -318,7 +318,9 @@ fun RowScope.SuggestionItem(words: SuggestedWords, idx: Int, isPrimary: Boolean,
         else -> LocalKeyboardScheme.current.onSurfaceVariant
     }
 
+    val showSourceIndicators = LocalKeyboardScheme.current.extended.advancedThemeOptions.showSuggestionSourceIndicators
     val iconToUse = when {
+        !showSourceIndicators -> null
         wordInfo?.mOriginatesFromTransformerLM == true -> painterResource(id = R.drawable.transformer_suggestion)
         wordInfo?.mOriginatesFromSwipeModel    == true -> painterResource(id = R.drawable.swipemodel_indicator)
         else -> null
