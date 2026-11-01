@@ -2,6 +2,7 @@ package org.futo.inputmethod.latin.uix.settings.pages
 
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.rememberCoroutineScope
@@ -26,6 +27,7 @@ import org.futo.inputmethod.latin.uix.settings.WrenNavRow
 import org.futo.inputmethod.latin.uix.settings.WrenSectionLabel
 import org.futo.inputmethod.latin.uix.settings.WrenSettingsStyle
 import org.futo.inputmethod.latin.uix.settings.useDataStoreValue
+import org.futo.inputmethod.latin.uix.settings.userSettingDecorationOnly
 import org.futo.inputmethod.latin.uix.settings.userSettingNavigationItem
 import org.futo.inputmethod.latin.uix.settings.userSettingToggleDataStore
 
@@ -172,7 +174,20 @@ val WrenMenuSections: Map<String, List<Pair<Int, List<UserSetting>>>> by lazy {
 val WrenFutoMenu = UserSettingsMenu(
     title = R.string.wren_set_futo,
     navPath = "wren_futo", registerNavPath = true,
+    // WrenBoard 1.3 (teardown item 41): the paid-version notice moved here from the WrenBoard home; the
+    // Payment row, payment screen and already-paid flow stay exactly where they were, one tap from home.
     settings = HomeScreenLite.settings + listOf(
+        userSettingDecorationOnly {
+            val isPaid = useDataStoreValue(IS_ALREADY_PAID)
+            if(isPaid || androidx.compose.ui.platform.LocalInspectionMode.current) {
+                androidx.compose.material3.Text(
+                    stringResource(R.string.payment_paid_version_indicator),
+                    style = org.futo.inputmethod.latin.uix.theme.Typography.SmallMl,
+                    modifier = Modifier.fillMaxWidth(),
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                )
+            }
+        },
         userSettingToggleDataStore(
             title = R.string.wren_set_style,
             setting = WrenSettingsStyle

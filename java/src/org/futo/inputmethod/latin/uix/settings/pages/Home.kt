@@ -265,7 +265,11 @@ fun HomeScreen(navController: NavHostController = rememberNavController()) {
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            if(isPaid || LocalInspectionMode.current) {
+            // WrenBoard 1.3 (teardown item 41): in Wren style the paid-version notice lives on the FUTO page
+            // next to the Payment row; FUTO style keeps it here. (Both sides concluded moving a notice is not
+            // removing or obscuring Licensor functionality under the FUTO Source First License 1.1-kb; that
+            // conclusion is an interpretation of the clause, not legal advice.)
+            if(!wrenStyle && (isPaid || LocalInspectionMode.current)) {
                 Text(
                     stringResource(R.string.payment_paid_version_indicator),
                     style = Typography.SmallMl,
