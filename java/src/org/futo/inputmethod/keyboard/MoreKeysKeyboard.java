@@ -35,14 +35,21 @@ import javax.annotation.Nonnull;
 
 public final class MoreKeysKeyboard extends Keyboard {
     private final int mDefaultKeyCoordX;
+    private final Key mDesignatedDefaultKey;
 
     MoreKeysKeyboard(final MoreKeysKeyboardParams params) {
         super(params);
         mDefaultKeyCoordX = params.getDefaultKeyCoordX() + params.mDefaultKeyWidth / 2;
+        mDesignatedDefaultKey = params.mDesignatedDefaultKey;
     }
 
     public int getDefaultCoordX() {
         return mDefaultKeyCoordX;
+    }
+
+    // WrenBoard 1.4: item marked "!default!" in the spec, or null for ordinary popups.
+    public Key getDesignatedDefaultKey() {
+        return mDesignatedDefaultKey;
     }
 
     @UsedForTesting
@@ -55,6 +62,7 @@ public final class MoreKeysKeyboard extends Keyboard {
         public int mLeftKeys;
         public int mRightKeys; // includes default key.
         public int mDividerWidth;
+        public Key mDesignatedDefaultKey; // WrenBoard 1.4: key built from a "!default!" spec, or null
         public int mColumnWidth;
 
         public MoreKeysKeyboardParams() {
@@ -358,6 +366,9 @@ public final class MoreKeysKeyboard extends Keyboard {
                 final Key key = moreKeySpec.buildKey(x, y, moreKeyFlags, params);
                 params.markAsEdgeKey(key, row);
                 params.onAddKey(key);
+                if (moreKeySpec.mIsDefault) {
+                    params.mDesignatedDefaultKey = key;
+                }
             }
             return new MoreKeysKeyboard(params);
         }

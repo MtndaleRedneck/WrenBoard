@@ -21,6 +21,7 @@ import android.util.SparseIntArray;
 
 import org.futo.inputmethod.compat.CharacterCompat;
 import org.futo.inputmethod.keyboard.Key;
+import org.futo.inputmethod.keyboard.KeyConsts;
 import org.futo.inputmethod.latin.common.CollectionUtils;
 import org.futo.inputmethod.latin.common.Constants;
 import org.futo.inputmethod.latin.common.StringUtils;
@@ -55,6 +56,8 @@ public final class MoreKeySpec {
     public final boolean mNeedsToUpperCase;
     public final boolean mDeduplicatable;
     public final Locale mLocale;
+    // WrenBoard 1.4: true when the spec carried the "!default!" marker (panel designated default)
+    public final boolean mIsDefault;
 
     public MoreKeySpec(@Nonnull final String moreKeySpec, boolean needsToUpperCase,
             @Nonnull final Locale locale, boolean deduplicatable) {
@@ -63,9 +66,16 @@ public final class MoreKeySpec {
         }
         mLocale = locale;
         mNeedsToUpperCase = needsToUpperCase;
-        final String label = KeySpecParser.getLabel(moreKeySpec);
+        String spec = moreKeySpec;
+        boolean isDefault = false;
+        if (spec.startsWith(KeyConsts.MORE_KEYS_DEFAULT_KEY)) {
+            isDefault = true;
+            spec = spec.substring(KeyConsts.MORE_KEYS_DEFAULT_KEY.length());
+        }
+        mIsDefault = isDefault;
+        final String label = KeySpecParser.getLabel(spec);
         mLabel = needsToUpperCase ? StringUtils.toTitleCaseOfKeyLabel(label, locale) : label;
-        final int codeInSpec = KeySpecParser.getCode(moreKeySpec);
+        final int codeInSpec = KeySpecParser.getCode(spec);
         final int code = needsToUpperCase ? StringUtils.toTitleCaseOfKeyCode(codeInSpec, locale)
                 : codeInSpec;
         if (code == Constants.CODE_UNSPECIFIED) {
@@ -75,11 +85,11 @@ public final class MoreKeySpec {
             mOutputText = mLabel;
         } else {
             mCode = code;
-            final String outputText = KeySpecParser.getOutputText(moreKeySpec);
+            final String outputText = KeySpecParser.getOutputText(spec);
             mOutputText = needsToUpperCase
                     ? StringUtils.toTitleCaseOfKeyLabel(outputText, locale) : outputText;
         }
-        mIconId = KeySpecParser.getIconId(moreKeySpec);
+        mIconId = KeySpecParser.getIconId(spec);
         mDeduplicatable = deduplicatable;
     }
 
@@ -103,6 +113,7 @@ public final class MoreKeySpec {
         hashCode = hashCode * 31 + (label == null ? 0 : label.hashCode());
         final String outputText = mOutputText;
         hashCode = hashCode * 31 + (outputText == null ? 0 : outputText.hashCode());
+        hashCode = hashCode * 31 + (mIsDefault ? 1 : 0);
         return hashCode;
     }
 
@@ -117,7 +128,8 @@ public final class MoreKeySpec {
                     && mIconId == other.mIconId
                     && TextUtils.equals(mLabel, other.mLabel)
                     && TextUtils.equals(mOutputText, other.mOutputText)
-                    && mDeduplicatable == other.mDeduplicatable;
+                    && mDeduplicatable == other.mDeduplicatable
+                    && mIsDefault == other.mIsDefault;
         }
         return false;
     }

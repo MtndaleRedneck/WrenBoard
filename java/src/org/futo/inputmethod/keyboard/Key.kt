@@ -102,6 +102,8 @@ data object KeyConsts {
     const val MORE_KEYS_HAS_LABELS: String = "!hasLabels!"
     const val MORE_KEYS_NEEDS_DIVIDERS: String = "!needsDividers!"
     const val MORE_KEYS_NO_PANEL_AUTO_MORE_KEY: String = "!noPanelAutoMoreKey!"
+    // WrenBoard 1.4: marks the more-key item a no-slide release types (panel designated default)
+    const val MORE_KEYS_DEFAULT_KEY: String = "!default!"
 
     const val BACKGROUND_TYPE_EMPTY: Int = 0
     const val BACKGROUND_TYPE_NORMAL: Int = 1

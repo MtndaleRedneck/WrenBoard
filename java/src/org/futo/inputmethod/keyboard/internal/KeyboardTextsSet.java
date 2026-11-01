@@ -73,6 +73,15 @@ public class KeyboardTextsSet {
         mTextsTable = KeyboardTextsTable.getTextsTable(locale);
     }
 
+    /**
+     * WrenBoard 1.4: true when the current locale's own texts table defines this text (not merely
+     * inherited from DEFAULT). Used to scope the pinned legacy period popup to locales without
+     * their own morekeys_period override; covers hi__Latn/ckb/new and future overrides by data.
+     */
+    public boolean hasLocaleSpecificText(final String name) {
+        return mTextsTable != null && KeyboardTextsTable.getText(name, mTextsTable, false) != null;
+    }
+
     public String getText(final String name) {
         // Try locale-specific text first
         String result = KeyboardTextsTable.getText(name, mTextsTable, false);

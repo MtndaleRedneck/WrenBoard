@@ -25,6 +25,7 @@ import android.graphics.drawable.Drawable;
 import android.util.AttributeSet;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
+import android.view.ViewConfiguration;
 import android.view.TouchDelegate;
 import android.view.View;
 import android.view.ViewGroup;
@@ -192,16 +193,43 @@ public class MoreKeysKeyboardView extends KeyboardView implements MoreKeysPanel 
         return ((MoreKeysKeyboard)getKeyboard()).getDefaultCoordX();
     }
 
+    // WrenBoard 1.4: state for the designated-default ("!default!") no-slide handling
+    private int mDownX;
+    private int mDownY;
+    private boolean mMovedAfterDown;
+    private int mTouchSlop = -1;
+
+    private Key getDesignatedDefaultKey() {
+        return ((MoreKeysKeyboard)getKeyboard()).getDesignatedDefaultKey();
+    }
+
     @Override
     public void onDownEvent(final int x, final int y, final int pointerId, final long eventTime) {
         mActivePointerId = pointerId;
-        mCurrentKey = detectKey(x, y);
+        mDownX = x;
+        mDownY = y;
+        mMovedAfterDown = false;
+        if (mTouchSlop < 0) {
+            mTouchSlop = ViewConfiguration.get(getContext()).getScaledTouchSlop();
+        }
+        // A popup with a designated default selects it on open, even when the panel's edge
+        // shift has moved another item under the finger (legacy period popup at the right edge).
+        final Key designated = getDesignatedDefaultKey();
+        mCurrentKey = (designated != null) ? selectKey(designated) : detectKey(x, y);
     }
 
     @Override
     public void onMoveEvent(final int x, final int y, final int pointerId, final long eventTime) {
         if (mActivePointerId != pointerId) {
             return;
+        }
+        if (getDesignatedDefaultKey() != null && !mMovedAfterDown) {
+            final int dx = x - mDownX;
+            final int dy = y - mDownY;
+            if (dx * dx + dy * dy <= mTouchSlop * mTouchSlop) {
+                return; // sub-slop wobble keeps the designated default selected
+            }
+            mMovedAfterDown = true;
         }
         final boolean hasOldKey = (mCurrentKey != null);
         mCurrentKey = detectKey(x, y);
@@ -216,9 +244,15 @@ public class MoreKeysKeyboardView extends KeyboardView implements MoreKeysPanel 
         if (mActivePointerId != pointerId) {
             return;
         }
-        // Calling {@link #detectKey(int,int,int)} here is harmless because the last move event and
-        // the following up event share the same coordinates.
-        mCurrentKey = detectKey(x, y);
+        final Key designated = getDesignatedDefaultKey();
+        if (designated != null && !mMovedAfterDown) {
+            // Released without sliding: type the designated default item.
+            mCurrentKey = designated;
+        } else {
+            // Calling {@link #detectKey(int,int,int)} here is harmless because the last move event
+            // and the following up event share the same coordinates.
+            mCurrentKey = detectKey(x, y);
+        }
         if (mCurrentKey != null) {
             updateReleaseKeyGraphics(mCurrentKey);
             onKeyInput(mCurrentKey, x, y);
@@ -246,8 +280,11 @@ public class MoreKeysKeyboardView extends KeyboardView implements MoreKeysPanel 
     }
 
     private Key detectKey(int x, int y) {
+        return selectKey(mKeyDetector.detectHitKey(x, y));
+    }
+
+    private Key selectKey(final Key newKey) {
         final Key oldKey = mCurrentKey;
-        final Key newKey = mKeyDetector.detectHitKey(x, y);
         if (newKey == oldKey) {
             return newKey;
         } else {
