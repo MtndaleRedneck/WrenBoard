@@ -202,13 +202,20 @@ fun InnerRecognize(
         // so the vertical offset is idle radius + gap + half of the measured pill height (text bounds + padding).
         val idleRadiusPx = with(LocalDensity.current) { (CIRCLE_BASE_RADIUS_DP * CIRCLE_IDLE_FACTOR).dp.toPx() }
         val gapPx = with(LocalDensity.current) { 8.dp.toPx() }
+        // WrenBoard 1.3 (Ezzy's 1.2 screenshot): on keyboard-height panels the pill's below-circle
+        // spot lands on the "Using mic" toast (BottomCenter, 16dp up, ~52dp tall). Clamp the pill
+        // to stay above the toast zone; the opaque backing keeps it readable over the circle.
+        val toastReservePx = with(LocalDensity.current) { 80.dp.toPx() }
         Text(
             text,
             modifier = Modifier
                 .layout { measurable, constraints ->
                     val placeable = measurable.measure(constraints)
                     layout(placeable.width, placeable.height) {
-                        placeable.place(0, (idleRadiusPx + gapPx + placeable.height / 2f).roundToInt())
+                        val belowCircleTop = constraints.maxHeight / 2f + idleRadiusPx + gapPx
+                        val aboveToastTop = constraints.maxHeight - toastReservePx - placeable.height
+                        val topPx = minOf(belowCircleTop, aboveToastTop)
+                        placeable.place(0, (topPx - constraints.maxHeight / 2f + placeable.height / 2f).roundToInt())
                     }
                 }
                 // opaque backing so the prompt stays readable if the circle grows over it while talking
