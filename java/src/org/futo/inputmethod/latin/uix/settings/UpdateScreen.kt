@@ -42,7 +42,6 @@ import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 //import okhttp3.OkHttpClient
 //import okhttp3.Request
@@ -221,16 +220,15 @@ private fun downloadAndInstall(context: Context, updateResult: UpdateResult) {
 fun UpdateDialog(navController: NavHostController) {
     val scope = LocalLifecycleOwner.current
     val context = LocalContext.current
-    val updateInfo = remember { runBlocking {
-        context.getSetting(LAST_UPDATE_CHECK_RESULT, "")
-    } }
-
-    val lastCheckFailed = remember { runBlocking {
-        context.getSetting(LAST_UPDATE_CHECK_FAILED, false)
-    } }
+    // WrenBoard 1.3.1: read the same live DataStore as the Updates card (useDataStore), not the
+    // DataStoreHelper copy that only the keyboard service fills. With WrenBoard not selected as the
+    // keyboard, that copy is empty and the dialog claimed "Up-to-date" over a card offering the new
+    // version. The dialog now recomposes when a check writes its result.
+    val (updateInfo, _) = useDataStore(key = LAST_UPDATE_CHECK_RESULT, default = "")
+    val (lastCheckFailed, _) = useDataStore(key = LAST_UPDATE_CHECK_FAILED, default = false)
 
     val lastUpdateResult = if(!LocalInspectionMode.current){
-        remember { UpdateResult.fromString(updateInfo) }
+        remember(updateInfo) { UpdateResult.fromString(updateInfo) }
     } else {
         UpdateResult(123, "abc", "1.2.3")
     }
@@ -246,6 +244,10 @@ fun UpdateDialog(navController: NavHostController) {
         if(lastCheckFailed) {
             // The check failed (no network, a server error, or no release published yet): do not claim "up to date".
             InfoDialog(title = "Update check failed", body = "WrenBoard could not confirm whether an update is available. There may be no network, or no release is published yet. Use \"Check for updates manually\" in Settings to check again.", navController = navController)
+        } else if(updateInfo.isEmpty()) {
+            // WrenBoard 1.3.1: no completed check in the store (the caller just kicked one off). Never
+            // claim up-to-date on empty data; the real verdict replaces this when the result lands.
+            InfoDialog(title = "Checking for updates...", body = "The update check is running. Its result appears here when it lands.", navController = navController)
         } else {
             InfoDialog(title = "Up-to-date", body = "As of the last update check, the app is up to date.", navController = navController)
         }

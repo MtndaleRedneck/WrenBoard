@@ -6,8 +6,18 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.core.content.edit
 //import androidx.work.Configuration
 import org.futo.inputmethod.latin.uix.isDirectBootUnlocked
+import org.futo.inputmethod.latin.uix.DataStoreHelper
 
 class CrashLoggingApplication : Application() /*, Configuration.Provider*/ {
+
+    override fun onCreate() {
+        super.onCreate()
+        // WrenBoard 1.3.1: fill the DataStoreHelper copy in every process, not only the keyboard
+        // service's. Settings screens (including the update dialog) read Context.getSetting from this
+        // copy; without this it stayed empty whenever LatinIME had not started. init is guarded, so
+        // LatinIME's own call remains a no-op.
+        DataStoreHelper.init(this)
+    }
     //override val workManagerConfiguration: Configuration
     //    get() = Configuration.Builder().build()
 
