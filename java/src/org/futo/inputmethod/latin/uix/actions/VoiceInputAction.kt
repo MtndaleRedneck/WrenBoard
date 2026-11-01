@@ -53,9 +53,12 @@ import org.futo.voiceinput.shared.RecognizerViewListener
 import org.futo.voiceinput.shared.RecognizerViewSettings
 import org.futo.voiceinput.shared.RecordingSettings
 import org.futo.voiceinput.shared.SoundPlayer
+import androidx.compose.ui.unit.Dp
 import org.futo.voiceinput.shared.types.Language
 import org.futo.voiceinput.shared.types.ModelLoader
 import org.futo.voiceinput.shared.types.getLanguageFromWhisperString
+import org.futo.voiceinput.shared.RecognizerView.CurrentView
+import org.futo.voiceinput.shared.types.MagnitudeState
 import org.futo.voiceinput.shared.ui.MicrophoneDeviceState
 import org.futo.voiceinput.shared.whisper.DecodingConfiguration
 import org.futo.voiceinput.shared.whisper.ModelManager
@@ -118,6 +121,55 @@ private class VoiceInputActionWindow(
     val model: ModelLoader, val locales: List<Locale>
 ) : ActionWindow(), RecognizerViewListener {
     val context = manager.getContext()
+
+    // WrenBoard 1.4 (S18): v9 voice bar - compact strip above the suggestion bar, keyboard stays.
+    override val onlyShowAboveKeyboard: Boolean get() = true
+    override val showTitleBar: Boolean get() = false
+    override val showCloseButton: Boolean get() = false
+    override val positionIsUserManagable: Boolean get() = false
+    override val fixedWindowHeight: Dp?
+        get() = if (needsFullHeight()) null else VoiceBarHeight
+
+    // After a stop (pill tap or auto-stop) the bar stays open in the Stopped state
+    // ("Tap to dictate") instead of closing; the chevron closes.
+    private var barStopped = mutableStateOf(false)
+    private var closeWhenFinished = false
+
+    private fun needsFullHeight(): Boolean {
+        if (modelException.value != null) return true
+        val view = recognizerView.value?.currentViewState?.value ?: return false
+        return view == CurrentView.PermissionError || view == CurrentView.ModelError
+    }
+
+    private fun onBarChevron() {
+        val rv = recognizerView.value
+        if (rv == null || barStopped.value) {
+            manager.closeActionWindow()
+            return
+        }
+        when (rv.currentViewState.value) {
+            CurrentView.InnerRecognize -> { closeWhenFinished = true; rv.finish() }
+            else -> manager.closeActionWindow() // cancels pending work through close()
+        }
+    }
+
+    private fun onBarPillTap(mode: VoiceBarMode) {
+        val rv = recognizerView.value ?: return
+        when (mode) {
+            VoiceBarMode.Stopped -> {
+                barStopped.value = false
+                wasFinished = false
+                cancelPlayed = false
+                rv.reset()
+                rv.start()
+            }
+            VoiceBarMode.Waiting, VoiceBarMode.Listening -> {
+                closeWhenFinished = false
+                rv.finish()
+            }
+            VoiceBarMode.Working -> { }
+        }
+    }
 
     private var shouldPlaySounds: Boolean = false
     private fun loadSettings(): RecognizerViewSettings {
@@ -208,23 +260,31 @@ private class VoiceInputActionWindow(
 
     @Composable
     override fun WindowContents(keyboardShown: Boolean) {
-        Box(modifier = Modifier
-            .fillMaxSize()
-            .clickable(
-                enabled = true,
-                onClickLabel = null,
-                onClick = { recognizerView.value?.finish() },
-                role = null,
-                indication = null,
-                interactionSource = remember { MutableInteractionSource() })
-            .semantics(mergeDescendants = true) {
-                traversalIndex = -1.0f
-            }) {
-            Box(modifier = Modifier.align(Alignment.Center)) {
-                when {
-                    modelException.value != null -> ModelDownloader(modelException.value!!)
-                    recognizerView.value != null -> recognizerView.value!!.Content()
+        val rv = recognizerView.value
+        when {
+            modelException.value != null -> Box(modifier = Modifier.fillMaxSize()) {
+                ModelDownloader(modelException.value!!)
+            }
+            rv != null && needsFullHeight() -> Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) { rv.Content() }
+            else -> {
+                val mode = when {
+                    rv == null -> VoiceBarMode.Working
+                    barStopped.value -> VoiceBarMode.Stopped
+                    rv.currentViewState.value == CurrentView.LoadingCircle ||
+                        rv.currentViewState.value == CurrentView.PartialDecodingResult -> VoiceBarMode.Working
+                    rv.statusState.value == MagnitudeState.TALKING -> VoiceBarMode.Listening
+                    else -> VoiceBarMode.Waiting
                 }
+                VoiceRecognizeBar(
+                    mode = mode,
+                    magnitude = rv?.magnitudeState?.floatValue ?: 0.0f,
+                    device = rv?.currentDeviceState?.value,
+                    onChevron = { onBarChevron() },
+                    onPillTap = { onBarPillTap(mode) }
+                )
             }
         }
     }
@@ -269,8 +329,14 @@ private class VoiceInputActionWindow(
         manager.getLifecycleScope().launch(Dispatchers.Main) {
             val sanitized = ModelOutputSanitizer.sanitize(result, inputTransaction.textContext)
             inputTransaction.commit(sanitized)
-            manager.announce(result)
-            manager.closeActionWindow()
+            if (sanitized.isNotBlank()) manager.announce(result)
+            if (closeWhenFinished) {
+                manager.closeActionWindow()
+            } else {
+                // v9 flow: bar stays open in the Stopped state for the next utterance
+                barStopped.value = true
+                inputTransaction = manager.createInputTransaction()
+            }
         }
     }
 
@@ -289,6 +355,8 @@ private class VoiceInputActionWindow(
         SettingsActivity.openToNavDest(context, "languages")
     }
 }
+
+private val VoiceBarHeight = 41.5.dp // 124 px at 3 px/dp (owner's phone density)
 
 private class VoiceInputNoModelWindow(val locale: Locale) : ActionWindow() {
     @Composable
