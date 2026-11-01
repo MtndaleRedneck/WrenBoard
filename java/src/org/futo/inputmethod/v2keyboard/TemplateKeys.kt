@@ -411,12 +411,16 @@ data class PeriodKey(
     ),
     val alternative: AbstractKey = BaseKey(".", hint = ",!?",
         // WrenBoard P0-1: the quick period popup reads ! , . ? from left to right (as in SwiftKey), in a fixed
-        // order, with the period itself as one of the four items.
+        // order, with the period itself as one of the four items. This is the shipping default
+        // (pref_enable_alt_period_key defaults true). Owner decision, WhatsApp
+        // wamid.HBgLMTM0NzM3NzE0MzAVAgASGCBBQzM2RkQ2QzExMTI2QjkwMkFEMDBBMjMyRkMwQUY5RgA= ("1-3. COPY
+        // WHATEVER SWIFTKEY LOOKS LIKE"): '.' is the designated no-slide default; the pinned
+        // '? , !'/'?' set above stays available by turning the alt-period setting off.
         moreKeys = listOf(
             "!fixedColumnOrder!4",
             "!",
             "!text/keyspec_comma",
-            ".",
+            "!default!.",
             "!text/keyspec_symbols_question"),
         attributes = KeyAttributes(moreKeyMode = MoreKeyMode.OnlyExplicit, fastMoreKeys = true)
     )

@@ -306,7 +306,7 @@ fun TextStyle.withCustomFont(orDefault: FontFamily? = null): TextStyle {
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun RowScope.SuggestionItem(words: SuggestedWords, idx: Int, isPrimary: Boolean, onClick: () -> Unit, onLongClick: () -> Unit, forcePrimary: Boolean, isEmoji: Boolean) {
+fun RowScope.SuggestionItem(words: SuggestedWords, idx: Int, isPrimary: Boolean, onClick: () -> Unit, onLongClick: () -> Unit, forcePrimary: Boolean, isEmoji: Boolean, slotWeight: Float = 1.0f) {
     val wordInfo = words.getInfoOrNull(idx)
     val isVerbatim = wordInfo?.kind == KIND_TYPED
     val word = wordInfo?.mWord
@@ -361,11 +361,12 @@ fun RowScope.SuggestionItem(words: SuggestedWords, idx: Int, isPrimary: Boolean,
 
     Box(
         modifier = textButtonModifier
-            .weight(1.0f)
+            .weight(slotWeight)
             .fillMaxHeight()
             .then(if(isKeyStyledTheme()) {
                 Modifier
-                    .padding(vertical = 4.dp)
+                    // SwiftKey strip (review item 3): 39dp chip inside the 41dp bar
+                    .padding(vertical = 1.dp)
                     .clip(WrenSuggestionShape)
                     .background(
                         Brush.verticalGradient(listOf(Color(0xFF3E3E3E), Color(0xFF060606))),
@@ -404,7 +405,8 @@ private val WrenSuggestionShape = RoundedCornerShape(7.dp)
 
 @Composable fun RowScope.SuggestionSeparator() {
     if(isKeyStyledTheme()) {
-        Spacer(Modifier.width(6.dp))
+        // SwiftKey strip (review item 3): 6px gap between chips at 420dpi
+        Spacer(Modifier.width(2.3.dp))
         return
     }
     Box(
@@ -522,7 +524,13 @@ fun RowScope.SuggestionItems(words: SuggestedWords, onClick: (i: Int) -> Unit, o
     // WrenBoard: the centre slot (the best word) is always bold, as in SwiftKey and the approved render.
     val boldCentre = isKeyStyledTheme()
     var centreSuggestion: SuggestedWordInfo? = null
+    // SwiftKey strip (review item 3): chip widths 256/344/258px at 1080px and a 105px-empty right
+    // edge, i.e. side/centre/side weights of 0.98/1.32/0.99 plus a fixed trailing margin.
+    val sideWeight = 0.98f
+    val centreWeight = 1.32f
+    var slotIndex = 0
     val suggestionItem = @Composable { suggestion: SuggestedWordInfo? ->
+        val w = if (slotIndex++ % 3 == 1) centreWeight else sideWeight
         if(suggestion != null) {
             val idx = words.indexOf(suggestion)
             SuggestionItem(
@@ -532,17 +540,40 @@ fun RowScope.SuggestionItems(words: SuggestedWords, onClick: (i: Int) -> Unit, o
                 forcePrimary = suggestion == layout.swipePrimaryElement || (boldCentre && suggestion == centreSuggestion),
                 onClick = { onClick(idx) },
                 onLongClick = { onLongClick(idx) },
-                isEmoji = suggestion in layout.emojiMatches
+                isEmoji = suggestion in layout.emojiMatches,
+                slotWeight = w
             )
+        } else if(isKeyStyledTheme()) {
+            // empty chip box, kept visible (S11)
+            Box(Modifier
+                .weight(w)
+                .fillMaxHeight()
+                .padding(vertical = 1.dp)
+                .clip(WrenSuggestionShape)
+                .background(
+                    Brush.verticalGradient(listOf(Color(0xFF3E3E3E), Color(0xFF060606))),
+                    WrenSuggestionShape
+                )
+                .border(1.dp, Color(0xFF0E0E0E), WrenSuggestionShape))
         } else {
-            Spacer(Modifier.weight(1.0f))
+            Spacer(Modifier.weight(w))
         }
     }
 
     when {
-        layout.isGestureBatch ||
-                (layout.emojiMatches.isEmpty() && layout.presentableSuggestions.size <= 1) ->
+        layout.isGestureBatch ->
             suggestionItem(layout.presentableSuggestions.firstOrNull())
+
+        layout.emojiMatches.isEmpty() && layout.presentableSuggestions.size <= 1 -> {
+            // S11 (owner-approved 2026-11-01, WhatsApp): one suggestion still shows three chip
+            // boxes, word in the centre, empty boxes kept - SwiftKey's layout.
+            suggestionItem(null)
+            SuggestionSeparator()
+            centreSuggestion = layout.presentableSuggestions.firstOrNull()
+            suggestionItem(layout.presentableSuggestions.firstOrNull())
+            SuggestionSeparator()
+            suggestionItem(null)
+        }
 
         layout.autocorrectMatch != null -> {
             var supplementalSuggestionIndex = 0
@@ -576,6 +607,11 @@ fun RowScope.SuggestionItems(words: SuggestedWords, onClick: (i: Int) -> Unit, o
             SuggestionSeparator()
             suggestionItem(layout.sortedMatches.getOrNull(supplementalSuggestionIndex))
         }
+    }
+
+    // SwiftKey strip (review item 3): 105px of empty space on the right at 1080px/420dpi
+    if (isKeyStyledTheme() && !layout.isGestureBatch) {
+        Spacer(Modifier.width(40.dp))
     }
 }
 
@@ -700,9 +736,13 @@ fun ActionItems(onSelect: (Action) -> Unit, onLongSelect: (Action) -> Unit) {
 
     val gradientColor = LocalKeyboardScheme.current.keyboardSurfaceDim
 
-    val drawLeftGradient = remember { derivedStateOf { lazyListState.firstVisibleItemIndex > 0 } }
+    // WrenBoard 1.2's even spread shows every button including More - no scroll fade, or the
+    // trailing "..." sits under the gradient and reads dim brown (review nit) instead of orange.
+    val evenSpreadForGradient = actionItems.size in 1..7
+    val drawLeftGradient = remember { derivedStateOf { !evenSpreadForGradient && lazyListState.firstVisibleItemIndex > 0 } }
     val drawRightGradient = remember(actionItems) { derivedStateOf {
-        lazyListState.layoutInfo.visibleItemsInfo.isNotEmpty()
+        !evenSpreadForGradient
+                && lazyListState.layoutInfo.visibleItemsInfo.isNotEmpty()
                 && actionItems.isNotEmpty()
                 && (lazyListState.layoutInfo.visibleItemsInfo.lastOrNull()?.key != actionItems.lastOrNull()?.name)
     } }
@@ -775,8 +815,9 @@ fun ExpandActionsButton(isActionsOpen: Boolean, onClick: () -> Unit) {
     val bgCol = LocalKeyboardScheme.current.keyboardContainer
     val fgCol = LocalKeyboardScheme.current.onKeyboardContainer
 
+    // SwiftKey nit: 14dp radius, centre x ~50px at 420dpi (38dp-wide button)
     val circleRadius = with(LocalDensity.current) {
-        16.dp.toPx()
+        14.dp.toPx()
     }
 
     val styled = isKeyStyledTheme()
@@ -785,7 +826,7 @@ fun ExpandActionsButton(isActionsOpen: Boolean, onClick: () -> Unit) {
     IconButton(
         onClick = onClick,
         modifier = Modifier
-            .width(42.dp)
+            .width(38.dp)
             .onGloballyPositioned { c -> if (org.futo.inputmethod.latin.BuildConfig.DEBUG) { val loc = IntArray(2); wbView.getLocationOnScreen(loc); val p = c.positionInRoot(); WbDebug.logWindow("CHEVRON open=$isActionsOpen cx=${(loc[0] + p.x + c.size.width / 2).toInt()} cy=${(loc[1] + p.y + c.size.height / 2).toInt()}") } }
             .rotate(
                 // WrenBoard: chevron points UP while the toolbar is tucked away and DOWN while it is open
