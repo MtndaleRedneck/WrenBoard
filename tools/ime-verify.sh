@@ -277,6 +277,23 @@ if [ "${WB_FOCUS:-}" = shift ]; then
   note "== done =="
   exit 0
 fi
+if [ "${WB_FOCUS:-}" = autocorrect ]; then
+  note "== autocorrect check (SwiftKey-list regression item): teh / brwon / i at head =="
+  clear_field; sleep 0.5
+  type_letters t e h; tapk space; sleep 1.0
+  shot ac_01_teh
+  assert_field "teh + space autocorrects to 'the '" "the "
+  type_letters b r w o n; tapk space; sleep 1.0
+  shot ac_02_brwon
+  assert_field "brwon + space autocorrects to 'brown '" "the brown "
+  type_letters i; tapk space; sleep 1.0
+  shot ac_03_i
+  assert_field "i + space autocapitalizes to 'I '" "the brown I "
+  adb logcat -d > shots/logcat_full.txt 2>&1
+  dim "final"
+  note "== done =="
+  exit 0
+fi
 if [ "${WB_FOCUS:-}" = learn ]; then note "FOCUS=learn: skipping the broad typing/symbols/settings legs; running learn-restore then the real-learned-data export/fresh-install leg only"; fi
 if [ "${WB_FOCUS:-}" = voice ]; then note "FOCUS=voice: skipping the broad typing/symbols/settings and learn/e2e legs; running the update-dialog + voice-backend confirmation leg only"; fi
 if [ "${WB_FOCUS:-}" = editor ]; then note "FOCUS=editor: running only the toolbar action editor legs"; fi
