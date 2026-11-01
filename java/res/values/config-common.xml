@@ -27,8 +27,8 @@
     <integer name="config_delay_in_milliseconds_to_update_shift_state">100</integer>
     <integer name="config_double_space_period_timeout">1100</integer>
 
-    <integer name="config_key_repeat_start_timeout">400</integer>
-    <integer name="config_key_repeat_interval">50</integer>
+    <integer name="config_key_repeat_start_timeout">660</integer>
+    <integer name="config_key_repeat_interval">225</integer>
 
     <integer name="config_ignore_alt_code_key_timeout">350</integer>
 
@@ -44,7 +44,7 @@
     <bool name="config_default_vibration_enabled">true</bool>
     <integer name="config_max_vibration_duration">100</integer>
 
-    <integer name="config_default_longpress_key_timeout">300</integer>
+    <integer name="config_default_longpress_key_timeout">450</integer>
     <integer name="config_max_longpress_timeout">700</integer>
     <integer name="config_min_longpress_timeout">100</integer>
     <integer name="config_longpress_timeout_step">10</integer>

@@ -304,13 +304,13 @@ private fun EmojiCell(
     val base = item.untoned
     val isLocked = lockedSet.contains(item.emoji) || lockedSet.contains(base)
     Box(
-        Modifier.fillMaxWidth().height(50.3.dp)
+        Modifier.fillMaxWidth().height(44.dp)
             .semantics { if (item.description.isNotBlank()) contentDescription = item.description }
             .then(if (popup.value) Modifier.padding(horizontal = 4.dp, vertical = 2.dp).clip(RoundedCornerShape(7.6.dp)).background(Color(0x29FFFFFF)) else Modifier)
             .combinedClickable(onClick = { w.type(item, view) }, onLongClick = { popup.value = true }),
         contentAlignment = Alignment.TopCenter
     ) {
-        EmojiGlyph(item.emoji, if (item.category == "ASCII") 16f else 29.8f, Modifier.padding(top = 9.dp))
+        EmojiGlyph(item.emoji, if (item.category == "ASCII") 16f else 24.5f, Modifier.padding(top = 9.dp))
         val hasTones = emojiMap[base]?.skinTones == true || item.skinTones
         if (hasTones) {
             Canvas(Modifier.align(Alignment.TopEnd).padding(top = 34.dp, end = 0.dp).size(7.6.dp)) {
@@ -487,7 +487,7 @@ private fun WrenEmojiSearch(w: WrenEmojiWindow, emojis: List<EmojiItem>, view: V
         LazyRow(Modifier.fillMaxWidth().weight(1f).background(EmojiColors.GridTop), verticalAlignment = Alignment.CenterVertically) {
             items(results, key = { it.emoji }) { item ->
                 Box(Modifier.width(51.4.dp).fillMaxHeight().clickable { w.type(item, view) }, contentAlignment = Alignment.Center) {
-                    EmojiGlyph(item.emoji, 29.8f)
+                    EmojiGlyph(item.emoji, 24.5f)
                 }
             }
         }

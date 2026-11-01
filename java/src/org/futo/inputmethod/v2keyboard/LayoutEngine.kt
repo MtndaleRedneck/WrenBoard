@@ -113,7 +113,8 @@ data class LayoutEngine(
     val layoutParams: LayoutParams
 ) {
     val horizontalGap = layoutParams.gap
-    val verticalGap = layoutParams.gap * 2
+    // SwiftKey list item 4: SwiftKey's row gap is the gap itself, not doubled (14px -> ~6px).
+    val verticalGap = layoutParams.gap
 
     val effectiveRows = keyboard.getEffectiveRows(params.mId.mNumberRowMode)
 

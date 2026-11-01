@@ -203,7 +203,7 @@ public class SettingsValues {
         mScreenMetrics = Settings.readScreenMetrics(res);
 
         mBackspaceDeletesInsertedText = prefs.getBoolean(Settings.PREF_BACKSPACE_DELETE_INSERTED_TEXT, true);
-        mBackspaceUndoesAutocorrect = prefs.getBoolean(Settings.PREF_BACKSPACE_UNDO_AUTOCORRECT, true);
+        mBackspaceUndoesAutocorrect = prefs.getBoolean(Settings.PREF_BACKSPACE_UNDO_AUTOCORRECT, false);
 
         int legacySpacebarMode = prefs.getInt(Settings.PREF_SPACEBAR_MODE_LEGACY, Settings.SPACEBAR_MODE_SWIPE_CURSOR_LEGACY);
         mSpacebarSwipeMode = prefs.getInt(Settings.PREF_SPACEBAR_SWIPE_MODE,
@@ -213,7 +213,7 @@ public class SettingsValues {
 
         mShiftLockMode = prefs.getInt(Settings.PREF_SHIFT_LOCK_MODE, Settings.SHIFT_LOCK_MODE_CYCLE);
 
-        mBackspaceMode = prefs.getInt(Settings.PREF_BACKSPACE_MODE, Settings.BACKSPACE_MODE_CHARACTERS);
+        mBackspaceMode = prefs.getInt(Settings.PREF_BACKSPACE_MODE, Settings.BACKSPACE_MODE_WORDS);
         mBackspaceModeHold = prefs.getInt(Settings.PREF_BACKSPACE_MODE_HOLD, Settings.BACKSPACE_MODE_WORDS);
         mNumberRowMode = mIsNumberRowEnabledByUser ?
                 prefs.getInt(Settings.PREF_NUMBER_ROW_MODE, Settings.NUMBER_ROW_MODE_CLASSIC)

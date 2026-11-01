@@ -583,7 +583,8 @@ class KeyboardSizingCalculator(val context: Context, val uixManager: UixManager)
 
         // WrenBoard 1.3 (teardown item 2): 3-6dp gaps looked about 3x too wide vs SwiftKey (3.6dp on a
         // 360dp-wide phone); aim for ~2.4dp there, never below 2dp or above 3dp.
-        return (minDp / 150.0f).coerceIn(2.0f, 3.0f)
+        // SwiftKey list item 4: gap reads 2.0f on a 360dp-wide phone, not 2.4f.
+        return (minDp / 180.0f).coerceIn(2.0f, 3.0f)
     }
 
     fun calculateSuggestionBarHeightDp(): Float {

@@ -4,6 +4,7 @@ import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.GradientDrawable
 import android.util.TypedValue
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.tooling.preview.Preview
@@ -51,6 +52,8 @@ private val darkScheme = extendedDarkColorScheme(
     surfaceContainerHighest=Color(0xFF4D4D4D),
     shadow=Color(0xFF000000).copy(alpha = 0.7f),
     keyboardSurface=Color(0xFF3C3C3C),
+    // WrenBoard 1.3 (SwiftKey list item 6): Pumpkin board gradient, from Tab's measured SwiftKey pixels.
+    keyboardBackgroundGradient=Brush.verticalGradient(listOf(Color(0xFF4C4C4C), Color(0xFF2A2A2A))),
     keyboardSurfaceDim=Color(0xFF3C3C3C),
     keyboardContainer=Color(0xFF232323),
     keyboardContainerVariant=Color(0xFF1C1C1C),
@@ -75,13 +78,16 @@ private fun lighten(c: Int, f: Float): Int {
  *  The line shade is interim, pending Tab's measured SwiftKey pixels. */
 private class TopLineGradientDrawable(top: Int, bottom: Int, private val radiusPx: Float, dm: android.util.DisplayMetrics) :
     GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, intArrayOf(top, bottom)) {
+    // SwiftKey list items 2+3: Tab's pixel measurements are off a ~420dpi phone; scale with density.
+    private val px420 = dm.density / 2.625f
     private val linePaint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
-        color = lighten(top, 0.30f)
-        strokeWidth = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 1.0f, dm).coerceAtLeast(1f)
+        color = 0xFF6E6E6E.toInt()
+        strokeWidth = (1.0f * px420).coerceAtLeast(1f)
     }
     override fun draw(canvas: android.graphics.Canvas) {
         super.draw(canvas)
-        val y = bounds.top + linePaint.strokeWidth * 1.5f
+        // center lands 3 SwiftKey px from the key's top edge (1px border + 2px gap + half the 1px line)
+        val y = bounds.top + 3.0f * px420
         canvas.drawLine(bounds.left + radiusPx, y, bounds.right - radiusPx, y, linePaint)
     }
 }
@@ -95,6 +101,8 @@ private fun keyGradient(context: android.content.Context, top: Int, bottom: Int)
     return TopLineGradientDrawable(top, bottom, radiusPx, context.resources.displayMetrics).apply {
         shape = GradientDrawable.RECTANGLE
         cornerRadius = radiusPx
+        // SwiftKey list item 2: 1px #0C0C0C key border lives on the gradient; KeyBackground outline is off.
+        setStroke((1.0f * context.resources.displayMetrics.density / 2.625f).toInt().coerceAtLeast(1), 0xFF0C0C0C.toInt())
     }
 }
 
@@ -103,8 +111,9 @@ private fun popupBox(context: android.content.Context): GradientDrawable {
     return GradientDrawable().apply {
         shape = GradientDrawable.RECTANGLE
         cornerRadius = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 6.0f, dm)
-        setColor(0xFF2B2B2B.toInt())
-        setStroke(TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 1.5f, dm).toInt().coerceAtLeast(2), 0xFFB4B4B4.toInt())
+        // SwiftKey list item 5: #333333 fill, 3px #BBBBBB border
+        setColor(0xFF333333.toInt())
+        setStroke((3.0f * dm.density / 2.625f).toInt().coerceAtLeast(2), 0xFFBBBBBB.toInt())
     }
 }
 
@@ -164,8 +173,7 @@ private fun wrenKeyBackgrounds(context: android.content.Context) = KeyedBitmaps(
             bitmap = KeyBackground(
                 foregroundColor = AccentOrange.toArgb(),
                 hintColor = HintGrey,
-                outlineColor = 0xFF0E0E0E.toInt(),
-                outlineWidth = 1.dp,
+                outlineColor = null,
                 background = keyGradient(context, 0xFF6A6A6A.toInt(), 0xFF383838.toInt())
             )
         ),
@@ -175,8 +183,7 @@ private fun wrenKeyBackgrounds(context: android.content.Context) = KeyedBitmaps(
             bitmap = KeyBackground(
                 foregroundColor = AccentOrange.toArgb(),
                 hintColor = HintGrey,
-                outlineColor = 0xFF0E0E0E.toInt(),
-                outlineWidth = 1.dp,
+                outlineColor = null,
                 background = keyGradient(context, 0xFF565656.toInt(), 0xFF242424.toInt())
             )
         ),
@@ -186,8 +193,7 @@ private fun wrenKeyBackgrounds(context: android.content.Context) = KeyedBitmaps(
             bitmap = KeyBackground(
                 foregroundColor = AccentOrange.toArgb(),
                 hintColor = HintGrey,
-                outlineColor = 0xFF0E0E0E.toInt(),
-                outlineWidth = 1.dp,
+                outlineColor = null,
                 background = keyGradient(context, 0xFF515151.toInt(), 0xFF242424.toInt())
             )
         ),
@@ -197,8 +203,7 @@ private fun wrenKeyBackgrounds(context: android.content.Context) = KeyedBitmaps(
             bitmap = KeyBackground(
                 foregroundColor = AccentOrange.toArgb(),
                 hintColor = HintGrey,
-                outlineColor = 0xFF0E0E0E.toInt(),
-                outlineWidth = 1.dp,
+                outlineColor = null,
                 // WrenBoard 1.3 (teardown item 1): the old top (#3E3E3E) sat 2 levels off the #3C3C3C board,
             // so the key top vanished. #4C4C4C keeps the charcoal look but reads as a full button box.
             background = keyGradient(context, 0xFF4C4C4C.toInt(), 0xFF060606.toInt())
@@ -222,8 +227,9 @@ val WrenBoardTheme = ThemeOption(
         extended = darkScheme.extended.copy(
             advancedThemeOptions = AdvancedThemeOptions(
                 keyRoundness = 0.78f,
-                // WrenBoard 1.3 (teardown items 7/8): 0.88 shrank every key glyph and icon below SwiftKey's.
-                textSizeMultiplier = 1.0f,
+                // SwiftKey list item 1: letters measured ~35% too big at 1.0; 0.74 matches Tab's SwiftKey spec
+                // (Ezzy's phone renders ~0.82; Tab re-measures there in the consolidated review).
+                textSizeMultiplier = 0.74f,
                 // WrenBoard 1.3 (teardown item 5): no orange transformer marker under suggestions.
                 showSuggestionSourceIndicators = false,
                 // Symbols sit centred above the letter, as on Ezzy's phone, SwiftKey and the approved render.
