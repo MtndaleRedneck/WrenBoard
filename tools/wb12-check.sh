@@ -235,10 +235,12 @@ if leg period; then
     done < shots/more_${mode}_keys.txt
     if [ $mode = legacy ]; then
       clear_field
+      I1X=$(awk 'NR==1{print $3}' shots/more_${mode}_keys.txt); I1Y=$(awk 'NR==1{print $4}' shots/more_${mode}_keys.txt)
+      note "[$mode] cancel slide: parent ($PX,$PY), first item ($I1X,$I1Y)"
       adb shell input motionevent DOWN "$PX" "$PY"; sleep 1.2
-      adb shell input motionevent MOVE "$PX" 1500; sleep 0.2
-      adb shell input motionevent MOVE "$PX" 1200; sleep 0.2
-      release "$PX" 1200
+      adb shell input motionevent MOVE "$I1X" "$I1Y"; sleep 0.2
+      adb shell input motionevent MOVE "$PX" "$PY"; sleep 0.2
+      release "$PX" "$PY"
       F=$(field)
       # engine semantics (identical pre/post fix, runs 41331924970/41331934384): sliding off the
       # panel cancels the POPUP; the release then types the PARENT key '.', never a popup item
@@ -439,11 +441,13 @@ fi
 
 if leg states; then
   note "== STATES: press states, 123 page 2, voice strip (SwiftKey-parity views, evidence capture) =="
-  focus_target; geom letters >/dev/null
+  focus_target; clear_field; geom letters >/dev/null
   read -r SX SY <<< "$(kxy code 32)"
-  adb shell input motionevent DOWN "$SX" "$SY"; sleep 0.5; shot states_space_press; adb shell input motionevent UP "$SX" "$SY"; sleep 0.3
+  adb shell input motionevent DOWN "$SX" "$SY"; sleep 0.3; shot states_space_press; adb shell input motionevent UP "$SX" "$SY"; sleep 0.3
+  adb shell input keyevent 4; sleep 0.6; focus_target; geom letters >/dev/null
   read -r BX BY <<< "$(kxy code -5)"
-  adb shell input motionevent DOWN "$BX" "$BY"; sleep 0.5; shot states_backspace_press; adb shell input motionevent UP "$BX" "$BY"; sleep 0.3
+  adb shell input motionevent DOWN "$BX" "$BY"; sleep 0.3; shot states_backspace_press; adb shell input motionevent UP "$BX" "$BY"; sleep 0.3
+  adb shell input keyevent 4; sleep 0.6; focus_target
   clear_field
   tapcode -3 >/dev/null || true; sleep 1.2
   geom sym2 >/dev/null
