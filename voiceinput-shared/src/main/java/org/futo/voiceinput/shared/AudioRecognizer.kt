@@ -494,7 +494,7 @@ class AudioRecognizer(
             // input route; report the true route, and keep it updated if it changes.
             reportActualRoute(recorder, state)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                recorder.addOnRoutingChangedListener({ r -> reportActualRoute(r, state) }, null)
+                recorder.addOnRoutingChangedListener({ reportActualRoute(recorder, state) }, null)
             }
 
             isRecording = true
