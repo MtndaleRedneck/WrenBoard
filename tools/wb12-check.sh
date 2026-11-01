@@ -215,7 +215,9 @@ if leg period; then
       # Tab blocker (mail 01793553574906000000): releasing without sliding must type the designated default '?'
       [ "$F" = "?" ] && pass "[legacy] no-slide release types '?'" || fail "[legacy] no-slide release typed '$F' (wanted '?')"
     else
-      note "[$mode] no-slide release typed '$F'"
+      # Owner decision (authenticated WhatsApp, 2026-11-01 15:57:49): the shipping default popup
+      # ('! , . ?') types '.' on a no-slide release; '? , !' stays available via the setting.
+      [ "$F" = "." ] && pass "[$mode] no-slide release types '.'" || fail "[$mode] no-slide release typed '$F' (wanted '.')"
     fi
     NM=$(wc -l < shots/more_${mode}_keys.txt); note "[$mode] popup keys ($NM): $(awk '{print $2}' shots/more_${mode}_keys.txt | tr '\n' ' ')"
     [ "$NM" -gt 0 ] || { fail "[$mode] period long-press showed no panel"; continue; }

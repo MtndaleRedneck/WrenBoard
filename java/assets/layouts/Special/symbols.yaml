@@ -16,4 +16,9 @@ rows:
       - "?"
       - "+"
       - "$delete"
-  - bottom: "$alphabet , $space . $enter"
+  - bottom:
+      - "$alphabet"
+      - ","
+      - {type: base, spec: "!icon/space_key_for_number_layout|!code/key_space", attributes: { style: Spacebar, width: Grow, showPopup: false, longPressEnabled: true, moreKeyMode: OnlyExplicit }}
+      - "."
+      - "$enter"

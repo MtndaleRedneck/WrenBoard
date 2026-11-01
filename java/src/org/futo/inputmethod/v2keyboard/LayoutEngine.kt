@@ -361,10 +361,34 @@ data class LayoutEngine(
         computedRowWithoutWidths: List<LayoutEntry.Key>,
         widths: Map<KeyWidth, Float>,
         height: Float,
-        splittable: Boolean
+        splittable: Boolean,
+        isBottomRow: Boolean = false
     ): LayoutRow {
         val computedRow = computedRowWithoutWidths.map { key ->
             LayoutEntry.Key(key.data, widths[key.data.width]!!, key.rowSpan)
+        }.let { row ->
+            // SwiftKey bottom row (owner-approved 480/156): enter is 1.5 letter pitches
+            // (156px at 1080px), the Grow space bar absorbs the delta (500px -> 480px).
+            if (!isBottomRow) {
+                row
+            } else {
+                val enterWidth = 1.5f * regularKeyWidth
+                val delta = enterWidth - (widths[KeyWidth.FunctionalKey] ?: enterWidth)
+                if (delta <= 0.0f || row.none { it.data.width == KeyWidth.Grow }) {
+                    row
+                } else {
+                    row.map { key ->
+                        when {
+                            key.data.code == Constants.CODE_ENTER ->
+                                LayoutEntry.Key(key.data, key.widthPx + delta, key.rowSpan, key.heightOverride)
+                            key.data.code == Constants.CODE_SPACE &&
+                                key.data.width == KeyWidth.Grow ->
+                                LayoutEntry.Key(key.data, key.widthPx - delta, key.rowSpan, key.heightOverride)
+                            else -> key
+                        }
+                    }
+                }
+            }
         }
 
         val totalRowWidth = computedRow.sumOf { it.widthPx.toDouble() }.toFloat()
@@ -480,7 +504,8 @@ data class LayoutEngine(
                 row,
                 rowWidths[i],
                 height.toFloat(),
-                rows[i].splittable
+                rows[i].splittable,
+                rows[i].isBottomRow
             )
         }
 
