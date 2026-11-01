@@ -617,6 +617,13 @@ if leg settings; then
   done
   opensettings wren_keyboard 3.5; adb shell input swipe 540 1900 540 500 400; sleep 1.5; adb shell input swipe 540 1900 540 500 400; sleep 1.5
   shot st02b_wren_keyboard_scrolled; dumpui st_kb2; KB="$(uitext st_wren_keyboard)$(uitext st_kb2)"
+  # The item-42 FAB bottom inset (72dp) shortens the page viewport, so at high
+  # densities the two fixed swipes can stop short of the FEEL card. Scroll on
+  # until all section cards have been seen (bounded).
+  for i in 1 2 3; do
+    echo "$KB" | grep -q "LOOK" && echo "$KB" | grep -q "LAYOUT" && echo "$KB" | grep -q "FEEL" && break
+    adb shell input swipe 540 1900 540 500 400; sleep 1.5; dumpui "st_kb_extra$i"; KB="$KB$(uitext st_kb_extra$i)"
+  done
   for w in LOOK LAYOUT FEEL; do echo "$KB" | grep -q "$w" && pass "Keyboard page has the $w card" || fail "Keyboard page lacks the $w card"; done
   # FUTO page must still reach FUTO's own screens
   opensettings "" 2; opensettings wren_futo 3.5; dumpui st_futo2
