@@ -187,16 +187,22 @@ class SettingsActivity : ComponentActivity(), DynamicThemeProviderOwner {
                             color = MaterialTheme.colorScheme.background
                         ) {
                             Box(Modifier.safeDrawingPadding()) {
+                                // WrenBoard 1.3 (teardown item 42 + Tab review): the floating
+                                // try-keyboard button overlays content, so shrink every page's
+                                // viewport by the FAB's height + margin (56dp + 16dp) while it shows.
+                                val fabVisible = inputMethodEnabled.value && inputMethodSelected.value
                                 SetupOrMain(
                                     inputMethodEnabled.value,
                                     inputMethodSelected.value,
                                     doublePackage.value
                                 ) {
-                                    SettingsNavigator(navController = navController)
+                                    Box(if (fabVisible) Modifier.padding(bottom = 72.dp) else Modifier) {
+                                        SettingsNavigator(navController = navController)
+                                    }
                                 }
                                 // WrenBoard 1.3 (teardown item 42): SwiftKey-style floating try-keyboard
                                 // button on every Settings page, once the keyboard is set up.
-                                if (inputMethodEnabled.value && inputMethodSelected.value) {
+                                if (fabVisible) {
                                     val fabContext = androidx.compose.ui.platform.LocalContext.current
                                     androidx.compose.material3.FloatingActionButton(
                                         onClick = {
