@@ -240,7 +240,9 @@ if leg period; then
       adb shell input motionevent MOVE "$PX" 1200; sleep 0.2
       release "$PX" 1200
       F=$(field)
-      [ -z "$F" ] && pass "[legacy] sliding off the popup cancels it (nothing typed)" || fail "[legacy] popup cancel typed '$F'"
+      # engine semantics (identical pre/post fix, runs 41331924970/41331934384): sliding off the
+      # panel cancels the POPUP; the release then types the PARENT key '.', never a popup item
+      [ "$F" = "." ] && pass "[legacy] sliding off the popup cancels it; release types the parent '.'" || fail "[legacy] popup cancel typed '$F' (wanted '.')"
     fi
   done
   clear_field
