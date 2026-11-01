@@ -126,8 +126,8 @@ private class TopLineGradientDrawable(
             0f, inner.top.toFloat(), 0f, inner.bottom.toFloat(),
             0xFF616161.toInt(), 0xFF0B0B0B.toInt(), android.graphics.Shader.TileMode.CLAMP
         )
-        canvas.drawLine(rimX_l, inner.top + radiusPx, rimX_l, inner.bottom - 1, rimPaint)
-        canvas.drawLine(rimX_r, inner.top + radiusPx, rimX_r, inner.bottom - 1, rimPaint)
+        canvas.drawLine(rimX_l, inner.top + radiusPx, rimX_l, inner.bottom - 1f, rimPaint)
+        canvas.drawLine(rimX_r, inner.top + radiusPx, rimX_r, inner.bottom - 1f, rimPaint)
         drawTopLine(canvas, inner)
     }
     private fun drawTopLine(canvas: android.graphics.Canvas, b: android.graphics.Rect) {
