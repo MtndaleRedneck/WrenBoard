@@ -6,7 +6,7 @@
 set -u
 APK="$1"; TAPK="$2"
 PKG=com.wrenboard.keyboard; TPKG=com.wrenboard.imetarget
-LEGS=",${WB_LEGS:-setup,keyboard,period,caps,shift,clip,update,toolbar,skin,symbols,emoji,clipboard,settings},"
+LEGS=",${WB_LEGS:-setup,keyboard,period,caps,shift,clip,update,toolbar,textedit,skin,symbols,emoji,clipboard,settings},"
 mkdir -p shots; R=shots/results.txt; : > "$R"
 ADB_BIN=$(type -P adb)
 # a dead emulator must not hang the run: each call is bounded, and once the link is confirmed gone
@@ -308,6 +308,34 @@ if leg toolbar; then
     fi
   else fail "no chevron position logged"; fi
   dbg collapse 0.8
+fi
+
+if leg textedit; then
+  note "== TEXT EDIT PANEL: toolbar > All Actions > Text Editor (evidence capture, note-only) =="
+  focus_target
+  adb logcat -c; dbg expand 1.5
+  AA=$(adb logcat -d -s WBDBG:I | tr -d '\r' | grep 'ACTION name=All_Actions' | tail -1)
+  AX=$(echo "$AA" | sed -n 's/.*cx=\([0-9-]*\).*/\1/p'); AY=$(echo "$AA" | sed -n 's/.*cy=\([0-9-]*\).*/\1/p')
+  if [ -n "$AX" ]; then
+    adb shell input tap "$AX" "$AY"; sleep 1.8
+    dumpui textedit_00_allactions
+    B=$(grep -o '<node[^>]*text="Text Editor"[^>]*/>' shots/textedit_00_allactions.xml | head -1 | grep -o 'bounds="\[[0-9]*,[0-9]*\]\[[0-9]*,[0-9]*\]"')
+    note "Text Editor node: $B"
+    TBX=$(echo "$B" | sed 's/bounds="\[\([0-9]*\),\([0-9]*\)\]\[\([0-9]*\),\([0-9]*\)\]"/echo $(( (\1+\3)\/2 )) $(( (\2+\4)\/2 ))/e')
+    if [ -n "$TBX" ]; then
+      adb shell input tap $TBX; sleep 1.8
+      shot textedit_01_panel
+      dumpui textedit_01
+      grep -q 'Text Editor' shots/textedit_01.xml && note "text-edit panel open" || note "text-edit panel not confirmed in dump"
+    else
+      shot textedit_01_panel
+      note "no Text Editor node in all-actions dump; captured raw"
+    fi
+    dbg close 1.0
+  else
+    note "no All_Actions button position"
+  fi
+  adb logcat -c; dbg collapse 1.0; focus_target
 fi
 
 if leg skin; then
