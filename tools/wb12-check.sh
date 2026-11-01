@@ -574,8 +574,10 @@ if leg emoji; then
         if ! grep -q 'EMOJI page=' shots/em10c.txt; then
           note "post-BACK: emoji panel was closed (BACK exited the panel, not just search) - reopening"
           dbg "open:emoji" 2.0
-          for i in $(seq 1 10); do sleep 0.5; wlog em10c; grep -q 'EMOJI page=' shots/em10c.txt && break; done
         fi
+        # wait for the Recents TAB marker, not just the page marker: tab markers are drawn
+        # after the page composes, so a page-only poll raced ahead of them (run 41351868194)
+        for i in $(seq 1 16); do sleep 0.5; wlog em10c; grep -q 'EMOJITAB i=0 ' shots/em10c.txt && break; done
         # fresh Recents-tab position (em9 predates the search UI)
         T2=$(pos shots/em10c.txt 'EMOJITAB i=0 ')
         if [ -n "$T2" ]; then
