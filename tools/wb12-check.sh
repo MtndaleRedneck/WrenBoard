@@ -6,7 +6,7 @@
 set -u
 APK="$1"; TAPK="$2"
 PKG=com.wrenboard.keyboard; TPKG=com.wrenboard.imetarget
-LEGS=",${WB_LEGS:-setup,keyboard,period,caps,shift,clip,update,toolbar,textedit,skin,symbols,emoji,clipboard,settings},"
+LEGS=",${WB_LEGS:-setup,keyboard,period,leftedge,caps,shift,clip,update,toolbar,textedit,skin,symbols,emoji,clipboard,settings},"
 mkdir -p shots; R=shots/results.txt; : > "$R"
 ADB_BIN=$(type -P adb)
 # a dead emulator must not hang the run: each call is bounded, and once the link is confirmed gone
@@ -210,6 +210,13 @@ if leg period; then
     adb logcat -d -s WBDBG:I | tr -d '\r' > shots/more_$mode.txt
     python3 tools/wb12_kv.py shots/more_$mode.txt list MORE > shots/more_${mode}_keys.txt
     release "$PX" "$PY"
+    F=$(field)
+    if [ $mode = legacy ]; then
+      # Tab blocker (mail 01793553574906000000): releasing without sliding must type the designated default '?'
+      [ "$F" = "?" ] && pass "[legacy] no-slide release types '?'" || fail "[legacy] no-slide release typed '$F' (wanted '?')"
+    else
+      note "[$mode] no-slide release typed '$F'"
+    fi
     NM=$(wc -l < shots/more_${mode}_keys.txt); note "[$mode] popup keys ($NM): $(awk '{print $2}' shots/more_${mode}_keys.txt | tr '\n' ' ')"
     [ "$NM" -gt 0 ] || { fail "[$mode] period long-press showed no panel"; continue; }
     [ $mode = default ] && { [ "$(awk '{print $2}' shots/more_${mode}_keys.txt | tr '\n' ' ')" = "! , . ? " ] && pass "[default] popup reads ! , . ? by default (alt period key now the default)" || fail "[default] popup is not the ! , . ? set by default"; }
@@ -226,7 +233,34 @@ if leg period; then
       want="$label"; [ "$label" = "_" ] && want=" "
       if [ "$F" = "$want" ]; then pass "[$mode] released on '$label' typed '$F'"; else fail "[$mode] released on '$label' typed '$F'"; fi
     done < shots/more_${mode}_keys.txt
+    if [ $mode = legacy ]; then
+      clear_field
+      adb shell input motionevent DOWN "$PX" "$PY"; sleep 1.2
+      adb shell input motionevent MOVE "$PX" 1500; sleep 0.2
+      adb shell input motionevent MOVE "$PX" 1200; sleep 0.2
+      release "$PX" 1200
+      F=$(field)
+      [ -z "$F" ] && pass "[legacy] sliding off the popup cancels it (nothing typed)" || fail "[legacy] popup cancel typed '$F'"
+    fi
   done
+  clear_field
+fi
+
+if leg leftedge; then
+  note "== LEFT-EDGE taps after the 3px margin shift =="
+  focus_target; geom letters >/dev/null
+  QCY=$(kxy code 113 | awk '{print $2}'); ACY=$(kxy code 97 | awk '{print $2}'); SCY=$(kxy code -1 | awk '{print $2}')
+  note "rows: q cy=$QCY, a cy=$ACY, shift cy=$SCY"
+  clear_field; adb logcat -c
+  adb shell input tap 4 "$QCY"; sleep 0.4
+  adb shell input tap 4 "$ACY"; sleep 0.4
+  F=$(field)
+  [ "$F" = "qa" ] && pass "left-edge taps on q/a rows register ('$F')" || fail "left-edge taps typed '$F' (wanted 'qa')"
+  E0=$(elem le0)
+  adb shell input tap 4 "$SCY"; sleep 0.5
+  E1=$(elem le1)
+  [ "$E0" != "$E1" ] && pass "left-edge tap on shift registers (element $E0 -> $E1)" || fail "left-edge tap on shift did not register (element $E1)"
+  [ "$E1" != "0" ] && tapcode -1 >/dev/null
   clear_field
 fi
 
@@ -319,16 +353,21 @@ if leg textedit; then
   if [ -n "$AX" ]; then
     adb logcat -c; adb shell input tap "$AX" "$AY"; sleep 1.8
     shot textedit_00_allactions
+    # the tile can start below the fold: scroll the grid first, THEN read the fresh position
     TE=""
     for i in 1 2 3; do
+      adb logcat -c
+      adb shell input swipe 540 2000 540 1200 350; sleep 1.5
       TE=$(adb logcat -d -s WBDBG:I | tr -d '\r' | grep 'ACTION name=Text_Editor' | tail -1)
       [ -n "$TE" ] && break
-      adb shell input swipe 540 2100 540 1300 300; sleep 1.2
     done
     note "Text Editor tile: $TE"
     TX=$(echo "$TE" | sed -n 's/.*cx=\([0-9-]*\).*/\1/p'); TY=$(echo "$TE" | sed -n 's/.*cy=\([0-9-]*\).*/\1/p')
     if [ -n "$TX" ]; then
+      adb logcat -c
       adb shell input tap "$TX" "$TY"; sleep 1.8
+      WO=$(adb logcat -d -s WBDBG:I | tr -d '\r' | grep 'WINDOW open' | tail -1)
+      note "after tap: $WO"
       shot textedit_01_panel
     else
       shot textedit_01_panel
