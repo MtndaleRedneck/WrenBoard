@@ -138,7 +138,7 @@ if leg setup; then
   shot s05_settings_active; dumpui s05; T=$(uitext s05)
   if echo "$T" | grep -q "WrenBoard is turned off\|WrenBoard is not your keyboard"; then
     note "banner still up after relaunch; default IME is $(adb shell settings get secure default_input_method | tr -d '\r'); waiting 4 s"
-    sleep 4; adb shell am force-stop "$PKG"; adb shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1; sleep 6
+    sleep 4; adb shell am force-stop "$PKG"; ensure_ime || note "  could not restore WrenBoard after retry force-stop"; adb shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1; sleep 6
     shot s05b_settings_active_retry; dumpui s05; T=$(uitext s05)
   fi
   echo "$T" | grep -q "WrenBoard is turned off\|WrenBoard is not your keyboard" && fail "banner still shown when active" || pass "no banner when active"
@@ -204,6 +204,10 @@ if leg period; then
   for mode in default quick legacy; do
     if [ $mode = quick ]; then dbg "prefbool:pref_enable_alt_period_key=true" 2.0; focus_target; geom period_quick >/dev/null; PXY=$(kxy code 46); read -r PX PY <<< "$PXY"; fi
     if [ $mode = legacy ]; then dbg "prefbool:pref_enable_alt_period_key=false" 2.0; focus_target; geom period_legacy >/dev/null; PXY=$(kxy code 46); read -r PX PY <<< "$PXY"; fi
+    # evidence: log the STORED pref value (UNSET proves the true fresh-install default, not a forced mode)
+    dbg "prefget:pref_enable_alt_period_key" 0.5
+    PV=$(adb logcat -d -s WBDBG:I | tr -d '\r' | grep 'PREF pref_enable_alt_period_key=' | tail -1 | sed 's/.*PREF //')
+    note "[$mode] stored pref: ${PV:-unknown}"
     clear_field; adb logcat -c
     adb shell input motionevent DOWN "$PX" "$PY"; sleep 1.2
     shot p_${mode}_popup_open
@@ -254,6 +258,23 @@ if leg period; then
       [ "$F" = "." ] && pass "[legacy] sliding off the popup cancels it; release types the parent '.'" || fail "[legacy] popup cancel typed '$F' (wanted '.')"
     fi
   done
+  # restore the shipping default (setting ON) so later legs run it, then verify persistence
+  # across a force-stop + relaunch: popup order ! , . ? and no-slide release types '.'
+  dbg "prefbool:pref_enable_alt_period_key=true" 1.0
+  dbg "prefget:pref_enable_alt_period_key" 0.5
+  note "[persist] stored pref: $(adb logcat -d -s WBDBG:I | tr -d '\r' | grep 'PREF pref_enable_alt_period_key=' | tail -1 | sed 's/.*PREF //')"
+  adb shell am force-stop "$PKG"; sleep 1
+  ensure_ime || note "  could not restore IME for persist check"
+  focus_target; geom period_persist >/dev/null; PXY=$(kxy code 46); read -r PX PY <<< "$PXY"
+  clear_field; adb logcat -c
+  adb shell input motionevent DOWN "$PX" "$PY"; sleep 1.2
+  shot p_persist_popup_open
+  adb logcat -d -s WBDBG:I | tr -d '\r' > shots/more_persist.txt
+  python3 tools/wb12_kv.py shots/more_persist.txt list MORE > shots/more_persist_keys.txt
+  release "$PX" "$PY"
+  F=$(field)
+  [ "$(awk '{print $2}' shots/more_persist_keys.txt | tr '\n' ' ')" = "! , . ? " ] && pass "[persist] popup still reads ! , . ? after restart" || fail "[persist] popup order changed after restart"
+  [ "$F" = "." ] && pass "[persist] no-slide release still types '.' after restart" || fail "[persist] no-slide typed '$F' after restart (wanted '.')"
   clear_field
 fi
 
@@ -544,16 +565,34 @@ if leg emoji; then
         D=${WB_DENSITY:-420}
         RX=$((75*D/420)); RY=$((1274*D/420))
         adb shell input tap $RX $RY; sleep 1.0
+        wlog em10b
+        note "post-result-tap state: $(grep -E 'WINDOW (EMOJI|open)' shots/em10b.txt | tail -3 | tr '\n' '|')"
         adb shell input keyevent 4; sleep 1.0   # leave search, back to the panel
-        T2=$(pos shots/em9.txt 'EMOJITAB i=0 ')
+        wlog em10c
+        # retake-3 (41347546224) landed on the LETTERS keyboard here: BACK closed the whole panel,
+        # not just search. Verify panel state before navigating; reopen if BACK closed it.
+        if ! grep -q 'EMOJI page=' shots/em10c.txt; then
+          note "post-BACK: emoji panel was closed (BACK exited the panel, not just search) - reopening"
+          dbg "open:emoji" 2.0
+          for i in $(seq 1 10); do sleep 0.5; wlog em10c; grep -q 'EMOJI page=' shots/em10c.txt && break; done
+        fi
+        # fresh Recents-tab position (em9 predates the search UI)
+        T2=$(pos shots/em10c.txt 'EMOJITAB i=0 ')
         if [ -n "$T2" ]; then
-          adb logcat -c; adb shell input tap $T2; sleep 1.5
-          # no locked emoji at this point (unlocked above), so the wave hand is the FIRST
-          # Recents cell - same first-cell coords as the e02/e04 presses
-          adb shell input motionevent DOWN $((LEFT+CW/2)) $((TOP+RH/2)); sleep 1.2; shot e07_skin_tone_popup; wlog em11
-          adb shell input motionevent UP $((LEFT+CW/2)) $((TOP+RH/2)); sleep 0.6
-          PM=$(grep 'EMOJI popup' shots/em11.txt | tail -1 | sed 's/.*EMOJI //')
-          echo "$PM" | grep -q 'variants=[2-9]' && pass "skin-tone variants popup ($PM)" || note "skin-tone popup: $PM"
+          adb logcat -c; adb shell input tap $T2; sleep 1.5; wlog em10d
+          note "recents page after tab tap: $(grep 'EMOJI page=' shots/em10d.txt | tail -1 | sed 's/.*WINDOW //')"
+          # fresh grid geometry for the Recents page first cell
+          G2=$(grep 'WINDOW EMOJIGRID' shots/em10d.txt | tail -1)
+          G2X=$(echo "$G2" | sed -n 's/.*cx=\([0-9]*\).*/\1/p'); G2Y=$(echo "$G2" | sed -n 's/.*cy=\([0-9]*\).*/\1/p')
+          G2W=$(echo "$G2" | sed -n 's/.* w=\([0-9]*\).*/\1/p'); G2H=$(echo "$G2" | sed -n 's/.* h=\([0-9]*\).*/\1/p')
+          if [ -n "$G2W" ]; then
+            C2W=$((G2W/8)); L2=$((G2X-G2W/2)); T2Y=$((G2Y-G2H/2))
+            # no locked emoji at this point (unlocked above), so the wave hand is the FIRST cell
+            adb shell input motionevent DOWN $((L2+C2W/2)) $((T2Y+RH/2)); sleep 1.2; shot e07_skin_tone_popup; wlog em11
+            adb shell input motionevent UP $((L2+C2W/2)) $((T2Y+RH/2)); sleep 0.6
+            PM=$(grep 'EMOJI popup' shots/em11.txt | tail -1 | sed 's/.*EMOJI //')
+            echo "$PM" | grep -q 'variants=[2-9]' && pass "skin-tone variants popup ($PM)" || note "skin-tone popup: $PM"
+          else note "skin-tone capture: no grid geometry on Recents page"; fi
         else note "skin-tone capture: no Recents tab position"; fi
       else note "skin-tone capture: wave search gave no results"; fi
       adb shell input keyevent 4; sleep 0.5
