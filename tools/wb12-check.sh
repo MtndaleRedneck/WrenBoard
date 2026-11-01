@@ -524,8 +524,9 @@ if leg emoji; then
       Q=$(grep 'EMOJI search' shots/em7.txt | tail -1); note "$Q"
       echo "$Q" | grep -q 'results=[1-9]' && pass "emoji search finds results ($Q)" || fail "emoji search found nothing ($Q)"
     else fail "no search button position"; fi
-    adb logcat -c; dbg "close" 1.0; dbg "open:emoji" 2.0; wlog em8
-    GT=$(pos shots/em8.txt 'EMOJIGIFTAB'); [ -n "$GT" ] && { adb shell input tap $GT; sleep 1.2; shot e06_gif_tab; pass "GIF tab opens (placeholder)"; } || fail "no GIF tab"
+    adb logcat -c; dbg "close" 1.0; dbg "open:emoji" 2.0
+    GT=""; for i in $(seq 1 10); do sleep 0.5; adb logcat -d -s WBDBG:I | tr -d '\r' > shots/em8.txt; GT=$(pos shots/em8.txt 'EMOJIGIFTAB'); [ -n "$GT" ] && break; done
+    [ -n "$GT" ] && { adb shell input tap $GT; sleep 1.2; shot e06_gif_tab; pass "GIF tab opens (placeholder)"; } || fail "no GIF tab"
     # skin-tone variants popup: search a hand emoji, long-press the first result
     adb logcat -c; dbg "close" 1.0; dbg "open:emoji" 2.0; wlog em9
     S=$(pos shots/em9.txt 'EMOJISEARCH')
@@ -535,15 +536,23 @@ if leg emoji; then
       sleep 1.2; wlog em10
       Q=$(grep 'EMOJI search' shots/em10.txt | tail -1); note "skin search: $Q"
       if echo "$Q" | grep -q 'results=[1-9]'; then
-        # results row sits directly under the search bar (no grid marker); calibrated on the
-        # 1080x2400/420 frame (run 41343142559 e07 shot: first cell ~(75,1274)), scaled by density
+        # search results are tap-only (no long-press handler in the results LazyRow), so tap the
+        # first result (wave hand) into the field, then long-press it as the newest Recents cell.
+        # results row first cell calibrated on run 41343142559 (~(75,1274) at 1080x2400/420).
         D=${WB_DENSITY:-420}
         RX=$((75*D/420)); RY=$((1274*D/420))
-        note "skin-tone long-press at ($RX,$RY) calibrated 1080x2400/420"
-        adb logcat -c
-        adb shell input motionevent DOWN $RX $RY; sleep 1.2; shot e07_skin_tone_popup; wlog em11
-        adb shell input motionevent UP $RX $RY; sleep 0.6
-        grep -q 'EMOJI popup' shots/em11.txt && note "skin-tone popup opened ($(grep 'EMOJI popup' shots/em11.txt | tail -1 | sed 's/.*EMOJI //'))" || note "skin-tone popup: no marker, shot stands as evidence"
+        adb shell input tap $RX $RY; sleep 1.0
+        adb shell input keyevent 4; sleep 1.0   # leave search, back to the panel
+        T2=$(pos shots/em9.txt 'EMOJITAB i=0 ')
+        if [ -n "$T2" ]; then
+          adb logcat -c; adb shell input tap $T2; sleep 1.5
+          # no locked emoji at this point (unlocked above), so the wave hand is the FIRST
+          # Recents cell - same first-cell coords as the e02/e04 presses
+          adb shell input motionevent DOWN $((LEFT+CW/2)) $((TOP+RH/2)); sleep 1.2; shot e07_skin_tone_popup; wlog em11
+          adb shell input motionevent UP $((LEFT+CW/2)) $((TOP+RH/2)); sleep 0.6
+          PM=$(grep 'EMOJI popup' shots/em11.txt | tail -1 | sed 's/.*EMOJI //')
+          echo "$PM" | grep -q 'variants=[2-9]' && pass "skin-tone variants popup ($PM)" || note "skin-tone popup: $PM"
+        else note "skin-tone capture: no Recents tab position"; fi
       else note "skin-tone capture: wave search gave no results"; fi
       adb shell input keyevent 4; sleep 0.5
     else note "skin-tone capture: no search button"; fi
