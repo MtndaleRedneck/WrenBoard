@@ -11,6 +11,7 @@ import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import android.view.KeyEvent
+import org.futo.inputmethod.keyboard.KeyboardId
 import android.view.View
 import android.view.ViewGroup
 import android.view.inputmethod.CompletionInfo
@@ -792,7 +793,28 @@ class LatinIME : InputMethodServiceCompose(), LatinIMELegacy.SuggestionStripCont
     }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
+        // WrenBoard 1.4 (panel back behavior): system Back closes an open toolbar
+        // panel instead of hiding the keyboard; the keyboard hides only from the
+        // plain keyboard view.
+        if (keyCode == KeyEvent.KEYCODE_BACK && uixManager.hasOpenActionWindow()) {
+            uixManager.closeActionWindow(true)
+            return true
+        }
         return latinIMELegacy.onKeyDown(keyCode, event) || super.onKeyDown(keyCode, event)
+    }
+
+    // WrenBoard 1.4 (panel exit layout): leaving a panel returns to the letters
+    // page, never to the 123/symbols page. Called from UixManager when an action
+    // window closes.
+    fun onActionWindowClosedRestoreLetters() {
+        val switcher = latinIMELegacy.mKeyboardSwitcher ?: return
+        val elementId = switcher.keyboard?.mId?.mElementId ?: return
+        if (elementId == KeyboardId.ELEMENT_SYMBOLS || elementId == KeyboardId.ELEMENT_SYMBOLS_SHIFTED) {
+            val autoCaps = latinIMELegacy.currentAutoCapsState
+            switcher.onPressKey(Constants.CODE_SWITCH_ALPHA_SYMBOL, true, autoCaps)
+            switcher.onReleaseKey(Constants.CODE_SWITCH_ALPHA_SYMBOL, false, autoCaps)
+            android.util.Log.i("WBDBG", "WINDOW restore-letters")
+        }
     }
 
     override fun onKeyUp(keyCode: Int, event: KeyEvent?): Boolean {

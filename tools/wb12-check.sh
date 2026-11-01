@@ -6,7 +6,7 @@
 set -u
 APK="$1"; TAPK="$2"
 PKG=com.wrenboard.keyboard; TPKG=com.wrenboard.imetarget
-LEGS=",${WB_LEGS:-setup,keyboard,period,leftedge,caps,shift,clip,update,toolbar,textedit,skin,symbols,states,emoji,clipboard,settings},"
+LEGS=",${WB_LEGS:-setup,keyboard,period,leftedge,caps,shift,clip,update,toolbar,textedit,skin,symbols,states,emoji,clipboard,settings,panelexit},"
 mkdir -p shots; R=shots/results.txt; : > "$R"
 ADB_BIN=$(type -P adb)
 # a dead emulator must not hang the run: each call is bounded, and once the link is confirmed gone
@@ -353,6 +353,31 @@ PY
   shot k03_hold123_clipboard
   W=$(adb logcat -d -s WBDBG:I | tr -d '\r' | grep 'WINDOW open' | tail -1); note "window: $W"
   echo "$W" | grep -q clipboard_history && pass "hold 123 opens the clipboard" || fail "hold 123 did not open the clipboard ($W)"
+  dbg close 1.0
+fi
+
+if leg panelexit; then
+  note "== PANEL EXIT: system Back closes the panel (never hides the keyboard); exit lands on letters =="
+  focus_target; geom panelexit0 >/dev/null
+  SXY=$(kxy code -3 2>/dev/null) || SXY=$(python3 tools/wb12_kv.py shots/geom.txt list KEY | awk '$2 ~ /123/ {print $3, $4; exit}')
+  read -r SX SY <<< "$SXY"
+  adb shell input tap $SX $SY; sleep 0.8
+  shot panelexit_01_symbols
+  ES=$(elem panelexit_sym)
+  [ "$ES" = "5" ] || [ "$ES" = "6" ] && pass "on the 123/symbols page before opening the panel (elementId=$ES)" || note "INFO: pre-panel elementId=$ES (expected 5/6)"
+  adb logcat -c
+  adb shell input motionevent DOWN "$SX" "$SY"; sleep 1.4; adb shell input motionevent UP "$SX" "$SY"; sleep 1.5
+  shot panelexit_02_clipboard_open
+  W2=$(adb logcat -d -s WBDBG:I | tr -d '\r' | grep 'WINDOW open' | tail -1); note "window: $W2"
+  echo "$W2" | grep -q clipboard_history || fail "panelexit: clipboard did not open ($W2)"
+  adb shell input keyevent 4; sleep 1.5
+  shot panelexit_03_after_back
+  L=$(adb logcat -d -s WBDBG:I | tr -d '\r' | grep -c 'restore-letters')
+  [ "$L" -gt 0 ] && pass "system Back closed the panel and restored the letters page" || fail "system Back did not restore letters (marker missing)"
+  NK=$(geom panelexit_after keep >/dev/null; grep -c 'KEY ' shots/geom_panelexit_after.txt)
+  [ "$NK" -gt 10 ] && pass "keyboard still visible after Back ($NK keys), not minimized" || fail "keyboard hidden after Back ($NK keys) - Back minimized the IME"
+  EA=$(elem panelexit_afterel)
+  case "$EA" in 0|1|2|3|4) pass "letters page after panel exit (elementId=$EA)";; *) fail "not on letters after panel exit (elementId=$EA)";; esac
   dbg close 1.0
 fi
 

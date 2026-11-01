@@ -805,6 +805,7 @@ class UixManager(private val latinIME: LatinIME) {
         mainKeyboardHidden.value = false
 
         latinIME.onKeyboardShown()
+        latinIME.onActionWindowClosedRestoreLetters()
 
         latinIME.window.window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
@@ -1473,6 +1474,8 @@ class UixManager(private val latinIME: LatinIME) {
             }
         }
     }
+
+    fun hasOpenActionWindow(): Boolean = currWindowActionWindow.value != null
 
     fun closeActionWindow(allowSkipClosing: Boolean = false) {
         if(returnBackToMainKeyboardViewFromAction(allowSkipClosing) == false) return
