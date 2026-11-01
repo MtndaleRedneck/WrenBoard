@@ -21,7 +21,7 @@ val FunctionalAttributes = KeyAttributes(
 )
 
 private val ShiftMoreKeys = listOf("!noPanelAutoMoreKey!", " |!code/key_capslock")
-private val SymbolsMoreKeys = listOf("!noPanelAutoMoreKey!", "!icon/action_clipboard_history|!code/action_clipboard_history")
+val SymbolsMoreKeys = listOf("!noPanelAutoMoreKey!", "!icon/action_clipboard_history|!code/action_clipboard_history")
 
 
 interface TemplatedKey : AbstractKey {

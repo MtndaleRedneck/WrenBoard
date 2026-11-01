@@ -8,7 +8,8 @@ import org.futo.inputmethod.latin.settings.Settings
 
 object RowKeyListSerializer : SpacedListSerializer<Key>(KeyPathSerializer)
 
-const val NumberRowHeight: Double = 0.8
+// WrenBoard 1.4 SwiftKey parity (item 2): number row is 0.85 of the letter-row pitch (126px vs 149px at 480dpi).
+const val NumberRowHeight: Double = 0.85
 
 enum class RowNumberRowMode(val displayByDefault: Boolean, val displayWhenExplicitlyActive: Boolean, val displayWhenExplicitlyInactive: Boolean) {
     Default(true, true, true),
@@ -141,9 +142,18 @@ val DefaultNumberRowClassic = Row(
     )
 )
 
+// WrenBoard 1.4 SwiftKey parity (item 3, Ezzy Nov 1: "Spacebar is a different size"): the 123 key
+// takes one regular key width (SwiftKey: 102px at 1080px wide) instead of the functional minimum (0.15),
+// freeing ~52px for the space bar. Clipboard long-press unchanged.
+private val WrenBottomSymbolsKey = BaseKey(
+    spec = "!text/keylabel_to_symbol|!code/key_switch_alpha_symbol",
+    moreKeys = SymbolsMoreKeys,
+    attributes = FunctionalAttributes + KeyAttributes(width = KeyWidth.Regular)
+)
+
 val DefaultBottomRow = Row(
     bottom = listOf(
-        TemplateSymbolsKey,
+        WrenBottomSymbolsKey,
         TemplateActionKey,
         ContextualKey(fallbackKey = BaseKey(",")),
         TemplateSpaceKey,
