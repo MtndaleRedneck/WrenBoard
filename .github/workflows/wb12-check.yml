@@ -17,6 +17,14 @@ on:
         description: "free text, ignored"
         required: false
         default: ""
+      size:
+        description: "emulator wm size (blank = 1080x2316)"
+        required: false
+        default: ""
+      density:
+        description: "emulator wm density (blank = 420)"
+        required: false
+        default: ""
 jobs:
   check:
     runs-on: ubuntu-latest
@@ -67,7 +75,7 @@ jobs:
           heap-size: 576M
           emulator-options: -no-window -gpu swangle_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none
           disable-animations: true
-          script: WB_LEGS="${{ inputs.legs }}" WB_LOCAL_APK_URL=http://127.0.0.1:8765/wb-debug.apk bash tools/wb12-check.sh wb-debug.apk tools/ime-target/out/imetarget.apk
+          script: WB_LEGS="${{ inputs.legs }}" WB_SIZE="${{ inputs.size }}" WB_DENSITY="${{ inputs.density }}" WB_LOCAL_APK_URL=http://127.0.0.1:8765/wb-debug.apk bash tools/wb12-check.sh wb-debug.apk tools/ime-target/out/imetarget.apk
       - name: Unit tests (update prompt status, swipe delete, starter words)
         if: always()
         run: |
