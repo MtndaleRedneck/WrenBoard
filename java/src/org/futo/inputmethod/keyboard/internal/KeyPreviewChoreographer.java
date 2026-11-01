@@ -107,7 +107,8 @@ public final class KeyPreviewChoreographer {
 
     public int getBottomPaddingForKey(final Context context, final Key key) {
         final float density = context.getResources().getDisplayMetrics().density;
-        return Math.max(key.getHeight(), (int)(64.0f * density));
+        // S4: box 310px tall at 420dpi (key row 58dp + 60dp)
+        return Math.max(key.getHeight(), (int)(60.0f * density));
     }
 
     private void placeKeyPreview(final Key key, final KeyPreviewView keyPreviewView,
@@ -123,7 +124,8 @@ public final class KeyPreviewChoreographer {
         final int bottomPadding = getBottomPaddingForKey(keyPreviewView.getContext(), key);
         final int topArea = Math.max(key.getHeight(), (int)(44.0f * density));
 
-        final int previewWidth  = Math.min(Math.max(key.getWidth(), (int)(34.0f * density)), (int)(64.0f * density));
+        // S4: SwiftKey's preview is the key plus 7px each side (420dpi measure)
+        final int previewWidth  = Math.min(Math.max(key.getWidth() + (int)(5.33f * density), (int)(34.0f * density)), (int)(72.0f * density));
         int previewHeight = topArea + bottomPadding;
         keyPreviewView.setPadding(0, 0, 0, bottomPadding);
 

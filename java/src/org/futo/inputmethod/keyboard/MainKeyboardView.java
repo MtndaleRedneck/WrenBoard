@@ -635,7 +635,10 @@ public final class MainKeyboardView extends KeyboardView implements DrawingProxy
         final int[] lastCoords = CoordinateUtils.newInstance();
         tracker.getLastCoordinates(lastCoords);
 
-        final int bottomPadding = mKeyPreviewChoreographer.getBottomPaddingForKey(getContext(), key);
+        // S7: the panel covers the parent key and ends ~4px above the key's bottom
+        // (SwiftKey measure at 420dpi); independent of the key-preview bottom padding.
+        final float panelDensity = getContext().getResources().getDisplayMetrics().density;
+        final int bottomPadding = (int)(1.5f * panelDensity);
 
         final int pointX = key.getDrawX() + key.getDrawWidth() / 2;
         final int pointY = key.getY() + key.getHeight() - bottomPadding;

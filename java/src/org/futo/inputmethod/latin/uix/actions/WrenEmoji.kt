@@ -502,11 +502,11 @@ private fun WrenEmojiSearch(w: WrenEmojiWindow, emojis: List<EmojiItem>, view: V
 private fun WrenGifPlaceholder(w: WrenEmojiWindow, view: View, modifier: Modifier) {
     Column(modifier.fillMaxWidth().background(Brush.verticalGradient(listOf(EmojiColors.GridTop, EmojiColors.GridMid, EmojiColors.GridBottom)))) {
         // Empty placeholder tiles (no text: Ezzy wants no hint text in panels).
-        Row(Modifier.weight(1f).fillMaxWidth().padding(8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(Modifier.weight(1f).fillMaxWidth().padding(8.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             listOf(listOf(0.42f, 0.58f), listOf(0.6f, 0.4f)).forEach { col ->
-                Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     col.forEach { frac ->
-                        Box(Modifier.fillMaxWidth().weight(frac).clip(RoundedCornerShape(10.dp)).background(Color(0xFF55524E)))
+                        Box(Modifier.fillMaxWidth().weight(frac).clip(RoundedCornerShape(0.dp)).background(Color(0xFF55524E)))
                     }
                 }
             }

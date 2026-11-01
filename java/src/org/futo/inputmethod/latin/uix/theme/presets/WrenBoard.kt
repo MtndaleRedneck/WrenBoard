@@ -76,29 +76,74 @@ private fun lighten(c: Int, f: Float): Int {
 
 /** Gradient key box with SwiftKey's thin light line along the top edge (WrenBoard 1.3, teardown item 1).
  *  The line shade is interim, pending Tab's measured SwiftKey pixels. */
-private class TopLineGradientDrawable(top: Int, bottom: Int, private val radiusPx: Float, dm: android.util.DisplayMetrics) :
-    GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, intArrayOf(top, bottom)) {
+private class TopLineGradientDrawable(
+    top: Int,
+    bottom: Int,
+    private val radiusPx: Float,
+    dm: android.util.DisplayMetrics,
+    private val chrome: Boolean
+) : GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, intArrayOf(top, bottom)) {
     // SwiftKey list items 2+3: Tab's pixel measurements are off a ~420dpi phone; scale with density.
     private val px420 = dm.density / 2.625f
+    // PARITY 1: 2px soft halo around the key (SwiftKey reads ~58/53/39 fading out), drawn inside the
+    // drawable's outer edge - the 1px key gap lets it read as surrounding the key.
+    private val haloPx = 2.0f * px420
+    private val haloPaint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+        style = android.graphics.Paint.Style.STROKE
+        color = 0xFF353535.toInt()
+        strokeWidth = haloPx
+        maskFilter = android.graphics.BlurMaskFilter(haloPx * 0.75f, android.graphics.BlurMaskFilter.Blur.NORMAL)
+    }
+    // PARITY 1: 1px side rim 2px inside the border, #616161 at the top fading to ~#0B0B0B.
+    private val rimPaint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+        style = android.graphics.Paint.Style.STROKE
+        strokeWidth = (1.0f * px420).coerceAtLeast(1f)
+    }
     private val linePaint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
         color = 0xFF6E6E6E.toInt()
         strokeWidth = (1.0f * px420).coerceAtLeast(1f)
     }
     override fun draw(canvas: android.graphics.Canvas) {
+        if (!chrome) { super.draw(canvas); drawTopLine(canvas, bounds); return }
+        // halo first, centered on the outer edge so roughly half lands past the fill
+        val outer = android.graphics.RectF(bounds)
+        canvas.drawRoundRect(outer, radiusPx, radiusPx, haloPaint)
+        // fill + border inset by the halo, so the halo stays visible around them
+        val inset = (haloPx / 2f).toInt().coerceAtLeast(1)
+        val save = canvas.save()
+        canvas.clipRect(android.graphics.RectF(bounds))
+        canvas.translate(0f, 0f)
+        val orig = android.graphics.Rect(bounds)
+        bounds = android.graphics.Rect(orig).apply { inset(inset, inset) }
         super.draw(canvas)
+        val inner = android.graphics.Rect(bounds)
+        bounds = orig
+        canvas.restoreToCount(save)
+        // side rims: vertical gradient #616161 -> #0B0B0B, 2px inside the border
+        val rimX_l = inner.left + 2.0f * px420 + rimPaint.strokeWidth / 2f
+        val rimX_r = inner.right - 2.0f * px420 - rimPaint.strokeWidth / 2f
+        rimPaint.shader = android.graphics.LinearGradient(
+            0f, inner.top.toFloat(), 0f, inner.bottom.toFloat(),
+            0xFF616161.toInt(), 0xFF0B0B0B.toInt(), android.graphics.Shader.TileMode.CLAMP
+        )
+        canvas.drawLine(rimX_l, inner.top + radiusPx, rimX_l, inner.bottom - 1, rimPaint)
+        canvas.drawLine(rimX_r, inner.top + radiusPx, rimX_r, inner.bottom - 1, rimPaint)
+        drawTopLine(canvas, inner)
+    }
+    private fun drawTopLine(canvas: android.graphics.Canvas, b: android.graphics.Rect) {
         // center lands 3 SwiftKey px from the key's top edge (1px border + 2px gap + half the 1px line)
-        val y = bounds.top + 3.0f * px420
-        canvas.drawLine(bounds.left + radiusPx, y, bounds.right - radiusPx, y, linePaint)
+        val y = b.top + 3.0f * px420
+        canvas.drawLine(b.left + radiusPx, y, b.right - radiusPx, y, linePaint)
     }
 }
 
-private fun keyGradient(context: android.content.Context, top: Int, bottom: Int): GradientDrawable {
+private fun keyGradient(context: android.content.Context, top: Int, bottom: Int, chrome: Boolean = true): GradientDrawable {
     val radiusPx = TypedValue.applyDimension(
         TypedValue.COMPLEX_UNIT_DIP,
         4.0f,
         context.resources.displayMetrics
     )
-    return TopLineGradientDrawable(top, bottom, radiusPx, context.resources.displayMetrics).apply {
+    return TopLineGradientDrawable(top, bottom, radiusPx, context.resources.displayMetrics, chrome).apply {
         shape = GradientDrawable.RECTANGLE
         cornerRadius = radiusPx
         // SwiftKey list item 2: 1px #0C0C0C key border lives on the gradient; KeyBackground outline is off.
@@ -136,7 +181,11 @@ private fun wrenKeyBackgrounds(context: android.content.Context) = KeyedBitmaps(
                 foregroundColor = AccentOrange.toArgb(),
                 hintColor = HintGrey,
                 outlineColor = null,
-                background = keyGradient(context, 0xFF5E5E5E.toInt(), 0xFF262626.toInt()).apply {
+                // S4: flat dark grey fill (Tab measured the gradient, target flat #333333); light border stays
+                background = GradientDrawable().apply {
+                    shape = GradientDrawable.RECTANGLE
+                    cornerRadius = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 4.0f, context.resources.displayMetrics)
+                    setColor(0xFF333333.toInt())
                     setStroke(
                         TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 1.0f, context.resources.displayMetrics).toInt().coerceAtLeast(2),
                         0xFFB4B4B4.toInt()
@@ -151,7 +200,9 @@ private fun wrenKeyBackgrounds(context: android.content.Context) = KeyedBitmaps(
                 hintColor = HintGrey,
                 outlineColor = 0xFFD0D0D0.toInt(),
                 outlineWidth = 1.dp,
-                background = keyGradient(context, 0xFF626262.toInt(), 0xFF2A2A2A.toInt())
+                // S7: selected cell inset so it doesn't paint over the panel outline (420dpi px in Rect)
+                padding = run { val d = context.resources.displayMetrics.density; android.graphics.Rect((6*d/2.625f).toInt(), (13*d/2.625f).toInt(), (6*d/2.625f).toInt(), (13*d/2.625f).toInt()) },
+                background = keyGradient(context, 0xFF626262.toInt(), 0xFF2A2A2A.toInt(), chrome = false)
             )
         ),
         KeyedBitmap(
@@ -174,7 +225,7 @@ private fun wrenKeyBackgrounds(context: android.content.Context) = KeyedBitmaps(
                 foregroundColor = AccentOrange.toArgb(),
                 hintColor = HintGrey,
                 outlineColor = null,
-                background = keyGradient(context, 0xFF6A6A6A.toInt(), 0xFF383838.toInt())
+                background = keyGradient(context, 0xFF767676.toInt(), 0xFF4A4A4A.toInt())
             )
         ),
         // Pressed base keys: lightened charcoal gradient
@@ -184,7 +235,7 @@ private fun wrenKeyBackgrounds(context: android.content.Context) = KeyedBitmaps(
                 foregroundColor = AccentOrange.toArgb(),
                 hintColor = HintGrey,
                 outlineColor = null,
-                background = keyGradient(context, 0xFF565656.toInt(), 0xFF242424.toInt())
+                background = keyGradient(context, 0xFF626262.toInt(), 0xFF363636.toInt())
             )
         ),
         // Top number row: slightly lighter gradient
@@ -194,7 +245,7 @@ private fun wrenKeyBackgrounds(context: android.content.Context) = KeyedBitmaps(
                 foregroundColor = AccentOrange.toArgb(),
                 hintColor = HintGrey,
                 outlineColor = null,
-                background = keyGradient(context, 0xFF515151.toInt(), 0xFF242424.toInt())
+                background = keyGradient(context, 0xFF424242.toInt(), 0xFF242424.toInt())
             )
         ),
         // Base letter/functional keys: charcoal vertical gradient with thin dark border
@@ -206,7 +257,7 @@ private fun wrenKeyBackgrounds(context: android.content.Context) = KeyedBitmaps(
                 outlineColor = null,
                 // WrenBoard 1.3 (teardown item 1): the old top (#3E3E3E) sat 2 levels off the #3C3C3C board,
             // so the key top vanished. #4C4C4C keeps the charcoal look but reads as a full button box.
-            background = keyGradient(context, 0xFF4C4C4C.toInt(), 0xFF060606.toInt())
+            background = keyGradient(context, 0xFF3D3D3D.toInt(), 0xFF060606.toInt())
             )
         ),
     )
@@ -230,6 +281,8 @@ val WrenBoardTheme = ThemeOption(
                 // SwiftKey list item 1: letters measured ~35% too big at 1.0; 0.74 matches Tab's SwiftKey spec
                 // (Ezzy's phone renders ~0.82; Tab re-measures there in the consolidated review).
                 textSizeMultiplier = 0.74f,
+                // PARITY 6: hint symbols at SwiftKey's size (Tab measured 1.3-size, target x1.2)
+                hintSizeMultiplier = 1.2f,
                 // WrenBoard 1.3 (teardown item 5): no orange transformer marker under suggestions.
                 showSuggestionSourceIndicators = false,
                 // Symbols sit centred above the letter, as on Ezzy's phone, SwiftKey and the approved render.

@@ -6,6 +6,7 @@ import android.util.Log
 import androidx.compose.ui.unit.Dp
 import org.futo.inputmethod.keyboard.KeyConsts
 import org.futo.inputmethod.keyboard.internal.KeyboardLayoutElement
+import org.futo.inputmethod.keyboard.internal.KeyboardLayoutKind
 import org.futo.inputmethod.keyboard.internal.KeyboardParams
 import org.futo.inputmethod.latin.R
 import org.futo.inputmethod.latin.common.Constants
@@ -653,7 +654,10 @@ data class LayoutEngine(
                             && it.mLabel != data.label
                 }?.mLabel ?: ""
 
-            // If we have no explicit hint and show hints setting is enabled (or we are in symbols menu),
+            // S9: SwiftKey's symbol pages show no hint glyphs on the symbol keys
+            layoutParams.element.kind == KeyboardLayoutKind.Symbols -> ""
+
+            // If we have no explicit hint and show hints setting is enabled,
             // set this to null which will later automatically select a hint based on
             // the first element of moreKeys
             else -> null
@@ -737,7 +741,12 @@ data class LayoutEngine(
                     val rightGap = if(i >= row.size / 2 && !entry.data.anchored) { row.getOrNull(i + 1) as? LayoutEntry.Gap } else { null }
 
                     val keyHeight = entry.heightOverride?.roundToInt() ?: height
-                    addKey(idx, colNum, entry.data, currentX.roundToInt(), y, entry.widthPx.roundToInt(), keyHeight, leftGap, rightGap)
+                    // S10: round each key's right edge from the cumulative float position instead of
+                    // rounding width and x independently - independent rounding drifted all leftover
+                    // to the left at 420dpi (6px left / 0 right margins instead of symmetric 3/3).
+                    val keyLeft = currentX.roundToInt()
+                    val keyRight = (currentX + entry.widthPx).roundToInt()
+                    addKey(idx, colNum, entry.data, keyLeft, y, keyRight - keyLeft, keyHeight, leftGap, rightGap)
 
                     // i != colNum because of Gap entries
                     colNum += 1

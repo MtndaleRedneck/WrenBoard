@@ -52,6 +52,9 @@ interface DynamicThemeProvider {
 
     val hintColor: Int?
 
+    /** Theme key-glyph size multiplier (1.0 when the theme does not scale key text). */
+    val keyTextSizeMultiplier: Float get() = 1.0f
+
     @ColorInt
     fun getColor(i: Int): Int?
 
