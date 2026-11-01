@@ -620,7 +620,7 @@ if leg settings; then
   done
   opensettings wren_keyboard 3.5; adb shell input swipe 540 1900 540 500 400; sleep 1.5; adb shell input swipe 540 1900 540 500 400; sleep 1.5
   shot st02b_wren_keyboard_scrolled; dumpui st_kb2; KB="$(uitext st_wren_keyboard)$(uitext st_kb2)"
-  # (FAB + try-typing bar removed per Ezzy, 1.3.) The settings viewport can be short, so at high
+  # The item-42 FAB bottom inset (72dp) shortens the page viewport, so at high
   # densities the two fixed swipes can stop short of the FEEL card. Scroll on
   # until all section cards have been seen (bounded).
   for i in 1 2 3; do
