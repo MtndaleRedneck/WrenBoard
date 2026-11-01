@@ -37,7 +37,8 @@ fun LongPressKey.description(resources: Resources): String {
 
 val LongPressKeyLayoutSetting = SettingsKey(
     stringPreferencesKey("longPressKeyOrdering"),
-    "${LongPressKey.LanguageKeys.ordinal},${LongPressKey.Numbers.ordinal},${LongPressKey.Symbols.ordinal},${LongPressKey.QuickActions.ordinal},${LongPressKey.MiscLetters.ordinal}"
+    // SwiftKey list item 8: accents (LanguageKeys) out of the default long-press categories.
+    "${LongPressKey.Numbers.ordinal},${LongPressKey.Symbols.ordinal},${LongPressKey.QuickActions.ordinal},${LongPressKey.MiscLetters.ordinal}"
 )
 
 fun String.toLongPressKeyLayoutItems(): List<LongPressKey> {
