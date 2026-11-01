@@ -578,11 +578,19 @@ if leg emoji; then
         # wait for the Recents TAB marker, not just the page marker: tab markers are drawn
         # after the page composes, so a page-only poll raced ahead of them (run 41351868194)
         for i in $(seq 1 16); do sleep 0.5; wlog em10c; grep -q 'EMOJITAB i=0 ' shots/em10c.txt && break; done
-        # fresh Recents-tab position (em9 predates the search UI)
+        # fresh Recents-tab position (em9 predates the search UI). On some reopens the app
+        # never re-logs the tab markers (run 41355121489: page logged, tabs not). Fall back
+        # to the same-run earlier position; the page=Recent change after the tap validates it.
         T2=$(pos shots/em10c.txt 'EMOJITAB i=0 ')
+        if [ -z "$T2" ]; then
+          T2=$(pos shots/em9.txt 'EMOJITAB i=0 ')
+          [ -n "$T2" ] && note "tab markers not re-logged on reopen; reusing position from earlier open"
+        fi
         if [ -n "$T2" ]; then
           adb logcat -c; adb shell input tap $T2; sleep 1.5; wlog em10d
-          note "recents page after tab tap: $(grep 'EMOJI page=' shots/em10d.txt | tail -1 | sed 's/.*WINDOW //')"
+          PG=$(grep 'EMOJI page=' shots/em10d.txt | tail -1 | sed 's/.*WINDOW //')
+          note "recents page after tab tap: $PG"
+          echo "$PG" | grep -q 'page=Recent' || note "skin-tone capture: tab tap did not open Recents ($PG)"
           # fresh grid geometry for the Recents page first cell
           G2=$(grep 'WINDOW EMOJIGRID' shots/em10d.txt | tail -1)
           G2X=$(echo "$G2" | sed -n 's/.*cx=\([0-9]*\).*/\1/p'); G2Y=$(echo "$G2" | sed -n 's/.*cy=\([0-9]*\).*/\1/p')
