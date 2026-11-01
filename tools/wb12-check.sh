@@ -214,12 +214,7 @@ if leg period; then
     [ "$NM" -gt 0 ] || { fail "[$mode] period long-press showed no panel"; continue; }
     [ $mode = default ] && { [ "$(awk '{print $2}' shots/more_${mode}_keys.txt | tr '\n' ' ')" = "! , . ? " ] && pass "[default] popup reads ! , . ? by default (alt period key now the default)" || fail "[default] popup is not the ! , . ? set by default"; }
     [ $mode = quick ] && { [ "$(awk '{print $2}' shots/more_${mode}_keys.txt | tr '\n' ' ')" = "! , . ? " ] && pass "[quick] popup reads ! , . ? left to right" || fail "[quick] popup order is not ! , . ?"; }
-    # Legacy (alt period off): the FUTO ? ! , set, order as laid out by MoreKeysKeyboard's auto
-    # column placement around the parent key. That placement derives from the parent key's x and
-    # width, so stage-A geometry (123-key shrink, 108px pitch, no side padding) deterministically
-    # reorders it from the old "? , !" to "? ! ," - the resolved moreKeys list is unchanged,
-    # '?' is still the default release item (next leg proves it). Updated 1.4, runs 41311819398/41315203139.
-    [ $mode = legacy ] && { [ "$(awk '{print $2}' shots/more_${mode}_keys.txt | tr '\n' ' ')" = "? ! , " ] && pass "[legacy] toggle off restores the FUTO ? ! , set" || fail "[legacy] toggle off did not restore the FUTO set"; }
+    [ $mode = legacy ] && { [ "$(awk '{print $2}' shots/more_${mode}_keys.txt | tr '\n' ' ')" = "? , ! " ] && pass "[legacy] toggle off restores the FUTO ? , ! set" || fail "[legacy] toggle off did not restore the FUTO set"; }
     i=0
     while read -r code label cx cy w h; do
       i=$((i+1)); [ $i -gt 6 ] && break

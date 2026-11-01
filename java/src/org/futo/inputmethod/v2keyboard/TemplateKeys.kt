@@ -389,7 +389,21 @@ data class TemplateCurrencyKey(val currency: String) : AbstractKey {
 }
 
 data class PeriodKey(
-    val default: AbstractKey = BaseKey(".", hint = ",!?"),
+    // WrenBoard 1.4: pin the legacy (alt-period-off) popup to the FUTO order ? , ! with a fixed column
+    // order. The unpinned auto layout derives item placement from the parent key's x and width, so the
+    // stage-A geometry (123-key shrink, wider pitch, no side padding) silently reordered it to ? ! ,
+    // (runs 41311819398/41315203139 vs baseline 41309528306). Restore verdict: Tab acceptance review,
+    // mail 01793544317987000000. OnlyExplicit keeps the bottom-row auto insertion from appending the
+    // locale period set; "?" stays the default release item (harness legacy legs verify both).
+    // Note: pinned for all locales, same trade-off as the quick popup's explicit set.
+    val default: AbstractKey = BaseKey(".", hint = ",!?",
+        moreKeys = listOf(
+            "!fixedColumnOrder!3",
+            "?",
+            "!text/keyspec_comma",
+            "!text/keyspec_symbols_question"),
+        attributes = KeyAttributes(moreKeyMode = MoreKeyMode.OnlyExplicit)
+    ),
     val alternative: AbstractKey = BaseKey(".", hint = ",!?",
         // WrenBoard P0-1: the quick period popup reads ! , . ? from left to right (as in SwiftKey), in a fixed
         // order, with the period itself as one of the four items.
