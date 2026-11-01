@@ -534,9 +534,14 @@ if leg emoji; then
       sleep 1.2; wlog em10
       Q=$(grep 'EMOJI search' shots/em10.txt | tail -1); note "skin search: $Q"
       if echo "$Q" | grep -q 'results=[1-9]'; then
+        # results row sits directly under the search bar (no grid marker); calibrated on the
+        # 1080x2400/420 frame (run 41343142559 e07 shot: first cell ~(75,1274)), scaled by density
+        D=${WB_DENSITY:-420}
+        RX=$((75*D/420)); RY=$((1274*D/420))
+        note "skin-tone long-press at ($RX,$RY) calibrated 1080x2400/420"
         adb logcat -c
-        adb shell input motionevent DOWN $((LEFT+CW/2)) $((TOP+RH/2)); sleep 1.2; shot e07_skin_tone_popup; wlog em11
-        adb shell input motionevent UP $((LEFT+CW/2)) $((TOP+RH/2)); sleep 0.6
+        adb shell input motionevent DOWN $RX $RY; sleep 1.2; shot e07_skin_tone_popup; wlog em11
+        adb shell input motionevent UP $RX $RY; sleep 0.6
         grep -q 'EMOJI popup' shots/em11.txt && note "skin-tone popup opened ($(grep 'EMOJI popup' shots/em11.txt | tail -1 | sed 's/.*EMOJI //'))" || note "skin-tone popup: no marker, shot stands as evidence"
       else note "skin-tone capture: wave search gave no results"; fi
       adb shell input keyevent 4; sleep 0.5
