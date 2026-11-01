@@ -1,9 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Arrow row, down. WrenBoard 1.4 artwork by Tab. Viewport 96 = 32dp; 1 unit = 1 px at 480 dpi. Drawn centred at its exact target size. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="24dp"
-    android:height="24dp"
-    android:viewportWidth="24"
-    android:viewportHeight="24">
+    android:width="32dp"
+    android:height="32dp"
+    android:viewportWidth="96"
+    android:viewportHeight="96">
   <path
       android:fillColor="#FFFFFFFF"
-      android:pathData="M12,20L22,5L2,5Z"/>
+      android:pathData="M19.05,33.08Q18.5,32.5 19.3,32.5L76.7,32.5Q77.5,32.5 76.95,33.08L48.83,62.63Q48,63.5 47.17,62.63Z"/>
 </vector>

@@ -1,14 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- WrenBoard 1.2: caps lock = the filled shift arrow with a bar under it (one-shot upper is the arrow alone). -->
+<!-- Shift, caps lock (filled arrow + bar). WrenBoard 1.4 artwork by Tab. Original drawing. Viewport 96 = 32dp; 1 unit = 1 px at 480 dpi. Drawn centred at its exact target size. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="26dp"
-    android:height="26dp"
-    android:viewportWidth="26"
-    android:viewportHeight="26">
+    android:width="32dp"
+    android:height="32dp"
+    android:viewportWidth="96"
+    android:viewportHeight="96">
   <path
       android:fillColor="#FFFFFFFF"
-      android:pathData="M13,2L24,12.5L17.5,12.5L17.5,18.5L8.5,18.5L8.5,12.5L2,12.5Z"/>
-  <path
-      android:fillColor="#FFFFFFFF"
-      android:pathData="M8.5,20.5L17.5,20.5L17.5,23.5L8.5,23.5Z"/>
+      android:fillType="evenOdd"
+      android:pathData="M47.54,16.75Q48,16.3 48.46,16.75L75.26,43.16Q75.6,43.5 75.12,43.5L62,43.5L62,65.9Q62,66.7 61.2,66.7L34.8,66.7Q34,66.7 34,65.9L34,43.5L20.88,43.5Q20.4,43.5 20.74,43.16ZM34,73.2Q34,71.7 35.5,71.7L60.5,71.7Q62,71.7 62,73.2L62,78.2Q62,79.7 60.5,79.7L35.5,79.7Q34,79.7 34,78.2Z"/>
 </vector>

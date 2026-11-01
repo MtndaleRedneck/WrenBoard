@@ -34,6 +34,7 @@ import android.util.AttributeSet;
 import android.view.View;
 
 import org.futo.inputmethod.keyboard.internal.KeyDrawParams;
+import org.futo.inputmethod.keyboard.internal.KeyboardIconsSet;
 import org.futo.inputmethod.keyboard.internal.KeyVisualAttributes;
 import org.futo.inputmethod.latin.uix.DynamicThemeProvider;
 import org.futo.inputmethod.latin.R;
@@ -439,6 +440,14 @@ public class KeyboardView extends View {
         canvas.translate(-bgX, -bgY);
     }
 
+    // WrenBoard 1.4 SwiftKey parity (items 9/11): icon names drawn at their full 32dp box
+    // (Tab's 1.4 artwork), bypassing the textSize*1.75 icon cap.
+    private static final java.util.Set<String> FULL_SIZE_ICON_IDS = new java.util.HashSet<>(java.util.Arrays.asList(
+            KeyboardIconsSet.NAME_SHIFT_KEY, KeyboardIconsSet.NAME_SHIFT_KEY_SHIFTED,
+            KeyboardIconsSet.NAME_SHIFT_KEY_LOCKED, KeyboardIconsSet.NAME_DELETE_KEY,
+            KeyboardIconsSet.NAME_ENTER_KEY,
+            "action_up", "action_down", "action_left", "action_right"));
+
     // Draw key top visuals.
     protected void onDrawKeyTopVisuals(@Nonnull final Key key, @Nonnull final Canvas canvas,
             @Nonnull final Paint paint, @Nonnull final KeyDrawParams params, @Nonnull final KeyDrawingConfiguration kdc,
@@ -600,12 +609,16 @@ public class KeyboardView extends View {
             int iconWidth;
             if (key.getCode() == Constants.CODE_SPACE && icon instanceof NinePatchDrawable) {
                 iconWidth = (int)(keyWidth * mSpacebarIconWidthRatio);
+            } else if (FULL_SIZE_ICON_IDS.contains(key.getIconId())) {
+                // WrenBoard 1.4 SwiftKey parity (items 9/11): the 32dp key artwork (shift states, delete,
+                // enter, arrow row) renders at its full designed box; every other icon keeps the cap below.
+                iconWidth = Math.min(Math.min(icon.getIntrinsicWidth(), keyWidth), keyHeight);
             } else {
                 iconWidth = Math.min(icon.getIntrinsicWidth(), keyWidth);
             }
             int iconHeight = icon.getIntrinsicHeight();
 
-            if(iconWidth > size) {
+            if(!FULL_SIZE_ICON_IDS.contains(key.getIconId()) && iconWidth > size) {
                 //iconHeight = (int)((float)iconHeight / (float)iconWidth * (float)size);
                 iconWidth = (int)size;
             }
