@@ -478,7 +478,8 @@ fi
 if leg emoji; then
   note "== EMOJI panel (SwiftKey replica): pages, Recents with Lock/Unlock, search, GIF tab =="
   focus_target; clear_field
-  adb logcat -c; dbg "open:emoji" 2.5; wlog em0
+  adb logcat -c; dbg "open:emoji" 0.5
+  for i in $(seq 1 24); do sleep 0.5; adb logcat -d -s WBDBG:I | tr -d '\r' > shots/em0.txt; grep -q 'EMOJI page=' shots/em0.txt && break; done
   shot e01_emoji_smileys
   grep -q 'WINDOW open emoji' shots/em0.txt && pass "emoji panel opens" || fail "emoji panel did not open"
   grep -q 'EMOJI page=Smileys' shots/em0.txt && pass "opens on the Smileys page" || fail "did not open on Smileys"
