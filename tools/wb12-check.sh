@@ -527,7 +527,8 @@ if leg emoji; then
       grep -q 'EMOJI lock' shots/em2.txt && pass "Lock locks the emoji" || fail "Lock did nothing"
     else fail "no Lock button in the popup"; fi
     # Recents page via its tab
-    adb logcat -c; dbg "close" 1.0; dbg "open:emoji" 2.0; wlog em3
+    adb logcat -c; dbg "close" 1.0; dbg "open:emoji" 2.0
+    for i in $(seq 1 12); do sleep 0.5; wlog em3; grep -q 'EMOJITAB i=0 ' shots/em3.txt && break; done
     T=$(pos shots/em3.txt 'EMOJITAB i=0 ')
     if [ -n "$T" ]; then adb logcat -c; adb shell input tap $T; sleep 1.5; wlog em4; shot e03_recents_locked
       grep -q 'EMOJI page=Recent' shots/em4.txt && pass "clock tab opens the separate Recents page" || fail "Recents page not shown"
@@ -625,17 +626,17 @@ if leg extras; then
   # digit preview: hold the 5 key
   FXY=$(kxy label 5) && { read -r X Y <<< "$FXY"; adb shell input motionevent DOWN $X $Y; sleep 0.3; shot x01_digit_preview_5; release $X $Y; } || note "no 5 key position"
   # symbol preview: symbols page, hold the = key (or first symbol found)
-  tapcode -3 >/dev/null || true; sleep 1.0; geom extras_sym >/dev/null
+  tapcode -3 >/dev/null || true; sleep 1.0; geom extras_sym keep >/dev/null
   SXY=$(kxy label '=' 2>/dev/null || kxy label '+' 2>/dev/null || true)
   [ -n "$SXY" ] && { read -r X Y <<< "$SXY"; adb shell input motionevent DOWN $X $Y; sleep 0.3; shot x02_symbol_preview; release $X $Y; } || note "no symbol key position for preview"
   dbg "sprm:pref_key_longpress_timeout" 1.0
-  tapcode -3 >/dev/null || true; sleep 1.0
+  tapcode -3 >/dev/null || true; sleep 1.0; geom extras
   # auto-capital: type a sentence ending, check shift auto-engages (uppercase labels in geom)
   clear_field; type_word hello; tapcode 32 >/dev/null; tapk "." >/dev/null 2>&1 || tapcode 46 >/dev/null; tapcode 32 >/dev/null; sleep 0.8
   geom autocap keep >/dev/null
-  ROW=$(numrow shots/geom_autocap.txt 2>/dev/null || true)
-  note "top letter row after 'hello. ': $ROW"
-  case "$ROW" in *QWERTY*) pass "auto-capital engages shift after sentence end";; *qwerty*) note "auto-capital did NOT engage after sentence end (row: $ROW)";; *) note "auto-capital row unreadable: $ROW";; esac
+  ROW=$(grep -oE 'label=[QWERTYUIOPqwertyuiop] ' shots/geom_autocap.txt | tr -d 'label= ' | tr -d ' ' | head -c 10)
+  note "letter row after 'hello. ': $ROW"
+  case "$ROW" in QWERTY*) pass "auto-capital engages shift after sentence end";; qwerty*) note "auto-capital did NOT engage after sentence end (row: $ROW)";; *) note "auto-capital row unreadable: $ROW";; esac
   shot x03_autocap_after_sentence
   # strip cases: multi-suggestion strip vs no-suggestion strip
   clear_field; type_word zebr; sleep 1.0; shot x04_strip_suggestions
