@@ -806,4 +806,13 @@ Default is %1$s</string>
     <string name="personal_dictionary_delete_additional_file">Delete extra dictionary file?</string>
     <!-- %1$s will be replaced with the custom dictionary name -->
     <string name="personal_dictionary_delete_additional_file_text">%1$s will be deleted</string>
+    <!-- WrenBoard 1.4 S18: voice bar (v9) -->
+    <string name="voicebar_tap_to_dictate">Tap to dictate</string>
+    <string name="voicebar_waiting">Waiting for speech</string>
+    <string name="voicebar_listening">Listening</string>
+    <string name="voicebar_working">Processing</string>
+    <string name="voicebar_close">Close voice input</string>
+    <string name="voicebar_bluetooth_mic">Bluetooth mic</string>
+    <string name="voicebar_phone_mic">Phone mic</string>
+    <string name="voicebar_switch_mic">Switch microphone, currently %1$s</string>
 </resources>

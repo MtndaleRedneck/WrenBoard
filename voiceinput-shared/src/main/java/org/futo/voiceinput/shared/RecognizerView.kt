@@ -81,8 +81,9 @@ class RecognizerView(
     lifecycleScope: LifecycleCoroutineScope,
     modelManager: ModelManager
 ) {
-    private val magnitudeState = mutableFloatStateOf(0.0f)
-    private val statusState = mutableStateOf(MagnitudeState.NOT_TALKED_YET)
+    // WrenBoard 1.4 (S18 voice bar): state handles are read by the bar composable
+    val magnitudeState = mutableFloatStateOf(0.0f)
+    val statusState = mutableStateOf(MagnitudeState.NOT_TALKED_YET)
 
     enum class CurrentView {
         LoadingCircle, PartialDecodingResult, InnerRecognize, PermissionError, ModelError
@@ -90,9 +91,9 @@ class RecognizerView(
 
     private val loadingCircleText = mutableStateOf("")
     private val partialDecodingText = mutableStateOf("")
-    private val currentViewState = mutableStateOf(CurrentView.LoadingCircle)
+    val currentViewState = mutableStateOf(CurrentView.LoadingCircle)
 
-    private val currentDeviceState = mutableStateOf(MicrophoneDeviceState(
+    val currentDeviceState = mutableStateOf(MicrophoneDeviceState(
         bluetoothAvailable = false,
         bluetoothActive = false,
         setBluetooth = { },
