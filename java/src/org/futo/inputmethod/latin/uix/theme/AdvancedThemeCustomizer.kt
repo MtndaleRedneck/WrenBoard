@@ -163,7 +163,16 @@ class AdvancedThemeMatcher(
         var label: String? = key.labelOverride ?: key.label
         var hintLabel: String? = if(hintIcon == null) key.effectiveHintLabel else null
 
-        val textSize = key.selectTextSize(params).toFloat() * scheme.extended.advancedThemeOptions.textSizeMultiplier
+        // S9 + nits: SwiftKey's alpha/symbol switch labels are bigger - "123" x1.55 (42x20 -> 65x32),
+        // lowercase "abc" x1.75 so it reads larger than "123" (Tab's cmp_symbols measure)
+        val switchLabelBoost = when {
+            key.code == org.futo.inputmethod.latin.common.Constants.CODE_SWITCH_ALPHA_SYMBOL ->
+                if (label?.firstOrNull()?.isLowerCase() == true) 1.75f else 1.55f
+            // nit: SwiftKey's comma glyph is 9x16 vs our 7x13
+            label == "," -> 1.25f
+            else -> 1.0f
+        }
+        val textSize = key.selectTextSize(params).toFloat() * scheme.extended.advancedThemeOptions.textSizeMultiplier * switchLabelBoost
         val hintSize = key.selectHintTextSize(drawableProvider, params).toFloat() * scheme.extended.advancedThemeOptions.hintSizeMultiplier
 
         var textTypeface = drawableProvider.selectKeyTypeface(key.selectTypeface(params))
