@@ -35,6 +35,13 @@ public class TestInput extends Activity {
                     if ("com.wrenboard.imetarget.CLEAR".equals(a)) {
                         edit.setText("");
                         Log.i("IMETARGET", "CLEARED");
+                    } else if ("com.wrenboard.imetarget.CAPSENT".equals(a)) {
+                        boolean on = intent.getBooleanExtra("on", true);
+                        edit.setInputType(on
+                                ? (android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES)
+                                : android.text.InputType.TYPE_CLASS_TEXT);
+                        edit.setText("");
+                        Log.i("IMETARGET", "CAPSENT=" + (on ? "ON" : "OFF"));
                     } else if ("com.wrenboard.imetarget.SETCLIP".equals(a)) {
                         ClipboardManager cm =
                                 (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
@@ -84,6 +91,7 @@ public class TestInput extends Activity {
 
         IntentFilter f = new IntentFilter();
         f.addAction("com.wrenboard.imetarget.CLEAR");
+        f.addAction("com.wrenboard.imetarget.CAPSENT");
         f.addAction("com.wrenboard.imetarget.SETCLIP");
         registerReceiver(control, f, Context.RECEIVER_EXPORTED);
 

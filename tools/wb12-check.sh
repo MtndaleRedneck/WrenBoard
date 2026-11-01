@@ -57,6 +57,7 @@ node_center() { # node_center <xmlname> <exact text>
 dbg() { adb shell "am broadcast -a com.wrenboard.keyboard.WBDBG -p $PKG --es cmd '$1'" >/dev/null 2>&1; sleep "${2:-0.6}"; }  # quoted for the device shell ('|' in seedupdate)
 geom() { adb logcat -c; dbg geom 1.0; adb logcat -d -s WBDBG:I > shots/geom_$1.txt; [ "${2:-use}" = use ] && cp shots/geom_$1.txt shots/geom.txt; return 0; }
 kxy() { python3 tools/wb12_kv.py shots/geom.txt xy KEY "$1" "$2"; }
+kxyf() { python3 tools/wb12_kv.py "$1" xy KEY "$2" "$3"; }
 tapk() { local xy; xy=$(kxy label "$1") || { fail "no key labelled '$1' in geometry"; return 1; }; adb shell input tap $xy; sleep 0.35; }
 tapcode() { local xy; xy=$(kxy code "$1") || { fail "no key with code $1 in geometry"; return 1; }; adb shell input tap $xy; sleep 0.35; }
 type_word() { local w="$1" i; for ((i=0;i<${#w};i++)); do tapk "${w:$i:1}" || return 1; done; }
@@ -627,17 +628,23 @@ if leg extras; then
   FXY=$(kxy label 5) && { read -r X Y <<< "$FXY"; adb shell input motionevent DOWN $X $Y; sleep 0.3; shot x01_digit_preview_5; release $X $Y; } || note "no 5 key position"
   # symbol preview: symbols page, hold the = key (or first symbol found)
   tapcode -3 >/dev/null || true; sleep 1.0; geom extras_sym keep >/dev/null
-  SXY=$(kxy label '=' 2>/dev/null || kxy label '+' 2>/dev/null || true)
+  SXY=$(kxyf shots/geom_extras_sym.txt label '=' 2>/dev/null || kxyf shots/geom_extras_sym.txt label '+' 2>/dev/null || true)
   [ -n "$SXY" ] && { read -r X Y <<< "$SXY"; adb shell input motionevent DOWN $X $Y; sleep 0.3; shot x02_symbol_preview; release $X $Y; } || note "no symbol key position for preview"
   dbg "sprm:pref_key_longpress_timeout" 1.0
   tapcode -3 >/dev/null || true; sleep 1.0; geom extras
-  # auto-capital: type a sentence ending, check shift auto-engages (uppercase labels in geom)
-  clear_field; type_word hello; tapcode 32 >/dev/null; tapk "." >/dev/null 2>&1 || tapcode 46 >/dev/null; tapcode 32 >/dev/null; sleep 0.8
+  # auto-capital: controlled capSentences field (fixture broadcast), type a sentence ending,
+  # then shift must auto-engage (uppercase labels in geom). Field is cleared by the broadcast.
+  adb shell am broadcast -a com.wrenboard.imetarget.CAPSENT --ez on true -p "$TPKG" >/dev/null 2>&1; sleep 0.8
+  adb shell input keyevent 4; sleep 0.8
+  focus_target; sleep 0.5
+  type_word hello; tapcode 32 >/dev/null; tapk "." >/dev/null 2>&1 || tapcode 46 >/dev/null; tapcode 32 >/dev/null; sleep 0.8
   geom autocap keep >/dev/null
   ROW=$(grep -oE 'label=[QWERTYUIOPqwertyuiop] ' shots/geom_autocap.txt | tr -d 'label= ' | tr -d ' ' | head -c 10)
-  note "letter row after 'hello. ': $ROW"
-  case "$ROW" in QWERTY*) pass "auto-capital engages shift after sentence end";; qwerty*) note "auto-capital did NOT engage after sentence end (row: $ROW)";; *) note "auto-capital row unreadable: $ROW";; esac
+  note "letter row after 'hello. ' (capSentences field): $ROW"
+  case "$ROW" in QWERTY*) pass "auto-capital engages shift after sentence end (capSentences field)";; qwerty*) fail "auto-capital did NOT engage in a capSentences field (row: $ROW)";; *) note "auto-capital row unreadable: $ROW";; esac
   shot x03_autocap_after_sentence
+  adb shell am broadcast -a com.wrenboard.imetarget.CAPSENT --ez on false -p "$TPKG" >/dev/null 2>&1; sleep 0.5
+  adb shell input keyevent 4; sleep 0.6; focus_target
   # strip cases: multi-suggestion strip vs no-suggestion strip
   clear_field; type_word zebr; sleep 1.0; shot x04_strip_suggestions
   S=$(sugg); note "strip with 'zebr': $S"
