@@ -394,13 +394,16 @@ data class PeriodKey(
     // stage-A geometry (123-key shrink, wider pitch, no side padding) silently reordered it to ? ! ,
     // (runs 41311819398/41315203139 vs baseline 41309528306). Restore verdict: Tab acceptance review,
     // mail 01793544317987000000. "?" stays the default release item (harness legacy legs verify both).
-    // Scoped to locales that fall back to DEFAULT.json's period set (\, ! ?): hi/ne/ar/fa ship their
-    // own morekeys_period overrides (Hindi's is 16 items) and keep the original auto behavior below.
+    // Scoped by the resolved texts table to locales that fall back to DEFAULT.json's period set
+    // (\, ! ?): hi/ne/ar/fa/ckb/new/hi__Latn ship their own morekeys_period overrides and keep the
+    // original auto behavior below.
     val default: AbstractKey = BaseKey(".", hint = ",!?"),
     val defaultPinned: AbstractKey = BaseKey(".", hint = ",!?",
         moreKeys = listOf(
             "!fixedColumnOrder!3",
-            "?",
+            // designated default: releasing the long-press without sliding types '?' (Tab blocker,
+            // mail 01793553574906000000); the edge shift otherwise puts '!' under the finger
+            "!default!?",
             "!text/keyspec_comma",
             "!"),
         attributes = KeyAttributes(moreKeyMode = MoreKeyMode.OnlyExplicit)
@@ -430,8 +433,10 @@ data class PeriodKey(
         coordinate: KeyCoordinate
     ): ComputedKeyData? = when {
         params.mId.mAlternativePeriodKey -> alternative
-        // Locales with their own morekeys_period override keep FUTO's auto popup (see DEFAULT.json vs hi/ne/ar/fa)
-        params.mId.locale.language in setOf("hi", "ne", "ar", "fa") -> default
+        // Locales with their own morekeys_period override keep FUTO's auto popup. Read the resolved
+        // texts table rather than a language list: hi__Latn, ckb and new also override (and future
+        // overrides are covered automatically); ur/hy/my fall back to DEFAULT and keep the pin.
+        params.mTextsSet.hasLocaleSpecificText("morekeys_period") -> default
         else -> defaultPinned
     }.computeData(params, row, keyboard, coordinate)
 }
