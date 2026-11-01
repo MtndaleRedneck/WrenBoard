@@ -180,7 +180,7 @@ import kotlin.math.roundToInt
  * TODO: Will need to make RTL languages work
  */
 
-val ActionBarHeight = 40.dp
+val ActionBarHeight = 41.dp
 
 val ActionBarScrollIndexSetting = SettingsKey(
     intPreferencesKey("action_bar_scroll_index"),
@@ -944,7 +944,8 @@ fun ActionBar(
         }
 
         if(needToUseExpandableSuggestionUi) return@Column
-        ActionSep()
+        // PARITY 13: SwiftKey has no divider under the strip on the WrenBoard skin
+        if(!LocalThemeProvider.current.keyBorders) ActionSep()
 
         Surface(
             modifier = Modifier

@@ -259,7 +259,12 @@ class SettingsActivity : ComponentActivity(), DynamicThemeProviderOwner {
 
         LayoutManager.init(this)
 
-        enableEdgeToEdge()
+        // Settings pages are all dark (WrenSettingsStyle PageTop #1B1B1E): force light status/nav
+        // icons - the DayNight default left dark icons on the dark pages (invisible clock/icons).
+        enableEdgeToEdge(
+            SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
+            SystemBarStyle.dark(android.graphics.Color.TRANSPARENT)
+        )
 
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {

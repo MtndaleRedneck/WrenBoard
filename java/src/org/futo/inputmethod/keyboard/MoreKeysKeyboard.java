@@ -328,9 +328,8 @@ public final class MoreKeysKeyboard extends Keyboard {
 
                 int dimension = (int)(context.getResources().getDisplayMetrics().density * 44.5f);
                 keyWidth = getMaxKeyWidth(key, Math.min(dimension, key.getTotalWidth()), padding, paintToMeasure);
-                // WrenBoard 1.3 (teardown item 32b): a one-key-tall popup strip read as short and wide next to
-                // SwiftKey's tall boxes; give popup rows half again the height.
-                rowHeight = Math.max(key.getHeight(), dimension) * 3 / 2;
+                // S7: SwiftKey's period panel is two key rows plus the gap (310px at 420dpi)
+                rowHeight = Math.max(key.getHeight(), dimension) * 2;
             }
             final int dividerWidth = 0; // TODO: Remove divider
             final List<MoreKeySpec> moreKeys = key.getMoreKeys();

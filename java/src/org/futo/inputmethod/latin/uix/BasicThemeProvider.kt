@@ -167,6 +167,9 @@ class BasicThemeProvider(val context: Context, val colorScheme: KeyboardColorSch
     override var typefaceOverride: Typeface? = null
     override val themeTypeface: Typeface?
 
+    override val keyTextSizeMultiplier: Float
+        get() = colorScheme.extended.advancedThemeOptions.textSizeMultiplier
+
     val kdcMatcher = AdvancedThemeMatcher(context, this, colorScheme)
     override fun selectKeyDrawingConfiguration(
         keyboard: Keyboard?,

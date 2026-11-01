@@ -61,7 +61,8 @@ public class KeyPreviewView extends androidx.appcompat.widget.AppCompatTextView 
 
     public KeyPreviewView(final Context context, final AttributeSet attrs, final int defStyleAttr) {
         super(context, attrs, defStyleAttr);
-        setGravity(Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL);
+        // S4: glyph centres on the row above (~26% of the box), not at the bottom of the top area
+        setGravity(Gravity.CENTER | Gravity.CENTER_HORIZONTAL);
         setIncludeFontPadding(false);
 
         mDrawableProvider = DynamicThemeProvider.obtainFromContext(context);
@@ -86,7 +87,8 @@ public class KeyPreviewView extends androidx.appcompat.widget.AppCompatTextView 
         mIcon = null;
         setCompoundDrawables(null, null, null, null);
         setTextColor(foregroundColor);
-        setTextSize(TypedValue.COMPLEX_UNIT_PX, key.selectTextSize(drawParams));
+        // S4: 1.44x the glyph as drawn on the key (key applies keyTextSizeMultiplier)
+        setTextSize(TypedValue.COMPLEX_UNIT_PX, key.selectTextSize(drawParams) * mDrawableProvider.getKeyTextSizeMultiplier() * 1.44f);
         setTypeface(mDrawableProvider.selectKeyTypeface(key.selectPreviewTypeface(drawParams)));
         // TODO Should take care of temporaryShiftLabel here.
         setTextAndScaleX(key.getWidth(), key.getPreviewLabel());

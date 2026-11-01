@@ -99,7 +99,19 @@ public class MoreKeysKeyboardView extends KeyboardView implements MoreKeysPanel 
            final KeyDrawParams params, final KeyDrawingConfiguration kdc,
                                        final int keyWidth, final int keyHeight) {
         if (!key.isSpacer() || mDivider == null) {
-            super.onDrawKeyTopVisuals(key, canvas, paint, params, kdc, keyWidth, keyHeight);
+            // S7: SwiftKey panel glyphs are ~1.8x the cap height, centered on the upper row
+            // of the two-row-tall cell.
+            final KeyDrawingConfiguration scaled = kdc.copy(
+                    kdc.getBackground(), kdc.getBackgroundPadding(), kdc.getBackgroundGap(),
+                    kdc.getIcon(), kdc.getHintIcon(), kdc.getLabel(), kdc.getHintLabel(),
+                    kdc.getTextColor(), kdc.getHintColor(),
+                    kdc.getTextSize() * 1.8f, kdc.getHintSize(),
+                    kdc.getTextTypeface(), kdc.getHintTypeface(),
+                    kdc.getCenteredHint(), kdc.getOutline());
+            canvas.save();
+            canvas.translate(0, -keyHeight / 4.0f);
+            super.onDrawKeyTopVisuals(key, canvas, paint, params, scaled, keyWidth, keyHeight);
+            canvas.restore();
             return;
         }
         final int iconWidth = Math.min(mDivider.getIntrinsicWidth(), keyWidth);

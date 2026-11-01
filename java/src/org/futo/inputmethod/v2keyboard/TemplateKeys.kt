@@ -112,7 +112,8 @@ data class AlphabetKey(val attributes: KeyAttributes = KeyAttributes()) : Templa
         // finger for the long-press timer is this one. It must carry the same clipboard long-press as 123.
         moreKeys = SymbolsMoreKeys,
         hint = " ",
-        attributes = attributes + FunctionalAttributes
+        // S9: SwiftKey shows lowercase "abc" on both symbol pages - don't uppercase on the shifted page
+        attributes = attributes + FunctionalAttributes + KeyAttributes(shiftable = false)
     )
 }
 val TemplateAlphabetKey = AlphabetKey()
