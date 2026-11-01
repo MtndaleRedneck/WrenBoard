@@ -230,7 +230,9 @@ fun getDefaultSettingForKind(kind: KeyboardSizeSettingKind, context: Context): S
         KeyboardSizeSettingKind.Portrait -> SavedKeyboardSizingSettings(
             currentMode = KeyboardMode.Regular,
             heightMultiplier = 1.0f * oldHeightMultiplier * portraitDeviceSizeHeightMultiplier,
-            paddingDp = DpRect(2.dp + extraSidePadding, 4.dp, 2.dp + extraSidePadding, 10.dp + oldBottomOffset),
+            // WrenBoard 1.4 SwiftKey parity (item 2): no base side padding - the leftover-to-gap split puts
+            // outer keys exactly 3px from the screen edge at 1080px, matching SwiftKey's margins and 108px pitch.
+            paddingDp = DpRect(extraSidePadding, 4.dp, extraSidePadding, 10.dp + oldBottomOffset),
             splitPaddingDp = DpRect(2.dp, 4.dp, 2.dp, 10.dp + oldBottomOffset),
             splitWidthFraction = portraitSplitWidthFraction,
             oneHandedDirection = OneHandedDirection.Right,
@@ -477,13 +479,14 @@ class KeyboardSizingCalculator(val context: Context, val uixManager: UixManager)
                     settings.mIsNumberRowEnabled && !settings.mIsNumberRowEnabledByUser ->
                         effectiveRows.first { it.isNumberRow }.rowHeight.guardNaN(0.5).coerceAtLeast(0.0)
 
-                    // If it's enabled by user, add only 0.5 to make the keyboard slightly less tall
-                    settings.mIsNumberRowEnabled -> 0.5
+                    // WrenBoard 1.4 SwiftKey parity (item 2): budget the number row's real height so letter
+                    // rows grow to SwiftKey's 149px instead of compressing to fit.
+                    settings.mIsNumberRowEnabled -> 0.85
 
                     else -> 0.0
                 } +
                 when { // Arrow row height
-                    settings.mIsArrowRowEnabled -> 0.8
+                    settings.mIsArrowRowEnabled -> 0.75
                     else -> 0.0
                 }
 

@@ -96,7 +96,8 @@ val ArrowRow = Row(
         repeatableEnabled = true
     ),
     splittable = false,
-    rowHeight = 0.8
+    // WrenBoard 1.4 SwiftKey parity (item 2): arrow row is 0.75 of the letter-row pitch (110px vs 149px at 480dpi).
+    rowHeight = 0.75
 )
 
 data class LayoutParams(
@@ -186,8 +187,9 @@ data class LayoutEngine(
     private val minimumKeyWidth = regularKeyWidth / 2
 
     private val minFunctionalKeyWidth = layoutWidth * keyboard.minimumFunctionalKeyWidth
-    private val maxFunctionalKeyWidth = (layoutWidth * maxOf(0.15f,
-        keyboard.overrideWidths[KeyWidth.FunctionalKey] ?: 0.15f))
+    // WrenBoard 1.4 SwiftKey parity (item 4): a layout's FunctionalKey overrideWidths entry is the exact cap
+    // (qwerty: 0.1315 -> shift/backspace ~134px at 1080px, leaving SwiftKey's inner gaps); default stays 0.15.
+    private val maxFunctionalKeyWidth = (layoutWidth * (keyboard.overrideWidths[KeyWidth.FunctionalKey] ?: 0.15f))
 
     private val bottomRegularKeyWidth = 0.1f * layoutWidth
 
@@ -449,7 +451,7 @@ data class LayoutEngine(
                 preWidths.map { it[KeyWidth.FunctionalKey]!! }
                     .filter { it > minimumKeyWidth }
                     .minOrNull() ?: minimumKeyWidth
-            ).coerceIn(minFunctionalKeyWidth, maxFunctionalKeyWidth)
+            ).coerceIn(minFunctionalKeyWidth, maxOf(minFunctionalKeyWidth, maxFunctionalKeyWidth))
 
             computedRowWithoutWidths.mapIndexed { i, it ->
                 computeRowWidths(
