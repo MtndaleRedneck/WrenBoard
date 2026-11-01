@@ -552,7 +552,7 @@ val LongPressMenu = UserSettingsMenu(
         UserSetting(name = R.string.morekey_settings_backspace_hold_delete_words) {
             val oldSetting = useSharedPrefsInt(
                 key = Settings.PREF_BACKSPACE_MODE,
-                default = Settings.BACKSPACE_MODE_CHARACTERS
+                default = Settings.BACKSPACE_MODE_WORDS
             )
 
             val setting = useSharedPrefsInt(
@@ -572,7 +572,7 @@ val LongPressMenu = UserSettingsMenu(
         UserSetting(name = R.string.morekey_settings_backspace_swipe_to_delete) {
             val setting = useSharedPrefsInt(
                 key = Settings.PREF_BACKSPACE_MODE,
-                default = Settings.BACKSPACE_MODE_CHARACTERS
+                default = Settings.BACKSPACE_MODE_WORDS
             )
 
             val deleteModes = mapOf(
@@ -867,7 +867,7 @@ val KeyboardSettingsMenu = UserSettingsMenu(
             title = R.string.keyboard_settings_period_key,
             subtitle = R.string.keyboard_settings_period_key_subtitle2,
             key = Settings.PREF_ENABLE_ALT_PERIOD_KEY,
-            default = {false},
+            default = {true},
         ),
         userSettingToggleDataStore(
             title = R.string.keyboard_settings_hide_when_hardware_keyboard_is_connected,
@@ -921,7 +921,7 @@ val TypingSettingsMenu = UserSettingsMenu(
         userSettingToggleSharedPrefs(
             title = R.string.typing_settings_revert_correction_on_backspace,
             key = Settings.PREF_BACKSPACE_UNDO_AUTOCORRECT,
-            default = {true}
+            default = {false}
         ),
         userSettingToggleSharedPrefs(
             title = R.string.popup_on_keypress,

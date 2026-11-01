@@ -201,8 +201,9 @@ if leg period; then
   note "== PERIOD long-press (P0-1) =="
   PXY=$(kxy code 46) || fail "no period key"
   read -r PX PY <<< "$PXY"
-  for mode in default quick; do
+  for mode in default quick legacy; do
     if [ $mode = quick ]; then dbg "prefbool:pref_enable_alt_period_key=true" 2.0; focus_target; geom period_quick >/dev/null; PXY=$(kxy code 46); read -r PX PY <<< "$PXY"; fi
+    if [ $mode = legacy ]; then dbg "prefbool:pref_enable_alt_period_key=false" 2.0; focus_target; geom period_legacy >/dev/null; PXY=$(kxy code 46); read -r PX PY <<< "$PXY"; fi
     clear_field; adb logcat -c
     adb shell input motionevent DOWN "$PX" "$PY"; sleep 1.2
     shot p_${mode}_popup_open
@@ -211,7 +212,9 @@ if leg period; then
     release "$PX" "$PY"
     NM=$(wc -l < shots/more_${mode}_keys.txt); note "[$mode] popup keys ($NM): $(awk '{print $2}' shots/more_${mode}_keys.txt | tr '\n' ' ')"
     [ "$NM" -gt 0 ] || { fail "[$mode] period long-press showed no panel"; continue; }
+    [ $mode = default ] && { [ "$(awk '{print $2}' shots/more_${mode}_keys.txt | tr '\n' ' ')" = "! , . ? " ] && pass "[default] popup reads ! , . ? by default (alt period key now the default)" || fail "[default] popup is not the ! , . ? set by default"; }
     [ $mode = quick ] && { [ "$(awk '{print $2}' shots/more_${mode}_keys.txt | tr '\n' ' ')" = "! , . ? " ] && pass "[quick] popup reads ! , . ? left to right" || fail "[quick] popup order is not ! , . ?"; }
+    [ $mode = legacy ] && { [ "$(awk '{print $2}' shots/more_${mode}_keys.txt | tr '\n' ' ')" = "? , ! " ] && pass "[legacy] toggle off restores the FUTO ? , ! set" || fail "[legacy] toggle off did not restore the FUTO set"; }
     i=0
     while read -r code label cx cy w h; do
       i=$((i+1)); [ $i -gt 6 ] && break

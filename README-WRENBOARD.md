@@ -1,4 +1,4 @@
-# WrenBoard (working build)
+# WrenBoard: fork notes
 
 WrenBoard is a modified fork of FUTO Keyboard (https://github.com/futo-org/android-keyboard), pinned at upstream commit 31e720ddcc2df6259069b2ae7cf0f1defaf2cb74.
 
