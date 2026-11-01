@@ -236,11 +236,16 @@ if leg period; then
     if [ $mode = legacy ]; then
       clear_field
       I1X=$(awk 'NR==1{print $3}' shots/more_${mode}_keys.txt); I1Y=$(awk 'NR==1{print $4}' shots/more_${mode}_keys.txt)
-      note "[$mode] cancel slide: parent ($PX,$PY), first item ($I1X,$I1Y)"
-      adb shell input motionevent DOWN "$PX" "$PY"; sleep 1.2
-      adb shell input motionevent MOVE "$I1X" "$I1Y"; sleep 0.2
-      adb shell input motionevent MOVE "$PX" "$PY"; sleep 0.2
-      release "$PX" "$PY"
+      KTOP=$(python3 tools/wb12_kv.py shots/geom.txt kbd y); [ -n "$KTOP" ] || KTOP=$((PY-900))
+      RY=$((KTOP-60))
+      note "[$mode] cancel slide: parent ($PX,$PY), item1 ($I1X,$I1Y), release ($PX,$RY) above kbd top $KTOP"
+      adb logcat -c
+      adb shell input motionevent DOWN "$PX" "$PY"
+      for i in 1 2 3 4 5 6; do sleep 0.6; adb logcat -d -s WBDBG:I | tr -d '\r' | grep -q 'MOREEND' && break; done
+      adb logcat -d -s WBDBG:I | tr -d '\r' | grep -q 'MOREEND' && note "[$mode] cancel: panel confirmed open" || note "[$mode] cancel: panel NOT confirmed open before slide"
+      adb shell input motionevent MOVE "$I1X" "$I1Y"; sleep 0.3
+      adb shell input motionevent MOVE "$PX" "$RY"; sleep 0.3
+      release "$PX" "$RY"
       F=$(field)
       # engine semantics (identical pre/post fix, runs 41331924970/41331934384): sliding off the
       # panel cancels the POPUP; the release then types the PARENT key '.', never a popup item
