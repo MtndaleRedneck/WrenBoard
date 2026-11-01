@@ -587,8 +587,14 @@ if leg emoji; then
           [ -n "$T2" ] && note "tab markers not re-logged on reopen; reusing position from earlier open"
         fi
         if [ -n "$T2" ]; then
+          sleep 1.0   # let the reopened panel finish animating; a tap 0.4s after the open markers was swallowed (run 41356129207)
           adb logcat -c; adb shell input tap $T2; sleep 1.5; wlog em10d
           PG=$(grep 'EMOJI page=' shots/em10d.txt | tail -1 | sed 's/.*WINDOW //')
+          if ! echo "$PG" | grep -q 'page=Recent'; then
+            note "first tab tap gave '$PG' - retrying after settle"
+            sleep 1.0; adb logcat -c; adb shell input tap $T2; sleep 1.5; wlog em10d
+            PG=$(grep 'EMOJI page=' shots/em10d.txt | tail -1 | sed 's/.*WINDOW //')
+          fi
           note "recents page after tab tap: $PG"
           echo "$PG" | grep -q 'page=Recent' || note "skin-tone capture: tab tap did not open Recents ($PG)"
           # fresh grid geometry for the Recents page first cell
