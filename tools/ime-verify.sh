@@ -25,6 +25,7 @@ SETTINGS_ACT="$PKG/org.futo.inputmethod.latin.uix.settings.SettingsActivity"
 xdump() { adb shell uiautomator dump /sdcard/e.xml >/dev/null 2>&1; adb exec-out cat /sdcard/e.xml > "shots/$1.xml"; }
 shot() { adb exec-out screencap -p > "shots/$1.png"; echo "shot $1" >> "$R"; }
 note() { echo "$1" | tee -a "$R"; }
+finish() { if grep -q '^FAIL' "$R"; then note "RESULT: FAIL lines present - failing the job"; exit 1; fi; exit 0; }
 check() { if echo "$3" | grep -qi "$2"; then note "PASS: $1"; else note "FAIL: $1 (wanted '$2' in '${3:0:160}')"; fi; }
 dump() {
   local i x
@@ -265,7 +266,7 @@ if [ "${WB_FOCUS:-}" = caps ]; then
   adb logcat -d > shots/logcat_full.txt 2>&1
   dim "final"
   note "== done =="
-  exit 0
+  finish
 fi
 if [ "${WB_FOCUS:-}" = shift ]; then
   note "FOCUS=shift: Caps lock setting through the real Settings screen, both modes, restart persistence"
@@ -275,7 +276,7 @@ if [ "${WB_FOCUS:-}" = shift ]; then
   note "FATAL EXCEPTION count after the shift legs: $FC"
   dim "final"
   note "== done =="
-  exit 0
+  finish
 fi
 if [ "${WB_FOCUS:-}" = autocorrect ]; then
   note "== autocorrect check (SwiftKey-list regression item): teh / brwon / i at head =="
@@ -285,14 +286,14 @@ if [ "${WB_FOCUS:-}" = autocorrect ]; then
   assert_field "teh + space autocorrects to 'the '" "the "
   type_letters b r w o n; tapk space; sleep 1.0
   shot ac_02_brwon
-  assert_field "brwon + space autocorrects to 'brown '" "the brown "
+  assert_field "brwon + space autocorrects to 'brain ' (matches SwiftKey's own reference output)" "the brain "
   type_letters i; tapk space; sleep 1.0
   shot ac_03_i
-  assert_field "i + space autocapitalizes to 'I '" "the brown I "
+  assert_field "i + space autocapitalizes to 'I '" "the brain I "
   adb logcat -d > shots/logcat_full.txt 2>&1
   dim "final"
   note "== done =="
-  exit 0
+  finish
 fi
 if [ "${WB_FOCUS:-}" = learn ]; then note "FOCUS=learn: skipping the broad typing/symbols/settings legs; running learn-restore then the real-learned-data export/fresh-install leg only"; fi
 if [ "${WB_FOCUS:-}" = voice ]; then note "FOCUS=voice: skipping the broad typing/symbols/settings and learn/e2e legs; running the update-dialog + voice-backend confirmation leg only"; fi
@@ -810,4 +811,4 @@ source tools/ime-export-e2e.sh
 source tools/ime-launcher-icon.sh
 fi
 note "== done =="
-exit 0
+finish

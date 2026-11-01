@@ -5,6 +5,9 @@ on:
       run_id:
         description: "build run id for the WrenBoard APK"
         required: true
+permissions:
+  contents: read
+  actions: read
 jobs:
   control:
     runs-on: ubuntu-latest
@@ -36,7 +39,7 @@ jobs:
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
       - name: Run control
-        uses: reactivecircus/android-emulator-runner@v2
+        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
         with:
           api-level: 34
           target: google_apis

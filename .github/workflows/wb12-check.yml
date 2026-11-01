@@ -25,6 +25,8 @@ on:
         description: "emulator wm density (blank = 420)"
         required: false
         default: ""
+permissions:
+  contents: read
 jobs:
   check:
     runs-on: ubuntu-latest
@@ -65,6 +67,10 @@ jobs:
           sudo udevadm trigger --name-match=kvm
       - name: Run WrenBoard 1.2 checks on the emulator
         timeout-minutes: 30
+        env:
+          WB_LEGS: ${{ inputs.legs }}
+          WB_SIZE: ${{ inputs.size }}
+          WB_DENSITY: ${{ inputs.density }}
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 34
@@ -75,7 +81,7 @@ jobs:
           heap-size: 576M
           emulator-options: -no-window -gpu swangle_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none
           disable-animations: true
-          script: WB_LEGS="${{ inputs.legs }}" WB_SIZE="${{ inputs.size }}" WB_DENSITY="${{ inputs.density }}" WB_LOCAL_APK_URL=http://127.0.0.1:8765/wb-debug.apk bash tools/wb12-check.sh wb-debug.apk tools/ime-target/out/imetarget.apk
+          script: WB_LOCAL_APK_URL=http://127.0.0.1:8765/wb-debug.apk bash tools/wb12-check.sh wb-debug.apk tools/ime-target/out/imetarget.apk
       - name: Unit tests (update prompt status, swipe delete, starter words)
         if: always()
         run: |
