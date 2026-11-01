@@ -1,10 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Backspace (filled tag, X cut out). WrenBoard 1.4 artwork by Tab. Original drawing. Viewport 96 = 32dp; 1 unit = 1 px at 480 dpi. Drawn centred at its exact target size. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="26dp"
-    android:height="26dp"
-    android:viewportWidth="26"
-    android:viewportHeight="26">
+    android:width="32dp"
+    android:height="32dp"
+    android:viewportWidth="96"
+    android:viewportHeight="96">
   <path
       android:fillColor="#FFFFFFFF"
       android:fillType="evenOdd"
-      android:pathData="M2,13L9,5H22C23.1,5 24,5.9 24,7V19C24,20.1 23.1,21 22,21H9ZM13.2,9.6L12,10.8L14.2,13L12,15.2L13.2,16.4L15.4,14.2L17.6,16.4L18.8,15.2L16.6,13L18.8,10.8L17.6,9.6L15.4,11.8Z"/>
+      android:pathData="M7.85,48.85Q7,48 7.85,47.15L27.15,27.85Q28,27 29.2,27L87,27Q89,27 89,29L89,67Q89,69 87,69L29.2,69Q28,69 27.15,68.15ZM48.93,59.79Q48.5,60.21 48.08,59.79L43.41,55.12Q42.99,54.7 43.41,54.27L50.48,47.2L43.41,40.13Q42.99,39.7 43.41,39.28L48.08,34.61Q48.5,34.19 48.93,34.61L56,41.68L63.07,34.61Q63.5,34.19 63.92,34.61L68.59,39.28Q69.01,39.7 68.59,40.13L61.52,47.2L68.59,54.27Q69.01,54.7 68.59,55.12L63.92,59.79Q63.5,60.21 63.07,59.79L56,52.72Z"/>
 </vector>
