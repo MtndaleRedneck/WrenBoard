@@ -40,6 +40,7 @@ import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
@@ -152,7 +153,15 @@ fun MoreActionsView() {
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         items(actions, key = { it.name }) {
-            ActionItem(it, Modifier.clickable {
+            // WrenBoard harness: log each grid tile's center in DEBUG builds, same as the toolbar.
+            val wbView = LocalView.current
+            val wbName = stringResource(it.name)
+            ActionItem(it, Modifier.onGloballyPositioned { c ->
+                if (org.futo.inputmethod.latin.BuildConfig.DEBUG) {
+                    val loc = IntArray(2); wbView.getLocationOnScreen(loc); val p = c.positionInRoot()
+                    org.futo.inputmethod.latin.uix.WbDebug.logWindow("ACTION name=${wbName.replace(' ', '_')} cx=${(loc[0] + p.x + c.size.width / 2).toInt()} cy=${(loc[1] + p.y + c.size.height / 2).toInt()}")
+                }
+            }.clickable {
                 manager!!.activateAction(it)
             })
         }
