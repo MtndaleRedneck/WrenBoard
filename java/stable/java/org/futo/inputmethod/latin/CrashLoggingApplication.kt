@@ -20,6 +20,7 @@ import org.acra.config.CoreConfigurationBuilder
 import org.acra.data.CrashReportDataFactory
 import org.futo.inputmethod.latin.settings.Settings
 import org.futo.inputmethod.latin.uix.isDirectBootUnlocked
+import org.futo.inputmethod.latin.uix.DataStoreHelper
 import org.futo.inputmethod.latin.uix.settings.LocalDataStoreCache
 import org.futo.inputmethod.latin.uix.settings.NavigationItem
 import org.futo.inputmethod.latin.uix.settings.NavigationItemStyle
@@ -27,6 +28,15 @@ import org.futo.inputmethod.latin.uix.settings.pages.copyToClipboard
 import kotlin.collections.plus
 
 class CrashLoggingApplication : Application() /*, Configuration.Provider*/ {
+
+    override fun onCreate() {
+        super.onCreate()
+        // WrenBoard 1.3.1: fill the DataStoreHelper copy in every process, not only the keyboard
+        // service's. Settings screens (including the update dialog) read Context.getSetting from this
+        // copy; without this it stayed empty whenever LatinIME had not started. init is guarded, so
+        // LatinIME's own call remains a no-op.
+        DataStoreHelper.init(this)
+    }
     //override val workManagerConfiguration: Configuration
     //    get() = Configuration.Builder().build()
 

@@ -4,7 +4,7 @@ name: wb12-check
 # The debug build is never published; release builds stay in build.yml.
 on:
   push:
-    branches: [wrenboard-1.2, wrenboard-1.3]
+    branches: [wrenboard-1.2, wrenboard-1.3, wrenboard-1.3.1]
     paths-ignore:
       - '**.md'
   workflow_dispatch:
@@ -32,8 +32,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 75
     env:
-      VERSION_NAME: 1.3.0-check
-      VERSION_CODE: "4"
+      VERSION_NAME: 1.3.1-check
+      VERSION_CODE: "5"
     steps:
       - uses: actions/checkout@v4
       - name: Init build submodules
