@@ -667,8 +667,11 @@ if leg voiceshot; then
   # the emulator has no BT adapter, so set the user-preference flag to exercise the toast + clamped pill.
   dbg dsbool:prefer_bluetooth_recording=true 0.5
   adb logcat -c
-  dbg open:voice_input 4.0
-  shot v01_voice_panel_keyboard
+  dbg open:voice_input 1.2
+  shot v01a_voice_panel_keyboard
+  sleep 0.8; shot v01b_voice_panel_toast
+  sleep 0.8; shot v01c_voice_panel_late
+  sleep 1.2; shot v01_voice_panel_keyboard
   adb logcat -d -s WBDBG:I | tr -d '\r' > shots/v01_voice_panel.log
   grep -q 'CMD open:voice_input' shots/v01_voice_panel.log && pass "debug open:voice_input accepted" || fail "open:voice_input not seen in WBDBG"
   grep -qi 'CMD open:voice_input failed' shots/v01_voice_panel.log && fail "open:voice_input threw (see v01_voice_panel.log)"
