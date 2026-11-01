@@ -51,6 +51,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -168,8 +170,9 @@ class WrenEmojiWindow(val manager: KeyboardManagerForAction) : ActionWindow() {
 }
 
 @Composable
-private fun Ic(id: Int, tint: Color, size: Dp, modifier: Modifier = Modifier) {
-    Icon(painterResource(id), contentDescription = null, tint = tint, modifier = modifier.size(size))
+private fun Ic(id: Int, tint: Color, size: Dp, modifier: Modifier = Modifier, desc: String? = null) {
+    // WrenBoard 1.3 (teardown item 30): icons were all contentDescription=null, so TalkBack had nothing to read.
+    Icon(painterResource(id), contentDescription = desc, tint = tint, modifier = modifier.size(size))
 }
 
 @Composable
@@ -194,7 +197,7 @@ private fun EmojiGlyph(text: String, sizeDp: Float, modifier: Modifier = Modifie
 private fun WrenTopTab(active: Boolean, iconActive: Int, icon: Int, label: String, modifier: Modifier, onClick: () -> Unit) {
     Box(modifier.width(if (active) 93.dp else 56.dp).fillMaxHeight().clickable(onClick = onClick)) {
         Row(Modifier.align(Alignment.Center), verticalAlignment = Alignment.CenterVertically) {
-            Ic(if (active) iconActive else icon, if (active) EmojiColors.Orange else EmojiColors.OrangeMuted, 22.dp)
+            Ic(if (active) iconActive else icon, if (active) EmojiColors.Orange else EmojiColors.OrangeMuted, 22.dp, desc = label)
             if (active) {
                 Spacer(Modifier.width(6.dp))
                 Text(label, color = EmojiColors.Orange, fontSize = 15.6.sp, fontWeight = FontWeight.Medium)
@@ -221,7 +224,7 @@ fun WrenEmojiPanel(w: WrenEmojiWindow) {
             Box(Modifier.size(46.dp).clickable {
                 w.manager.closeActionWindow()
                 w.manager.performHapticAndAudioFeedback(Constants.CODE_SWITCH_ALPHA_SYMBOL, view)
-            }, contentAlignment = Alignment.Center) { Ic(R.drawable.wren_ic_arrow_back_ios_new, EmojiColors.Orange, 18.dp) }
+            }, contentAlignment = Alignment.Center) { Ic(R.drawable.wren_ic_arrow_back_ios_new, EmojiColors.Orange, 18.dp, desc = stringResource(R.string.wren_cd_back)) }
             WrenTopTab(w.tab.value == 0, R.drawable.wren_ic_sentiment_satisfied_fill, R.drawable.wren_ic_sentiment_satisfied,
                 stringResource(R.string.wren_emoji_tab), Modifier) { w.tab.value = 0 }
             WrenTopTab(w.tab.value == 1, R.drawable.wren_ic_gif_box_fill, R.drawable.wren_ic_gif_box,
@@ -244,7 +247,7 @@ fun WrenEmojiPanel(w: WrenEmojiWindow) {
             Spacer(Modifier.width(5.dp))
             Box(Modifier.size(36.dp).clip(CircleShape).background(EmojiColors.Arrow).clickable {
                 w.manager.sendCodePointEvent(Constants.CODE_ENTER)
-            }, contentAlignment = Alignment.Center) { Ic(R.drawable.wren_ic_arrow_forward, Color(0xFF333333), 21.dp) }
+            }, contentAlignment = Alignment.Center) { Ic(R.drawable.wren_ic_arrow_forward, Color(0xFF333333), 21.dp, desc = stringResource(R.string.wren_cd_enter)) }
         }
         Box(Modifier.fillMaxWidth().height(2.7.dp).background(EmojiColors.Sep))
 
@@ -270,13 +273,13 @@ fun WrenEmojiPanel(w: WrenEmojiWindow) {
                 w.manager.performHapticAndAudioFeedback(Constants.CODE_SWITCH_ALPHA_SYMBOL, view)
             }, contentAlignment = Alignment.Center) { Text("abc", color = EmojiColors.Orange, fontSize = 17.9.sp) }
             Box(Modifier.width(39.dp).fillMaxHeight().wbPos("EMOJISEARCH").clickable { w.searching.value = true }, contentAlignment = Alignment.Center) {
-                Ic(R.drawable.wren_ic_search, EmojiColors.OrangeMuted, 24.dp)
+                Ic(R.drawable.wren_ic_search, EmojiColors.OrangeMuted, 24.dp, desc = stringResource(R.string.wren_search_emojis))
             }
             LazyRow(Modifier.weight(1f).fillMaxHeight()) {
                 items(emojiPages.size) { i ->
                     val active = pagerState.currentPage == i
                     Box(Modifier.width(39.dp).fillMaxHeight().wbPos("EMOJITAB i=$i key=${emojiPages[i].key}").clickable { scope.launch { pagerState.scrollToPage(i) } }, contentAlignment = Alignment.Center) {
-                        Ic(if (active) emojiPages[i].iconActive else emojiPages[i].icon, if (active) EmojiColors.Orange else EmojiColors.OrangeMuted, 24.dp)
+                        Ic(if (active) emojiPages[i].iconActive else emojiPages[i].icon, if (active) EmojiColors.Orange else EmojiColors.OrangeMuted, 24.dp, desc = emojiPages[i].key)
                         if (active) Box(Modifier.align(Alignment.BottomCenter).padding(bottom = 2.dp).width(27.dp).height(2.3.dp).background(EmojiColors.Orange, RoundedCornerShape(1.dp)))
                     }
                 }
@@ -284,7 +287,7 @@ fun WrenEmojiPanel(w: WrenEmojiWindow) {
             Box(Modifier.width(44.dp).fillMaxHeight().repeatablyClickableAction { repeated ->
                 w.manager.backspace(1)
                 if (!repeated) w.manager.performHapticAndAudioFeedback(Constants.CODE_DELETE, view)
-            }, contentAlignment = Alignment.Center) { Ic(R.drawable.wren_ic_backspace_fill, EmojiColors.Orange, 30.dp) }
+            }, contentAlignment = Alignment.Center) { Ic(R.drawable.wren_ic_backspace_fill, EmojiColors.Orange, 30.dp, desc = stringResource(R.string.wren_cd_backspace)) }
         }
     }
 }
@@ -301,6 +304,7 @@ private fun EmojiCell(
     val isLocked = lockedSet.contains(item.emoji) || lockedSet.contains(base)
     Box(
         Modifier.fillMaxWidth().height(50.3.dp)
+            .semantics { if (item.description.isNotBlank()) contentDescription = item.description }
             .then(if (popup.value) Modifier.padding(horizontal = 4.dp, vertical = 2.dp).clip(RoundedCornerShape(7.6.dp)).background(Color(0x29FFFFFF)) else Modifier)
             .combinedClickable(onClick = { w.type(item, view) }, onLongClick = { popup.value = true }),
         contentAlignment = Alignment.TopCenter
@@ -374,7 +378,7 @@ private fun EmojiPopup(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
             ) {
-                Ic(if (isLocked) R.drawable.wren_ic_lock_open else R.drawable.wren_ic_lock_fill, EmojiColors.Orange, 20.dp)
+                Ic(if (isLocked) R.drawable.wren_ic_lock_open else R.drawable.wren_ic_lock_fill, EmojiColors.Orange, 20.dp, desc = stringResource(if (isLocked) R.string.wren_cd_unlock_emoji else R.string.wren_cd_lock_emoji))
                 Text(stringResource(if (isLocked) R.string.wren_emoji_unlock else R.string.wren_emoji_lock), color = EmojiColors.Orange, fontSize = 11.4.sp, fontWeight = FontWeight.Medium)
             }
         }
@@ -461,7 +465,7 @@ private fun WrenEmojiSearch(w: WrenEmojiWindow, emojis: List<EmojiItem>, view: V
     Column(Modifier.fillMaxSize().background(EmojiColors.Bar)) {
         Row(Modifier.fillMaxWidth().height(46.dp).padding(horizontal = 4.5.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(40.dp).clip(CircleShape).clickable { w.endSearch() }, contentAlignment = Alignment.Center) {
-                Ic(R.drawable.wren_ic_arrow_back_ios_new, EmojiColors.Orange, 18.dp)
+                Ic(R.drawable.wren_ic_arrow_back_ios_new, EmojiColors.Orange, 18.dp, desc = stringResource(R.string.wren_cd_back))
             }
             Row(
                 Modifier.weight(1f).height(37.dp).clip(RoundedCornerShape(6.dp))
@@ -474,7 +478,7 @@ private fun WrenEmojiSearch(w: WrenEmojiWindow, emojis: List<EmojiItem>, view: V
                 Box(Modifier.weight(1f)) { ActionTextEditor(text = w.searchText, placeholder = stringResource(R.string.wren_search_emojis)) }
                 if (w.searchText.value.isNotEmpty()) {
                     Box(Modifier.size(30.dp).clip(CircleShape).clickable { w.searchText.value = "" }, contentAlignment = Alignment.Center) {
-                        Ic(R.drawable.wren_ic_close, EmojiColors.OrangeMuted, 20.dp)
+                        Ic(R.drawable.wren_ic_close, EmojiColors.OrangeMuted, 20.dp, desc = stringResource(R.string.wren_cd_clear))
                     }
                 }
             }
@@ -518,7 +522,7 @@ private fun WrenGifPlaceholder(w: WrenEmojiWindow, view: View, modifier: Modifie
                     Box(Modifier.fillMaxHeight().clickable { chip.value = i }.padding(horizontal = 12.dp), contentAlignment = Alignment.Center) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             if (i == 0) {
-                                Ic(if (active) R.drawable.wren_ic_schedule_fill else R.drawable.wren_ic_schedule, if (active) EmojiColors.Orange else EmojiColors.OrangeMuted, 20.dp)
+                                Ic(if (active) R.drawable.wren_ic_schedule_fill else R.drawable.wren_ic_schedule, if (active) EmojiColors.Orange else EmojiColors.OrangeMuted, 20.dp, desc = stringResource(R.string.wren_cd_recent))
                                 Spacer(Modifier.width(5.dp))
                             }
                             Text(stringResource(label), color = if (active) EmojiColors.Orange else EmojiColors.OrangeMuted, fontSize = 15.sp,
@@ -531,7 +535,7 @@ private fun WrenGifPlaceholder(w: WrenEmojiWindow, view: View, modifier: Modifie
             Box(Modifier.width(44.dp).fillMaxHeight().repeatablyClickableAction { repeated ->
                 w.manager.backspace(1)
                 if (!repeated) w.manager.performHapticAndAudioFeedback(Constants.CODE_DELETE, view)
-            }, contentAlignment = Alignment.Center) { Ic(R.drawable.wren_ic_backspace_fill, EmojiColors.Orange, 30.dp) }
+            }, contentAlignment = Alignment.Center) { Ic(R.drawable.wren_ic_backspace_fill, EmojiColors.Orange, 30.dp, desc = stringResource(R.string.wren_cd_backspace)) }
         }
     }
 }

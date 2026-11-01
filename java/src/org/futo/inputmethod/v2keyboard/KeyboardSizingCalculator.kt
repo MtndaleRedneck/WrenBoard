@@ -581,11 +581,14 @@ class KeyboardSizingCalculator(val context: Context, val uixManager: UixManager)
 
         val minDp = Math.min(widthDp, heightDp)
 
-        return (minDp / 100.0f).coerceIn(3.0f, 6.0f)
+        // WrenBoard 1.3 (teardown item 2): 3-6dp gaps looked about 3x too wide vs SwiftKey (3.6dp on a
+        // 360dp-wide phone); aim for ~2.4dp there, never below 2dp or above 3dp.
+        return (minDp / 150.0f).coerceIn(2.0f, 3.0f)
     }
 
     fun calculateSuggestionBarHeightDp(): Float {
-        return 40.0f
+        // WrenBoard 1.3 (teardown item 8): 40dp read as too short vs SwiftKey's suggestion boxes.
+        return 46.0f
     }
 
     fun calculateTotalActionBarHeightPx(): Int =

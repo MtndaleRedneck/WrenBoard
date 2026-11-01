@@ -245,7 +245,7 @@ fun UpdateDialog(navController: NavHostController) {
     if(lastUpdateResult == null || !lastUpdateResult.isNewer()) {
         if(lastCheckFailed) {
             // The check failed (no network, a server error, or no release published yet): do not claim "up to date".
-            InfoDialog(title = "Update check failed", body = "WrenBoard could not confirm whether an update is available. There may be no network, or no release is published yet. Use \"Check for updates manually\" in Settings to open the releases page.", navController = navController)
+            InfoDialog(title = "Update check failed", body = "WrenBoard could not confirm whether an update is available. There may be no network, or no release is published yet. Use \"Check for updates manually\" in Settings to check again.", navController = navController)
         } else {
             InfoDialog(title = "Up-to-date", body = "As of the last update check, the app is up to date.", navController = navController)
         }
