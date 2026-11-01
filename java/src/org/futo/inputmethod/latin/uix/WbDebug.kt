@@ -81,6 +81,13 @@ object WbDebug {
                             PreferenceUtils.getDefaultSharedPreferences(ime).edit()
                                 .putBoolean(kv[0], kv.getOrNull(1) == "true").apply()
                         }
+                        cmd.startsWith("prefget:") -> {
+                            // prefget:<key> : log the stored value, or UNSET when nothing wrote it
+                            // (distinguishes a true fresh-install default from a mode-forced value)
+                            val k = cmd.removePrefix("prefget:")
+                            val p = PreferenceUtils.getDefaultSharedPreferences(ime)
+                            Log.i(TAG, "PREF $k=" + (if (p.contains(k)) p.getBoolean(k, false).toString() else "UNSET"))
+                        }
                         cmd.startsWith("dsbool:") -> {
                             // dsbool:<datastore key>=<true|false>, e.g. dsbool:enableClipboardHistory=true
                             val kv = cmd.removePrefix("dsbool:").split("=")
