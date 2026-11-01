@@ -96,8 +96,6 @@ def main():
     # Only trailing glyph-less bands are dropped: a uniform-dark nav area is
     # always last, whereas a dim key row (e.g. number-row key bodies) can be
     # glyph-free in the middle.
-    while len(bands) > 4 and not has_glyphs(*bands[-1]):
-        bands.pop()
     if len(bands) < 4:
         print(json.dumps({"error": "too few key bands", "bands": len(bands), "bg": bg}))
         sys.exit(4)
@@ -134,6 +132,16 @@ def main():
             else:
                 merged.append(c)
         return merged
+
+    # Drop trailing glyph-less bands (nav/blank areas), but keep rows whose
+    # structure says they are real: the arrow row (4 wide cells) and the
+    # bottom strip (a very wide space-bar cell). Some renderers draw those
+    # rows' tiny glyphs under the brightness threshold.
+    while len(bands) > 4 and not has_glyphs(*bands[-1]):
+        cs = band_cells(*bands[-1])
+        if len(cs) == 4 or (cs and max(b_ - a_ for a_, b_ in cs) > W * 0.3):
+            break
+        bands.pop()
 
     out_bands = []
     for (y1, y2) in bands:
@@ -263,49 +271,53 @@ def main():
             strip["cy"] = cyy
             strip["chevron"] = True
 
-    # Positional mapping with arrow-row awareness:
-    #   bands[-1] with 4 wide cells = arrow row; bands[-2] = bottom row.
+    # Positional mapping, anchored on the letter rows and going forward:
+    # trailing dim rows can go undetected on some renderers, so the bottom
+    # strip is identified by its very wide space-bar cell and the arrow row
+    # by its four equal wide cells - never by position from the tail.
     keys = {}
     arrows = None
-    if len(out_bands[-1]["cells"]) == 4:
-        arrows = out_bands[-1]
-        bottom = out_bands[-2]
-        letter_bands = out_bands[:-2]
-    else:
-        bottom = out_bands[-1]
-        letter_bands = out_bands[:-1]
-    for name, i in (("arrow_up", 0), ("arrow_down", 1),
-                    ("arrow_left", 2), ("arrow_right", 3)):
-        if arrows:
-            c = arrows["cells"][i]
-            keys[name] = [c["cx"], c["cy"]]
-    if len(bottom["cells"]) >= 4:
-        keys["symbols"] = [bottom["cells"][0]["cx"], bottom["cells"][0]["cy"]]
-        widest = max(bottom["cells"], key=lambda c: c["x2"] - c["x1"])
-        keys["space"] = [widest["cx"], widest["cy"]]
-        keys["enter"] = [bottom["cells"][-1]["cx"], bottom["cells"][-1]["cy"]]
-    # letters: q row = last 10-cell band among letter_bands; number row = the
-    # 10-cell band directly above it if present.
-    bands10 = [b for b in letter_bands if len(b["cells"]) == 10]
+    bottom = None
+    bands10 = [b for b in out_bands if len(b["cells"]) == 10]
     if bands10:
         qrow = bands10[-1]
-        qi = letter_bands.index(qrow)
+        qi = out_bands.index(qrow)
         for i, ch in enumerate("qwertyuiop"):
             keys[ch] = [qrow["cells"][i]["cx"], qrow["cells"][i]["cy"]]
-        if qi > 0 and len(letter_bands[qi - 1]["cells"]) == 10:
+        if qi > 0 and len(out_bands[qi - 1]["cells"]) == 10:
             for i, ch in enumerate("1234567890"):
-                keys["num_" + ch] = [letter_bands[qi - 1]["cells"][i]["cx"],
-                                     letter_bands[qi - 1]["cells"][i]["cy"]]
-        if qi + 1 < len(letter_bands) and len(letter_bands[qi + 1]["cells"]) == 9:
+                keys["num_" + ch] = [out_bands[qi - 1]["cells"][i]["cx"],
+                                     out_bands[qi - 1]["cells"][i]["cy"]]
+        zi = None
+        if qi + 1 < len(out_bands) and len(out_bands[qi + 1]["cells"]) == 9:
             for i, ch in enumerate("asdfghjkl"):
-                keys[ch] = [letter_bands[qi + 1]["cells"][i]["cx"],
-                            letter_bands[qi + 1]["cells"][i]["cy"]]
-        if qi + 2 < len(letter_bands) and len(letter_bands[qi + 2]["cells"]) == 9:
-            zrow = letter_bands[qi + 2]
+                keys[ch] = [out_bands[qi + 1]["cells"][i]["cx"],
+                            out_bands[qi + 1]["cells"][i]["cy"]]
+        if qi + 2 < len(out_bands) and len(out_bands[qi + 2]["cells"]) == 9:
+            zi = qi + 2
+            zrow = out_bands[zi]
             keys["shift"] = [zrow["cells"][0]["cx"], zrow["cells"][0]["cy"]]
             for i, ch in enumerate("zxcvbnm"):
                 keys[ch] = [zrow["cells"][i + 1]["cx"], zrow["cells"][i + 1]["cy"]]
             keys["backspace"] = [zrow["cells"][-1]["cx"], zrow["cells"][-1]["cy"]]
+        rest = out_bands[(zi + 1) if zi is not None else (qi + 1):]
+        for b in rest:
+            widest = max((c["x2"] - c["x1"] for c in b["cells"]), default=0)
+            if bottom is None and widest > W * 0.3:
+                bottom = b
+            elif bottom is not None and len(b["cells"]) == 4:
+                arrows = b
+                break
+    if arrows:
+        for name, i in (("arrow_up", 0), ("arrow_down", 1),
+                        ("arrow_left", 2), ("arrow_right", 3)):
+            c = arrows["cells"][i]
+            keys[name] = [c["cx"], c["cy"]]
+    if bottom is not None and len(bottom["cells"]) >= 4:
+        keys["symbols"] = [bottom["cells"][0]["cx"], bottom["cells"][0]["cy"]]
+        widest = max(bottom["cells"], key=lambda c: c["x2"] - c["x1"])
+        keys["space"] = [widest["cx"], widest["cy"]]
+        keys["enter"] = [bottom["cells"][-1]["cx"], bottom["cells"][-1]["cy"]]
     if strip:
         keys["strip_expand"] = strip["first"]
         keys["strip_mic"] = strip.get("last", strip["first"])
