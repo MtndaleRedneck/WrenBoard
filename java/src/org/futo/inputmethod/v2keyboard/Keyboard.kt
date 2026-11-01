@@ -136,7 +136,10 @@ val DefaultNumberRowClassic = Row(
             shiftLocked = BaseKey(c.toString())
         )
     },
-    rowHeight = 1.0,
+    // WrenBoard 1.4 SwiftKey parity (item 2): same 0.85 height as DefaultNumberRow. Runtime evidence:
+    // the number-row-mode pref falls back to CLASSIC (SettingsValues.java), so without this the 0.85
+    // target silently never applied (measured 147px = letter rows at 1080x2316/420, run 41311819398).
+    rowHeight = NumberRowHeight,
     attributes = KeyAttributes(
         width = KeyWidth.Grow
     )
@@ -148,7 +151,8 @@ val DefaultNumberRowClassic = Row(
 private val WrenBottomSymbolsKey = BaseKey(
     spec = "!text/keylabel_to_symbol|!code/key_switch_alpha_symbol",
     moreKeys = SymbolsMoreKeys,
-    attributes = FunctionalAttributes + KeyAttributes(width = KeyWidth.Regular)
+    // KeyAttributes.plus resolves first-non-null, so the width override must come FIRST.
+    attributes = KeyAttributes(width = KeyWidth.Regular) + FunctionalAttributes
 )
 
 val DefaultBottomRow = Row(
