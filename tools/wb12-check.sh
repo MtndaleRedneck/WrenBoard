@@ -176,7 +176,10 @@ if leg keyboard; then
   shot k01c_starter_words_toggle_off
   [ -z "$S3" ] && pass "toggle off: no starter words in an empty field" || fail "starter words still shown with the toggle off ($S3)"
   # toggle off only blanks the empty field: typing a word still gets FUTO's normal suggestions
-  adb logcat -c; type_word hel; sleep 1; S4=$(sugg); F4=$(field); note "toggle off, typed '$F4': [$S4]"; shot k01d_typed_word_toggle_off
+  adb logcat -c; type_word hel; sleep 1; S4=$(sugg)
+  # Under emulator load the suggestion broadcast can land after the 1s read; give it a few retries before judging.
+  for i in 1 2 3; do [ -n "$S4" ] && break; sleep 1.5; S4=$(sugg); done
+  F4=$(field); note "toggle off, typed '$F4': [$S4]"; shot k01d_typed_word_toggle_off
   echo "$S4" | tr '|' '\n' | grep -qi "^hel" && pass "toggle off: typed word still gets normal suggestions ($S4)" || fail "toggle off: typed 'hel' got no normal suggestions ($S4)"
   clear_field
   dbg "dsbool:wren_starter_words=true" 1.0
