@@ -393,10 +393,11 @@ data class PeriodKey(
     // order. The unpinned auto layout derives item placement from the parent key's x and width, so the
     // stage-A geometry (123-key shrink, wider pitch, no side padding) silently reordered it to ? ! ,
     // (runs 41311819398/41315203139 vs baseline 41309528306). Restore verdict: Tab acceptance review,
-    // mail 01793544317987000000. OnlyExplicit keeps the bottom-row auto insertion from appending the
-    // locale period set; "?" stays the default release item (harness legacy legs verify both).
-    // Note: pinned for all locales, same trade-off as the quick popup's explicit set.
-    val default: AbstractKey = BaseKey(".", hint = ",!?",
+    // mail 01793544317987000000. "?" stays the default release item (harness legacy legs verify both).
+    // Scoped to locales that fall back to DEFAULT.json's period set (\, ! ?): hi/ne/ar/fa ship their
+    // own morekeys_period overrides (Hindi's is 16 items) and keep the original auto behavior below.
+    val default: AbstractKey = BaseKey(".", hint = ",!?"),
+    val defaultPinned: AbstractKey = BaseKey(".", hint = ",!?",
         moreKeys = listOf(
             "!fixedColumnOrder!3",
             "?",
@@ -427,9 +428,11 @@ data class PeriodKey(
         row: Row,
         keyboard: Keyboard,
         coordinate: KeyCoordinate
-    ): ComputedKeyData? = when(params.mId.mAlternativePeriodKey) {
-        false -> default
-        true -> alternative
+    ): ComputedKeyData? = when {
+        params.mId.mAlternativePeriodKey -> alternative
+        // Locales with their own morekeys_period override keep FUTO's auto popup (see DEFAULT.json vs hi/ne/ar/fa)
+        params.mId.locale.language in setOf("hi", "ne", "ar", "fa") -> default
+        else -> defaultPinned
     }.computeData(params, row, keyboard, coordinate)
 }
 
