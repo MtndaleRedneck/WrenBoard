@@ -117,10 +117,14 @@ fun VoiceRecognizeBar(
 
         // Centered device pill: only when a headset is available; label = system-reported route
         if (device?.bluetoothAvailable == true) {
-            val active = device.bluetoothActive
-            val label = stringResource(
-                if (active) R.string.voicebar_bluetooth_mic else R.string.voicebar_phone_mic
-            )
+            // Label/icon reflect the recorder's ACTUAL routed input device; the toggle
+            // still requests the preference flip via FUTO's existing switcher.
+            val route = device.actualRouteIsBluetooth
+            val label = when (route) {
+                true -> stringResource(R.string.voicebar_bluetooth_mic)
+                false -> stringResource(R.string.voicebar_phone_mic)
+                null -> stringResource(R.string.voicebar_mic_generic)
+            }
             val switchDesc = stringResource(R.string.voicebar_switch_mic, label)
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -134,7 +138,7 @@ fun VoiceRecognizeBar(
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
-                        onClick = { device.setBluetooth(!active) }
+                        onClick = { device.setBluetooth(!device.bluetoothActive) }
                     )
                     .semantics {
                         contentDescription = switchDesc
@@ -142,7 +146,7 @@ fun VoiceRecognizeBar(
                     }
             ) {
                 Icon(
-                    painter = painterResource(if (active) R.drawable.bluetooth else R.drawable.mic),
+                    painter = painterResource(if (route == true) R.drawable.bluetooth else R.drawable.mic),
                     contentDescription = null,
                     tint = WrenOrange,
                     modifier = Modifier.size(12.dp)

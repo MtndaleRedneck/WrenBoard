@@ -67,7 +67,11 @@ data class MicrophoneDeviceState(
     val bluetoothActive: Boolean,
     val bluetoothPreferredByUser: Boolean,
     val setBluetooth: (Boolean) -> Unit,
-    val deviceName: String
+    val deviceName: String,
+    // The recorder's actual routed input device (AudioRecord.getRoutedDevice), which can
+    // differ from the acknowledged communication-device request above. Null = not yet known.
+    val actualRouteIsBluetooth: Boolean? = null,
+    val actualRouteName: String? = null
 )
 
 // Circle radius = CIRCLE_BASE_RADIUS_DP * (CIRCLE_IDLE_FACTOR + 2 * level); the prompt pill is placed from the idle radius.

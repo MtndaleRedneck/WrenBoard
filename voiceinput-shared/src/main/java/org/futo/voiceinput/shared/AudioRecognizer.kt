@@ -447,11 +447,40 @@ class AudioRecognizer(
     }
 
     @Throws(SecurityException::class)
+    private fun routeIsBluetooth(device: AudioDeviceInfo): Boolean {
+        return device.type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO ||
+                (Build.VERSION.SDK_INT >= 33 && device.type == AudioDeviceInfo.TYPE_BLE_HEADSET)
+    }
+
+    private fun reportActualRoute(recorder: AudioRecord, state: MicrophoneDeviceState) {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                val routed = recorder.routedDevice
+                if (routed != null) {
+                    listener.recordingStarted(state.copy(
+                        actualRouteIsBluetooth = routeIsBluetooth(routed),
+                        actualRouteName = routed.productName?.toString()
+                    ))
+                }
+            }
+        } catch(_: Exception) {}
+    }
+
     private fun createRecorderAndJob(preferBluetoothMic: Boolean): MicrophoneDeviceState {
         isRecording = false
         recorder?.stop()
 
         val bluetoothInfo = setCommunicationDevice(preferBluetoothMic)
+
+        val state = MicrophoneDeviceState(
+            bluetoothAvailable = bluetoothInfo.first || isBluetoothAvailable(),
+            bluetoothActive = bluetoothInfo.first,
+            deviceName = bluetoothInfo.second,
+            bluetoothPreferredByUser = settings.recordingConfiguration.preferBluetoothMic,
+            setBluetooth = {
+                listener.recordingStarted(createRecorderAndJob(it))
+            }
+        )
 
         val task = {
             recorder?.release()
@@ -460,6 +489,13 @@ class AudioRecognizer(
 
             recorder.startRecording()
             this.recorder = recorder
+
+            // The acknowledged communication device can differ from the recorder's actual
+            // input route; report the true route, and keep it updated if it changes.
+            reportActualRoute(recorder, state)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                recorder.addOnRoutingChangedListener({ r -> reportActualRoute(r, state) }, null)
+            }
 
             isRecording = true
 
@@ -486,15 +522,7 @@ class AudioRecognizer(
         }
 
 
-        return MicrophoneDeviceState(
-            bluetoothAvailable = bluetoothInfo.first || isBluetoothAvailable(),
-            bluetoothActive = bluetoothInfo.first,
-            deviceName = bluetoothInfo.second,
-            bluetoothPreferredByUser = settings.recordingConfiguration.preferBluetoothMic,
-            setBluetooth = {
-                listener.recordingStarted(createRecorderAndJob(it))
-            }
-        )
+        return state
     }
 
     private fun startRecording() {
