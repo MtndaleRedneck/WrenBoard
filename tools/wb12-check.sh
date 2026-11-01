@@ -525,6 +525,22 @@ if leg emoji; then
     else fail "no search button position"; fi
     adb logcat -c; dbg "close" 1.0; dbg "open:emoji" 2.0; wlog em8
     GT=$(pos shots/em8.txt 'EMOJIGIFTAB'); [ -n "$GT" ] && { adb shell input tap $GT; sleep 1.2; shot e06_gif_tab; pass "GIF tab opens (placeholder)"; } || fail "no GIF tab"
+    # skin-tone variants popup: search a hand emoji, long-press the first result
+    adb logcat -c; dbg "close" 1.0; dbg "open:emoji" 2.0; wlog em9
+    S=$(pos shots/em9.txt 'EMOJISEARCH')
+    if [ -n "$S" ]; then
+      adb shell input tap $S; sleep 2.0; geom emskin keep >/dev/null
+      for ch in w a v e; do XY=$(python3 tools/wb12_kv.py shots/geom_emskin.txt xy KEY label "$ch") && adb shell input tap $XY; sleep 0.3; done
+      sleep 1.2; wlog em10
+      Q=$(grep 'EMOJI search' shots/em10.txt | tail -1); note "skin search: $Q"
+      if echo "$Q" | grep -q 'results=[1-9]'; then
+        adb logcat -c
+        adb shell input motionevent DOWN $((LEFT+CW/2)) $((TOP+RH/2)); sleep 1.2; shot e07_skin_tone_popup; wlog em11
+        adb shell input motionevent UP $((LEFT+CW/2)) $((TOP+RH/2)); sleep 0.6
+        grep -q 'EMOJI popup' shots/em11.txt && note "skin-tone popup opened ($(grep 'EMOJI popup' shots/em11.txt | tail -1 | sed 's/.*EMOJI //'))" || note "skin-tone popup: no marker, shot stands as evidence"
+      else note "skin-tone capture: wave search gave no results"; fi
+      adb shell input keyevent 4; sleep 0.5
+    else note "skin-tone capture: no search button"; fi
   else fail "no emoji grid geometry"; fi
   dbg close 1.0
 fi
