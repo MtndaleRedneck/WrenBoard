@@ -356,6 +356,17 @@ class LatinIME : InputMethodServiceCompose(), LatinIMELegacy.SuggestionStripCont
         }
     }
 
+    // WrenBoard 1.4 (panel back behavior): landing on the letters page after a panel closes
+    // is an explicit switch, not a side effect of a keyboard reload. Without this, a panel
+    // opened from the 123 page can leave the keyboard on the symbols page.
+    fun onActionWindowClosedRestoreLetters() {
+        currentInputEditorInfo?.let { editorInfo ->
+            latinIMELegacy.mKeyboardSwitcher?.resetKeyboardStateToAlphabet(
+                editorInfo, latinIMELegacy.currentAutoCapsState)
+        }
+        onKeyboardShown()
+    }
+
     // Called by UixManager when the intention is to subsequently call LegacyKeyboardView with hidden=false
     // Maybe this can be changed to LaunchedEffect
     fun onKeyboardShown() {

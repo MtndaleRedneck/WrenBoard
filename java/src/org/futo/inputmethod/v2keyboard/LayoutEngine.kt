@@ -783,12 +783,12 @@ data class LayoutEngine(
     }
 
     private fun addRowAlignLeft(idx: Int, row: List<LayoutEntry>, y: Int, height: Int) {
-        // WrenBoard 1.4 SwiftKey parity (side margins): each key's widthPx carries its trailing
-        // gap, so the row fills the board with a trailing-gap margin on the right and none on the
-        // left. Shift by half the inter-key gap for symmetric 3/3 margins at 1080x2400/480.
-        // One-handed and split halves keep their deliberate flush anchoring.
-        val x = if (!isSplitLayout && !isOneHandedLayout) horizontalGapPx / 2.0f else 0.0f
-        addRow(idx, row, x, y, height)
+        // WrenBoard 1.4 SwiftKey parity (side margins): Key.drawX already centers each key's
+        // trailing gap (drawX = x + horizontalGap / 2), so rows anchored at x=0 draw with
+        // symmetric 3/3 margins at 1080x2400. A row-level half-gap shift here double-shifts the
+        // drawn boxes (measured 7px left / 1px right at e9aca56fc). One-handed and split halves
+        // keep their deliberate flush anchoring.
+        addRow(idx, row, 0.0f, y, height)
     }
 
     private fun addRowAlignRight(idx: Int, row: List<LayoutEntry>, y: Int, height: Int) {

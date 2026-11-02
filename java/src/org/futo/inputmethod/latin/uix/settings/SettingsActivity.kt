@@ -391,27 +391,12 @@ class SettingsActivity : ComponentActivity(), DynamicThemeProviderOwner {
     }
 
     fun updateEdgeToEdge() {
-        themeProvider?.let {
-            val color = it.colorScheme.background.toArgb()
-
-            val luminance = sqrt(
-                0.299 * Color.red(color) / 255.0
-                        + 0.587 * Color.green(color) / 255.0
-                        + 0.114 * Color.blue(color) / 255.0
-            )
-
-            if (luminance > 0.5 && color != android.graphics.Color.TRANSPARENT) {
-                enableEdgeToEdge(
-                    SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT),
-                    SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT),
-                )
-            } else {
-                enableEdgeToEdge(
-                    SystemBarStyle.dark(Color.TRANSPARENT),
-                    SystemBarStyle.dark(Color.TRANSPARENT)
-                )
-            }
-
-        }
+        // Settings pages are always dark (WrenSettingsStyle PageTop #1B1B1E) regardless of the
+        // keyboard preview theme, so the system bars always want light icons. Deriving the style
+        // from the keyboard theme's background could put dark icons on the dark pages (s01/s03).
+        enableEdgeToEdge(
+            SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
+            SystemBarStyle.dark(android.graphics.Color.TRANSPARENT)
+        )
     }
 }

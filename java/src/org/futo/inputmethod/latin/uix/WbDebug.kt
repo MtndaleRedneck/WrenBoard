@@ -124,6 +124,10 @@ object WbDebug {
                         cmd.startsWith("settings:") -> {
                             org.futo.inputmethod.latin.uix.settings.SettingsActivity.openToNavDest(ime, cmd.removePrefix("settings:").ifEmpty { null })
                         }
+                        cmd == "close" -> {
+                            // same close path as the panel header's "<" button and system Back
+                            ime.uixManager.closeActionWindow(true)
+                        }
                         cmd.startsWith("open:") -> {
                             val action = AllActionsMap[cmd.removePrefix("open:")]
                             if (action != null) ime.uixManager.debugOpenAction(action)

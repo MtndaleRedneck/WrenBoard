@@ -385,6 +385,47 @@ if leg panelexit; then
   EA=$(elem panelexit_afterel)
   case "$EA" in 0|1|2|3|4) pass "letters page after panel exit (elementId=$EA)";; *) fail "not on letters after panel exit (elementId=$EA)";; esac
   dbg close 1.0
+
+  note "== PANEL EXIT matrix: every panel from the 123 page; exits via Back, via the panel close path, and ABC while open =="
+  for P in clipboard_history emoji text_edit; do
+    # enter from the 123 page
+    focus_target; sleep 0.4; tapcode -3 >/dev/null 2>&1 || true; sleep 1.0
+    ES=$(elem panelexit_m_pre)
+    adb logcat -c; dbg "open:$P" 1.6
+    W=$(adb logcat -d -s WBDBG:I | tr -d '\r' | grep 'WINDOW open' | tail -1)
+    if ! echo "$W" | grep -q "$P"; then note "panelexit $P: no WINDOW open marker ($W) - skipping"; continue; fi
+    pass "panelexit $P: opened from the 123 page (elementId=$ES)"
+    shot "panelexit_${P}_open"
+    # exit 1: system Back -> keyboard visible on letters
+    adb shell input keyevent 4; sleep 1.6
+    NK=$(geom "panelexit_${P}_back" keep >/dev/null; grep -c 'KEY ' "shots/geom_panelexit_${P}_back.txt")
+    [ "$NK" -gt 10 ] && pass "panelexit $P: keyboard still up after Back ($NK keys)" || fail "panelexit $P: keyboard hidden after Back ($NK keys)"
+    EA=$(elem "panelexit_${P}_backel")
+    case "$EA" in 0|1|2|3|4) pass "panelexit $P: letters page after Back (elementId=$EA)";; *) fail "panelexit $P: not on letters after Back (elementId=$EA)";; esac
+    # exit 2: reopen, close via the panel close path (closeActionWindow - the "<" button's own call)
+    tapcode -3 >/dev/null 2>&1 || true; sleep 1.0
+    adb logcat -c; dbg "open:$P" 1.6; dbg close 1.5
+    NK=$(geom "panelexit_${P}_close" keep >/dev/null; grep -c 'KEY ' "shots/geom_panelexit_${P}_close.txt")
+    EA=$(elem "panelexit_${P}_closeel")
+    [ "$NK" -gt 10 ] && pass "panelexit $P: keyboard still up after panel close path ($NK keys)" || fail "panelexit $P: keyboard hidden after close path ($NK keys)"
+    case "$EA" in 0|1|2|3|4) pass "panelexit $P: letters page after close path (elementId=$EA)";; *) fail "panelexit $P: not on letters after close path (elementId=$EA)";; esac
+    # exit 3: reopen on the 123 page, tap ABC with the panel open, then Back must close the panel onto letters
+    tapcode -3 >/dev/null 2>&1 || true; sleep 1.0
+    adb logcat -c; dbg "open:$P" 1.6
+    tapcode -3 >/dev/null 2>&1 || true; sleep 1.0   # symbols-page ABC key toggles back to letters
+    EA=$(elem "panelexit_${P}_abcel")
+    case "$EA" in 0|1|2|3|4) pass "panelexit $P: letters page after ABC with panel open (elementId=$EA)";; *) note "panelexit $P: elementId=$EA after ABC with panel open";; esac
+    adb shell input keyevent 4; sleep 1.4
+    NK=$(geom "panelexit_${P}_abcback" keep >/dev/null; grep -c 'KEY ' "shots/geom_panelexit_${P}_abcback.txt")
+    EA=$(elem "panelexit_${P}_abcbackel")
+    [ "$NK" -gt 10 ] && case "$EA" in 0|1|2|3|4) pass "panelexit $P: Back after ABC closes panel onto letters ($NK keys, elementId=$EA)";; *) fail "panelexit $P: Back after ABC not on letters (elementId=$EA)";; esac || fail "panelexit $P: keyboard hidden after Back-after-ABC ($NK keys)"
+  done
+
+  # second Back from the plain letters page hides the keyboard
+  focus_target; sleep 0.4
+  adb shell input keyevent 4; sleep 1.4
+  NK=$(geom panelexit_hidden keep >/dev/null; grep -c 'KEY ' shots/geom_panelexit_hidden.txt)
+  [ "${NK:-0}" -eq 0 ] && pass "second Back from letters hides the keyboard" || fail "second Back from letters did not hide the keyboard ($NK keys)"
 fi
 
 if leg toolbar; then
