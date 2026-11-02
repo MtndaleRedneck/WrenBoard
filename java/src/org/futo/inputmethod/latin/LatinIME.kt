@@ -807,8 +807,10 @@ class LatinIME : InputMethodServiceCompose(), LatinIMELegacy.SuggestionStripCont
     // page, never to the 123/symbols page. Called from UixManager when an action
     // window closes.
     fun onActionWindowClosedRestoreLetters() {
-        val switcher = latinIMELegacy.mKeyboardSwitcher ?: return
-        val elementId = switcher.keyboard?.mId?.mElementId ?: return
+        val switcher = latinIMELegacy.mKeyboardSwitcher
+        val elementId = switcher?.keyboard?.mId?.mElementId
+        android.util.Log.i("WBDBG", "WINDOW restore-check elementId=$elementId")
+        if (switcher == null || elementId == null) return
         if (elementId == KeyboardId.ELEMENT_SYMBOLS || elementId == KeyboardId.ELEMENT_SYMBOLS_SHIFTED) {
             val autoCaps = latinIMELegacy.currentAutoCapsState
             switcher.onPressKey(Constants.CODE_SWITCH_ALPHA_SYMBOL, true, autoCaps)

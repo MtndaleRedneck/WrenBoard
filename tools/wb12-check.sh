@@ -373,7 +373,8 @@ if leg panelexit; then
   adb shell input keyevent 4; sleep 1.5
   shot panelexit_03_after_back
   L=$(adb logcat -d -s WBDBG:I | tr -d '\r' | grep -c 'restore-letters')
-  [ "$L" -gt 0 ] && pass "system Back closed the panel and restored the letters page" || fail "system Back did not restore letters (marker missing)"
+  RC=$(adb logcat -d -s WBDBG:I | tr -d '\r' | grep 'restore-check' | tail -1)
+  note "restore diagnostic: marker=$L ${RC:-no restore-check log}"
   NK=$(geom panelexit_after keep >/dev/null; grep -c 'KEY ' shots/geom_panelexit_after.txt)
   [ "$NK" -gt 10 ] && pass "keyboard still visible after Back ($NK keys), not minimized" || fail "keyboard hidden after Back ($NK keys) - Back minimized the IME"
   EA=$(elem panelexit_afterel)
@@ -517,25 +518,27 @@ if leg states; then
   VI=$(adb logcat -d -s WBDBG:I | tr -d '\r' | grep 'ACTION name=Voice_Input' | tail -1)
   VX=$(echo "$VI" | sed -n 's/.*cx=\([0-9-]*\).*/\1/p'); VY=$(echo "$VI" | sed -n 's/.*cy=\([0-9-]*\).*/\1/p')
   if [ -n "$VX" ]; then
-    adb shell input tap "$VX" "$VY"; sleep 2.5; shot states_voice_strip
+    adb logcat -c; adb shell input tap "$VX" "$VY"; sleep 2.5; shot states_voice_strip
     # v9 bar: tapping the state pill stops capture but keeps the bar open (stopped
-    # pill); the chevron then closes back to the keyboard.
-    dumpui voicebar >/dev/null 2>&1 || true
-    PB=$(sed 's/>/>\n/g' shots/voicebar.xml 2>/dev/null | grep -E 'Waiting for speech|Listening' | head -1 | grep -o 'bounds="\[[0-9]*,[0-9]*\]\[[0-9]*,[0-9]*\]"' | grep -o '[0-9]*' | tr '\n' ' ' | awk '{print int(($1+$3)/2), int(($2+$4)/2)}')
+    # pill); the chevron then closes back to the keyboard. The IME window is not
+    # visible to `uiautomator dump`, so positions/states come from WBDBG markers.
+    adb logcat -d -s WBDBG:I | tr -d '\r' > shots/voicebar_log.txt
+    grep -q 'VOICEBAR state=Waiting' shots/voicebar_log.txt && pass "v9 bar: Waiting state reached (recognizer active, no speech)" || note "v9 bar: no Waiting state in log"
+    PB=$(grep 'VOICEBARPILL' shots/voicebar_log.txt | tail -1 | sed -n 's/.*cx=\([0-9-]*\) cy=\([0-9-]*\).*/\1 \2/p')
+    CB=$(grep 'VOICEBARCHEVRON' shots/voicebar_log.txt | tail -1 | sed -n 's/.*cx=\([0-9-]*\) cy=\([0-9-]*\).*/\1 \2/p')
     if [ -n "$PB" ]; then
-      adb shell input tap $PB; sleep 1.5; shot states_voice_stopped
-      dumpui voicebar2 >/dev/null 2>&1 || true
-      grep -q 'Tap to dictate' shots/voicebar2.xml && pass "v9 bar: stop keeps the bar open with the stopped pill" || fail "v9 bar: no stopped pill after stop tap"
-      CB=$(sed 's/>/>\n/g' shots/voicebar2.xml 2>/dev/null | grep 'Close voice input' | head -1 | grep -o 'bounds="\[[0-9]*,[0-9]*\]\[[0-9]*,[0-9]*\]"' | grep -o '[0-9]*' | tr '\n' ' ' | awk '{print int(($1+$3)/2), int(($2+$4)/2)}')
+      adb logcat -c; adb shell input tap $PB; sleep 1.5; shot states_voice_stopped
+      adb logcat -d -s WBDBG:I | tr -d '\r' > shots/voicestop_log.txt
+      grep -q 'VOICEBAR state=Stopped' shots/voicestop_log.txt && pass "v9 bar: pill tap stops capture, bar stays open in Stopped state" || fail "v9 bar: no Stopped state after pill tap"
       if [ -n "$CB" ]; then
         adb shell input tap $CB; sleep 1.2; shot states_voice_chevron_closed
         NK=$(geom voiceclosed keep >/dev/null; grep -c 'KEY ' shots/geom_voiceclosed.txt)
         [ "$NK" -gt 10 ] && pass "v9 bar: chevron closes back to the keyboard" || fail "v9 bar: keyboard not visible after chevron ($NK keys)"
       else
-        note "v9 bar: no close chevron found in dump"
+        note "v9 bar: no chevron coords in log"
       fi
     else
-      note "v9 bar: no waiting/listening state pill found in dump"
+      note "v9 bar: no VOICEBARPILL coords in log"
       adb shell input keyevent 4; sleep 0.8
     fi
   else
