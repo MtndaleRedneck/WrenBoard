@@ -42,7 +42,7 @@ fun applyWindowColors(window: Window, @ColorInt color: Int, statusBar: Boolean) 
         // set through the insets controller, leaving dark icons on the dark setup pages (s01/s03).
         val lightBars = luminance > 0.5 && color != android.graphics.Color.TRANSPARENT
         val controller = androidx.core.view.WindowCompat.getInsetsController(window, window.decorView)
-        controller.isAppearanceLightNavigationBar = lightBars
+        controller.isAppearanceLightNavigationBars = lightBars
         if(statusBar) {
             controller.isAppearanceLightStatusBars = lightBars
         }
