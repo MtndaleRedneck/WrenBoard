@@ -51,7 +51,7 @@ object WbDebug {
     }
 
     fun logBack(phase: String, inputViewShown: Boolean, hasConnection: Boolean) {
-        Log.i(TAG, "BACK phase=\$phase inputViewShown=\$inputViewShown hasConnection=\$hasConnection")
+        Log.i(TAG, "BACK phase=$phase inputViewShown=$inputViewShown hasConnection=$hasConnection")
     }
 
     fun logRestore(elementId: Int?) {
