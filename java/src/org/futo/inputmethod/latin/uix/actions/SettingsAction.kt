@@ -6,7 +6,8 @@ import org.futo.inputmethod.latin.uix.Action
 import org.futo.inputmethod.latin.uix.settings.SettingsActivity
 
 val SettingsAction = Action(
-    icon = R.drawable.settings_sun,
+    // WrenBoard 1.5: swap the "sun" glyph for the WrenBoard gear (same Material gear used in the clipboard panel).
+    icon = R.drawable.wren_ic_settings,
     name = R.string.go_to_settings,
     simplePressImpl = { manager, _ ->
         val intent = Intent()
