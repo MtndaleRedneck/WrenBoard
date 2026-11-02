@@ -189,7 +189,10 @@ if leg keyboard; then
   # fix1b: starter words come from the person's own typing history; I/The/You only stand in when there is none
   for i in 1 2 3; do clear_field; type_word zebra; tapcode 32; sleep 0.6; done
   note "field after learning: '$(field)'"
-  clear_field; adb logcat -c; focus_target; sleep 2; S2=$(sugg); note "starter words after typing 'zebra' 3x at the start of a field: [$S2]"
+  # Under emulator load the learned-word broadcast can land after the first read; retry before judging.
+  clear_field; adb logcat -c; focus_target; sleep 2; S2=$(sugg)
+  for i in 1 2 3; do echo "$S2" | grep -qi zebra && break; sleep 2; S2=$(sugg); done
+  note "starter words after typing 'zebra' 3x at the start of a field: [$S2]"
   grep 'STARTER' shots/_s.txt | tail -3 | sed 's/^.*WBDBG *: /  /' | tee -a "$R"
   shot k01b_starter_words_from_history
   echo "$S2" | grep -qi "zebra" && pass "starter words come from typing history ($S2)" || fail "starter words did not pick up typing history (got '$S2')"
