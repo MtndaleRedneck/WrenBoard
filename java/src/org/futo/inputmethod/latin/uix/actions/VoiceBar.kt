@@ -94,6 +94,10 @@ fun VoiceRecognizeBar(
             modifier = Modifier
                 .padding(start = 16.dp)
                 .size(20.dp)
+                .onGloballyPositioned {
+                    val c = it.boundsInWindow().center
+                    Log.i("WBDBG", "WINDOW VOICEBARCHEVRON cx=${c.x.toInt()} cy=${c.y.toInt()} w=${it.size.width} h=${it.size.height}")
+                }
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
