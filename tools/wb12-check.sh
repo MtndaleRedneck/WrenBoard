@@ -816,10 +816,31 @@ if leg clipboard; then
     C=$(pos shots/cl3.txt 'CLIPCARD i=1 ')
   fi
   if [ -n "$C" ]; then read -r X Y <<< "$C"
+    # Swipe evidence (4-pair flip-flop with byte-identical product code; cause INCONCLUSIVE between
+    # emulator gesture timing and a product race): instrument coords + card identity + state, keep the
+    # first-attempt verdict permanent, and on failure run a separate diagnostic manual-stream attempt
+    # with mid-gesture frames. No green-by-retry: a first-attempt FAIL stands in the record.
+    note "swipe attempt 1: input swipe ($X,$Y)->($((X-600)),$Y) 300ms; cards=$(grep -c 'CLIPCARD' shots/cl3.txt); target=$(grep 'CLIPCARD i=1 ' shots/cl3.txt | head -1 | cut -c1-140)"
     adb logcat -c; adb shell input swipe $X $Y $((X-600)) $Y 300; sleep 1.5; wlog cl4
     grep -q 'CLIP removed=1' shots/cl4.txt || { sleep 1.5; wlog cl4; }
     shot cl04_swiped_undo
-    grep -q 'CLIP removed=1' shots/cl4.txt && pass "swipe deletes the clip" || fail "swipe did not delete"
+    if grep -q 'CLIP removed=1' shots/cl4.txt; then pass "swipe deletes the clip"; else
+      fail "swipe did not delete (first attempt)"
+      dbg close 0.8; dbg "open:clipboard_history" 2.5; wlog cl3d
+      C2=$(pos shots/cl3d.txt 'CLIPCARD i=1 '); note "swipe diagnostic: cards=$(grep -c 'CLIPCARD' shots/cl3d.txt); target=$(grep 'CLIPCARD i=1 ' shots/cl3d.txt | head -1 | cut -c1-140)"
+      if [ -n "$C2" ]; then read -r X2 Y2 <<< "$C2"
+        adb logcat -c
+        adb shell "input motionevent DOWN $X2 $Y2"; sleep 0.2
+        adb shell "input motionevent MOVE $((X2-150)) $Y2"; sleep 0.15; shot cl04d_drag_150
+        adb shell "input motionevent MOVE $((X2-350)) $Y2"; sleep 0.15; shot cl04e_drag_350
+        adb shell "input motionevent MOVE $((X2-650)) $Y2"; sleep 0.15; shot cl04f_drag_650
+        adb shell "input motionevent UP $((X2-650)) $Y2"; sleep 1.5; wlog cl4d
+        shot cl04g_after_diagnostic_swipe
+        note "diagnostic stream CLIP lines: $(grep -o 'CLIP [a-z =0-9]*' shots/cl4d.txt | head -4 | tr '\n' '|')"
+        grep -q 'CLIP removed=1' shots/cl4d.txt && pass "diagnostic swipe deletes via manual stream (first-attempt FAIL above stands)" || fail "diagnostic swipe also did not delete (manual stream; see frames cl04d-f)"
+        grep -q 'CLIP undo restored' shots/cl4d.txt && note "diagnostic: undo already fired in stream log"
+      else fail "diagnostic swipe: no card position on panel reopen"; fi
+    fi
     U=$(pos shots/cl4.txt 'CLIPUNDO'); [ -n "$U" ] && { adb logcat -c; adb shell input tap $U; sleep 1.0; wlog cl5; shot cl05_after_undo
       grep -q 'CLIP undo restored=1' shots/cl5.txt && pass "Undo brings the swiped clip back" || fail "Undo did not restore"; } || fail "no Undo bar after swipe"
   else fail "no card position"; fi
