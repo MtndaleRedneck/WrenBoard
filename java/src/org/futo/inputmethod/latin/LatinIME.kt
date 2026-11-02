@@ -412,6 +412,7 @@ class LatinIME : InputMethodServiceCompose(), LatinIMELegacy.SuggestionStripCont
         if(BuildConfig.DEBUG) org.futo.inputmethod.latin.uix.WbDebug.install(this)
 
         scheduleUpdateCheckingJob(this)
+        org.futo.inputmethod.latin.uix.actions.migrateToolbarForSaveWord(this)
         launchJob { uixManager.showUpdateNoticeIfNeeded() }
 
         launchJob {

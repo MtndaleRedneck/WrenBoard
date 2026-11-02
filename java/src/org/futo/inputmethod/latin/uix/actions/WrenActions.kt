@@ -2,6 +2,8 @@ package org.futo.inputmethod.latin.uix.actions
 
 import android.content.Intent
 import android.util.Log
+import android.widget.Toast
+import org.futo.inputmethod.compat.UserDictionaryCompatUtils
 import org.futo.inputmethod.latin.R
 import org.futo.inputmethod.latin.uix.Action
 import org.futo.inputmethod.latin.uix.settings.SettingsActivity
@@ -69,6 +71,30 @@ val InfoAction = Action(
                     or Intent.FLAG_ACTIVITY_CLEAR_TOP
         )
         manager.getContext().startActivity(intent)
+    },
+    windowImpl = null,
+)
+
+/** Save word: adds the selection (single word) or the last typed word to the personal dictionary. */
+val SaveWordAction = Action(
+    icon = R.drawable.wren_ic_spellcheck,
+    name = R.string.wren_action_save_word,
+    simplePressImpl = { manager, _ ->
+        val ime = manager.getLatinIMEForDebug()
+        val ic = ime.currentInputConnection
+        val selected = ic?.getSelectedText(0)?.toString()?.trim()
+        val word = if (!selected.isNullOrEmpty() && selected.none { it.isWhitespace() }) {
+            selected
+        } else {
+            val before = ic?.getTextBeforeCursor(200, 0)?.toString() ?: ""
+            before.trimEnd().takeLastWhile { it.isLetterOrDigit() || it == '\'' || it == '-' || it == '.' }
+        }
+        if (word.isNotEmpty()) {
+            UserDictionaryCompatUtils.addWord(manager.getContext(), word, 250, null, null)
+            Toast.makeText(manager.getContext(),
+                manager.getContext().getString(R.string.wren_word_saved, word),
+                Toast.LENGTH_SHORT).show()
+        }
     },
     windowImpl = null,
 )
