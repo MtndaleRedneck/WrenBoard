@@ -433,8 +433,15 @@ if leg panelexit; then
   if [ "$EA" = "5" ] || [ "$EA" = "6" ]; then tapcode -3 >/dev/null 2>&1 || true; sleep 1.0; note "pre-hide: toggled off symbols (elementId was $EA)"; fi
   adb shell input keyevent 4; sleep 1.4
   adb logcat -d -s WBDBG:I | tr -d '\r' | grep 'BACK phase' | tail -4 | sed 's/^.*WBDBG *: /  /' | tee -a "$R"
+  # Visibility is the assertion, not model key count: WbDebug geom dumps the loaded keyboard
+  # model (mainKeyboardView.keyboard) with no visibility gate, so a correct hide still dumps keys
+  # (48 retained after hide in runs 41385942014/41385942026). Ground truth: window state + pixels.
   NK=$(geom panelexit_hidden keep >/dev/null; grep -c 'KEY ' shots/geom_panelexit_hidden.txt)
-  [ "${NK:-0}" -eq 0 ] && pass "second Back from letters hides the keyboard" || fail "second Back from letters did not hide the keyboard ($NK keys)"
+  adb shell dumpsys input_method > shots/dumpsys_panelexit_hidden.txt 2>&1
+  SHOWN=$(grep -oE 'mInputShown=(true|false)' shots/dumpsys_panelexit_hidden.txt | head -1 | cut -d= -f2)
+  shot panelexit_hidden
+  note "post-Back visibility: mInputShown=$SHOWN (model dump retains $NK keys - model state, not visibility)"
+  [ "$SHOWN" = "false" ] && pass "second Back from letters hides the keyboard (mInputShown=false)" || fail "second Back from letters did not hide the keyboard (mInputShown=$SHOWN)"
 fi
 
 if leg toolbar; then
