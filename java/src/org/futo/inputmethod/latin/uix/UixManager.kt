@@ -804,6 +804,8 @@ class UixManager(private val latinIME: LatinIME) {
 
         mainKeyboardHidden.value = false
 
+        // Explicit return to the letters page when the model is stuck on symbols
+        latinIME.onActionWindowClosedRestoreLetters()
         latinIME.onKeyboardShown()
 
         latinIME.window.window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)

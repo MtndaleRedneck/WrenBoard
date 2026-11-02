@@ -50,6 +50,14 @@ object WbDebug {
         Log.i(TAG, "MOREEND")
     }
 
+    fun logBack(phase: String, inputViewShown: Boolean, hasConnection: Boolean) {
+        Log.i(TAG, "BACK phase=\$phase inputViewShown=\$inputViewShown hasConnection=\$hasConnection")
+    }
+
+    fun logRestore(elementId: Int?) {
+        Log.i(TAG, "RESTORE elementId=\$elementId")
+    }
+
     fun logWindow(what: String) {
         if (!BuildConfig.DEBUG) return
         Log.i(TAG, "WINDOW $what")
