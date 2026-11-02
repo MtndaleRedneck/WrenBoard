@@ -678,6 +678,8 @@
     <string name="wren_action_gif">GIF</string>
     <string name="wren_action_share">Share</string>
     <string name="wren_action_info">Info</string>
+    <string name="wren_action_save_word">Save word</string>
+    <string name="wren_word_saved">Saved "%s" to your dictionary</string>
     <string name="wren_about_title">About WrenBoard</string>
     <string name="wren_set_keyboard">Keyboard</string>
     <string name="wren_set_keyboard_sub">Theme, toolbar buttons, rows, height, sound</string>
