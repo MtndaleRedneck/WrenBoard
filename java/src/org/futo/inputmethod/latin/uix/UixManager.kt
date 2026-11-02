@@ -805,7 +805,6 @@ class UixManager(private val latinIME: LatinIME) {
         mainKeyboardHidden.value = false
 
         latinIME.onKeyboardShown()
-        latinIME.onActionWindowClosedRestoreLetters()
 
         latinIME.window.window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
