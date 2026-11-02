@@ -804,7 +804,8 @@ class UixManager(private val latinIME: LatinIME) {
 
         mainKeyboardHidden.value = false
 
-        latinIME.onKeyboardShown()
+        // Explicit return to the letters page (WrenBoard 1.4 panel back behavior)
+        latinIME.onActionWindowClosedRestoreLetters()
 
         latinIME.window.window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
