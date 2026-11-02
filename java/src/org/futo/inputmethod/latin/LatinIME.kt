@@ -800,11 +800,37 @@ class LatinIME : InputMethodServiceCompose(), LatinIMELegacy.SuggestionStripCont
             uixManager.closeActionWindow(true)
             return true
         }
+        if (keyCode == KeyEvent.KEYCODE_BACK && org.futo.inputmethod.latin.BuildConfig.DEBUG) {
+            org.futo.inputmethod.latin.uix.WbDebug.logBack("down", isInputViewShown, currentInputConnection != null)
+        }
         return latinIMELegacy.onKeyDown(keyCode, event) || super.onKeyDown(keyCode, event)
     }
 
     override fun onKeyUp(keyCode: Int, event: KeyEvent?): Boolean {
+        if (keyCode == KeyEvent.KEYCODE_BACK && org.futo.inputmethod.latin.BuildConfig.DEBUG) {
+            org.futo.inputmethod.latin.uix.WbDebug.logBack("up", isInputViewShown, currentInputConnection != null)
+        }
         return latinIMELegacy.onKeyUp(keyCode, event) || super.onKeyUp(keyCode, event)
+    }
+
+    // WrenBoard 1.4 (panel back behavior): if the keyboard model is still on the symbols
+    // page when a panel closes, switch the state machine back to alphabet. Conditional on
+    // the actual model: an UNCONDITIONAL reset here (30a63f040) landed letters but the
+    // clipboard swipe-delete drag was cancelled mid-gesture in CI runs 41380027248/41380053762,
+    // while the plain close path (e2f006431) kept swipe working but left symbols stuck
+    // (runs 41383097163/41383122296). Reset only when the model actually needs it.
+    fun onActionWindowClosedRestoreLetters() {
+        val switcher = latinIMELegacy.mKeyboardSwitcher ?: return
+        val elementId = switcher.keyboard?.mId?.mElementId
+        if (org.futo.inputmethod.latin.BuildConfig.DEBUG) {
+            org.futo.inputmethod.latin.uix.WbDebug.logRestore(elementId)
+        }
+        if (elementId == org.futo.inputmethod.keyboard.KeyboardId.ELEMENT_SYMBOLS
+                || elementId == org.futo.inputmethod.keyboard.KeyboardId.ELEMENT_SYMBOLS_SHIFTED) {
+            currentInputEditorInfo?.let { editorInfo ->
+                switcher.resetKeyboardStateToAlphabet(editorInfo, latinIMELegacy.currentAutoCapsState)
+            }
+        }
     }
 
     override fun updateVisibility(shouldShowSuggestionsStrip: Boolean, fullscreenMode: Boolean) {
