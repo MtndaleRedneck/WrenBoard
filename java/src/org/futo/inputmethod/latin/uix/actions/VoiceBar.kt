@@ -38,6 +38,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
@@ -79,6 +80,16 @@ fun VoiceRecognizeBar(
 ) {
     LaunchedEffect(mode) { Log.i("WBDBG", "WINDOW VOICEBAR state=$mode") }
 
+    // wb12 markers must be screen-absolute: `input tap` is screen space, while
+    // boundsInWindow() is IME-window space (run 41366592427: x matched, y off ~62px).
+    val hostView = LocalView.current
+    fun screenCenter(l: androidx.compose.ui.layout.LayoutCoordinates): Pair<Int, Int> {
+        val c = l.boundsInWindow().center
+        val loc = IntArray(2)
+        hostView.getLocationOnScreen(loc)
+        return Pair(c.x.toInt() + loc[0], c.y.toInt() + loc[1])
+    }
+
     val closeDesc = stringResource(R.string.voicebar_close)
 
     Row(
@@ -95,8 +106,8 @@ fun VoiceRecognizeBar(
                 .padding(start = 16.dp)
                 .size(20.dp)
                 .onGloballyPositioned {
-                    val c = it.boundsInWindow().center
-                    Log.i("WBDBG", "WINDOW VOICEBARCHEVRON cx=${c.x.toInt()} cy=${c.y.toInt()} w=${it.size.width} h=${it.size.height}")
+                    val c = screenCenter(it)
+                    Log.i("WBDBG", "WINDOW VOICEBARCHEVRON cx=${c.first} cy=${c.second} w=${it.size.width} h=${it.size.height}")
                 }
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
@@ -184,8 +195,8 @@ fun VoiceRecognizeBar(
                     RoundedCornerShape(14.dp)
                 )
                 .onGloballyPositioned {
-                    val c = it.boundsInWindow().center
-                    Log.i("WBDBG", "WINDOW VOICEBARPILL cx=${c.x.toInt()} cy=${c.y.toInt()} w=${it.size.width} h=${it.size.height}")
+                    val c = screenCenter(it)
+                    Log.i("WBDBG", "WINDOW VOICEBARPILL cx=${c.first} cy=${c.second} w=${it.size.width} h=${it.size.height}")
                 }
                 .then(
                     if (tappable) Modifier.clickable(

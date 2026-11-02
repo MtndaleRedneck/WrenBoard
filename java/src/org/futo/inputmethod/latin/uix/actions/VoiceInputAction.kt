@@ -142,6 +142,7 @@ private class VoiceInputActionWindow(
     }
 
     private fun onBarChevron() {
+        android.util.Log.i("WBDBG", "WINDOW VOICEBARCHEVRONTAP stopped=${barStopped.value}")
         val rv = recognizerView.value
         if (rv == null || barStopped.value) {
             manager.closeActionWindow()
@@ -154,6 +155,7 @@ private class VoiceInputActionWindow(
     }
 
     private fun onBarPillTap(mode: VoiceBarMode) {
+        android.util.Log.i("WBDBG", "WINDOW VOICEBARPILLTAP mode=$mode")
         val rv = recognizerView.value ?: return
         when (mode) {
             VoiceBarMode.Stopped -> {
@@ -290,6 +292,7 @@ private class VoiceInputActionWindow(
     }
 
     override fun close(): CloseResult {
+        android.util.Log.i("WBDBG", "WINDOW VOICEBAR closed")
         inputTransaction.cancel()
         runBlocking { initJob.cancelAndJoin() }
         recognizerView.value?.cancel()
@@ -300,6 +303,7 @@ private class VoiceInputActionWindow(
     private var wasFinished = false
     private var cancelPlayed = false
     override fun cancelled() {
+        android.util.Log.i("WBDBG", "WINDOW VOICE capture cancelled wasFinished=$wasFinished")
         if (!wasFinished) {
             if (shouldPlaySounds && !cancelPlayed) {
                 state.soundPlayer?.playCancelSound()
@@ -310,6 +314,7 @@ private class VoiceInputActionWindow(
     }
 
     override fun recordingStarted(device: MicrophoneDeviceState) {
+        android.util.Log.i("WBDBG", "WINDOW VOICE capture started")
         if (shouldPlaySounds) {
             state.soundPlayer?.playStartSound()
         }
@@ -324,6 +329,7 @@ private class VoiceInputActionWindow(
     }
 
     override fun finished(result: String) {
+        android.util.Log.i("WBDBG", "WINDOW VOICE capture finished blank=${result.isBlank()} closeWhenFinished=$closeWhenFinished")
         wasFinished = true
 
         manager.getLifecycleScope().launch(Dispatchers.Main) {

@@ -55,7 +55,12 @@ node_center() { # node_center <xmlname> <exact text>
   sed 's/>/>\n/g' "shots/$1.xml" | grep "text=\"$2\"" | head -1 | grep -o 'bounds="\[[0-9]*,[0-9]*\]\[[0-9]*,[0-9]*\]"' | grep -o '[0-9]*' | tr '\n' ' ' | awk '{print int(($1+$3)/2), int(($2+$4)/2)}'
 }
 dbg() { adb shell "am broadcast -a com.wrenboard.keyboard.WBDBG -p $PKG --es cmd '$1'" >/dev/null 2>&1; sleep "${2:-0.6}"; }  # quoted for the device shell ('|' in seedupdate)
-geom() { adb logcat -c; dbg geom 1.0; adb logcat -d -s WBDBG:I > shots/geom_$1.txt; [ "${2:-use}" = use ] && cp shots/geom_$1.txt shots/geom.txt; return 0; }
+geom() { adb logcat -c; dbg geom 1.0; adb logcat -d -s WBDBG:I > shots/geom_$1.txt
+  if ! grep -q 'KEY ' shots/geom_$1.txt; then
+    note "geom $1: empty dump, one bounded retry (run 41366592427 hit dump-blindness with the keyboard visibly up)"
+    dbg geom 1.5; adb logcat -d -s WBDBG:I > shots/geom_$1.txt
+  fi
+  [ "${2:-use}" = use ] && cp shots/geom_$1.txt shots/geom.txt; return 0; }
 kxy() { python3 tools/wb12_kv.py shots/geom.txt xy KEY "$1" "$2"; }
 kxyf() { python3 tools/wb12_kv.py "$1" xy KEY "$2" "$3"; }
 tapk() { local xy; xy=$(kxy label "$1") || { fail "no key labelled '$1' in geometry"; return 1; }; adb shell input tap $xy; sleep 0.35; }
@@ -527,13 +532,17 @@ if leg states; then
     PB=$(grep 'VOICEBARPILL' shots/voicebar_log.txt | tail -1 | sed -n 's/.*cx=\([0-9-]*\) cy=\([0-9-]*\).*/\1 \2/p')
     CB=$(grep 'VOICEBARCHEVRON' shots/voicebar_log.txt | tail -1 | sed -n 's/.*cx=\([0-9-]*\) cy=\([0-9-]*\).*/\1 \2/p')
     if [ -n "$PB" ]; then
-      adb logcat -c; adb shell input tap $PB; sleep 1.5; shot states_voice_stopped
+      adb logcat -c; adb shell input tap $PB; sleep 2.0; shot states_voice_stopped
       adb logcat -d -s WBDBG:I | tr -d '\r' > shots/voicestop_log.txt
+      grep -q 'VOICEBARPILLTAP' shots/voicestop_log.txt || note "v9 bar: pill-tap marker missing - the tap did not reach the bar (targeting, not behavior)"
       grep -q 'VOICEBAR state=Stopped' shots/voicestop_log.txt && pass "v9 bar: pill tap stops capture, bar stays open in Stopped state" || fail "v9 bar: no Stopped state after pill tap"
+      grep -qE 'VOICE capture (finished|cancelled)' shots/voicestop_log.txt && pass "v9 bar: capture released after pill tap (recognizer lifecycle event)" || fail "v9 bar: no capture-release lifecycle event after pill tap"
       if [ -n "$CB" ]; then
-        adb shell input tap $CB; sleep 1.2; shot states_voice_chevron_closed
+        adb logcat -c; adb shell input tap $CB; sleep 1.5; shot states_voice_chevron_closed
+        adb logcat -d -s WBDBG:I | tr -d '\r' > shots/voiceclose_log.txt
+        grep -q 'VOICEBAR closed' shots/voiceclose_log.txt && pass "v9 bar: chevron closes the bar (bar-closed marker)" || fail "v9 bar: bar still open after chevron (no closed marker)"
         NK=$(geom voiceclosed keep >/dev/null; grep -c 'KEY ' shots/geom_voiceclosed.txt)
-        [ "$NK" -gt 10 ] && pass "v9 bar: chevron closes back to the keyboard" || fail "v9 bar: keyboard not visible after chevron ($NK keys)"
+        [ "$NK" -gt 10 ] && pass "v9 bar: keyboard visible after chevron ($NK keys)" || fail "v9 bar: keyboard not visible after chevron ($NK keys)"
       else
         note "v9 bar: no chevron coords in log"
       fi
