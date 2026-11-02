@@ -532,8 +532,19 @@ if leg states; then
     PB=$(grep 'VOICEBARPILL' shots/voicebar_log.txt | tail -1 | sed -n 's/.*cx=\([0-9-]*\) cy=\([0-9-]*\).*/\1 \2/p')
     CB=$(grep 'VOICEBARCHEVRON' shots/voicebar_log.txt | tail -1 | sed -n 's/.*cx=\([0-9-]*\) cy=\([0-9-]*\).*/\1 \2/p')
     if [ -n "$PB" ]; then
-      adb logcat -c; adb shell input tap $PB; sleep 2.0; shot states_voice_stopped
-      adb logcat -d -s WBDBG:I | tr -d '\r' > shots/voicestop_log.txt
+      adb logcat -c; adb shell input tap $PB
+      # v9 flow: pill tap in Waiting -> finish() -> processing -> Whisper decode -> finished -> Stopped.
+      # Emulator-CPU decode of the captured audio far exceeds a fixed 2s window (run 41369773385:
+      # pilltap marker + state=Working logged, finished() still in flight at chevron time), so poll
+      # for the Stopped state / capture-finished marker instead of asserting after a fixed sleep.
+      for i in $(seq 1 30); do
+        sleep 3
+        adb logcat -d -s WBDBG:I | tr -d '\r' > shots/voicestop_log.txt
+        if grep -q 'VOICEBAR state=Stopped' shots/voicestop_log.txt || grep -q 'VOICE capture finished' shots/voicestop_log.txt; then
+          break
+        fi
+      done
+      shot states_voice_stopped
       grep -q 'VOICEBARPILLTAP' shots/voicestop_log.txt || note "v9 bar: pill-tap marker missing - the tap did not reach the bar (targeting, not behavior)"
       grep -q 'VOICEBAR state=Stopped' shots/voicestop_log.txt && pass "v9 bar: pill tap stops capture, bar stays open in Stopped state" || fail "v9 bar: no Stopped state after pill tap"
       grep -qE 'VOICE capture (finished|cancelled)' shots/voicestop_log.txt && pass "v9 bar: capture released after pill tap (recognizer lifecycle event)" || fail "v9 bar: no capture-release lifecycle event after pill tap"
