@@ -31,19 +31,20 @@ fun applyWindowColors(window: Window, @ColorInt color: Int, statusBar: Boolean) 
     window.navigationBarColor = color
 
     if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-        val view = window.decorView
-        val uiFlags = view.systemUiVisibility
-
         val luminance = sqrt(
             0.299 * android.graphics.Color.red(color) / 255.0
                     + 0.587 * android.graphics.Color.green(color) / 255.0
                     + 0.114 * android.graphics.Color.blue(color) / 255.0
         )
 
-        if (luminance > 0.5 && color != android.graphics.Color.TRANSPARENT) {
-            view.systemUiVisibility = uiFlags or View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR
-        } else {
-            view.systemUiVisibility = uiFlags and (View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR.inv())
+        // WrenBoard 1.4: set bar appearance via WindowInsetsControllerCompat. The deprecated
+        // systemUiVisibility read-modify-write clobbered the status-bar state enableEdgeToEdge
+        // set through the insets controller, leaving dark icons on the dark setup pages (s01/s03).
+        val lightBars = luminance > 0.5 && color != android.graphics.Color.TRANSPARENT
+        val controller = androidx.core.view.WindowCompat.getInsetsController(window, window.decorView)
+        controller.isAppearanceLightNavigationBar = lightBars
+        if(statusBar) {
+            controller.isAppearanceLightStatusBars = lightBars
         }
     }
 }
