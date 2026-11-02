@@ -424,9 +424,15 @@ if leg panelexit; then
     [ "$NK" -gt 10 ] && case "$EA" in 0|1|2|3|4) pass "panelexit $P: Back after ABC closes panel onto letters ($NK keys, elementId=$EA)";; *) fail "panelexit $P: Back after ABC not on letters (elementId=$EA)";; esac || fail "panelexit $P: keyboard hidden after Back-after-ABC ($NK keys)"
   done
 
-  # second Back from the plain letters page hides the keyboard
+  # second Back from the plain letters page hides the keyboard.
+  # Force a known letters state first: after the matrix the page can be symbols (elementId 5/6),
+  # where Back toggles to letters instead of hiding - that made this check read page state as key count.
   focus_target; sleep 0.4
+  adb logcat -c
+  EA=$(elem panelexit_prehide)
+  if [ "$EA" = "5" ] || [ "$EA" = "6" ]; then tapcode -3 >/dev/null 2>&1 || true; sleep 1.0; note "pre-hide: toggled off symbols (elementId was $EA)"; fi
   adb shell input keyevent 4; sleep 1.4
+  adb logcat -d -s WBDBG:I | tr -d '\r' | grep 'BACK phase' | tail -4 | sed 's/^.*WBDBG *: /  /' | tee -a "$R"
   NK=$(geom panelexit_hidden keep >/dev/null; grep -c 'KEY ' shots/geom_panelexit_hidden.txt)
   [ "${NK:-0}" -eq 0 ] && pass "second Back from letters hides the keyboard" || fail "second Back from letters did not hide the keyboard ($NK keys)"
 fi
