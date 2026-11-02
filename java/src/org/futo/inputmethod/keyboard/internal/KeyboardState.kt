@@ -184,6 +184,14 @@ class KeyboardState(private val switchActions: SwitchActions) {
     private val shiftKeyState = ShiftKeyState("Shift")
     private val symbolKeyState = ModifierKeyState("Symbol")
 
+    // WrenBoard 1.5 (123 long-press flash): the alpha/symbol layout switch is deferred from
+    // finger-down to key release. Switching on press flashed the symbols layout for the half
+    // second before the clipboard long-press timer fired. A tap still switches (release on the
+    // same key); a consumed long-press cancels key tracking in PointerTracker so no release
+    // event arrives and nothing switches. Trade-off: 123 chord typing (hold 123, tap a symbol)
+    // no longer engages, since the layout stays on letters while the key is held.
+    private var pendingSymbolSwitch = false
+
     private val alphabetShiftState = AlphabetShiftState()
     private var savedKeyboardState = SavedKeyboardState()
 
@@ -280,6 +288,7 @@ class KeyboardState(private val switchActions: SwitchActions) {
 
         shiftKeyState.onRelease()
         symbolKeyState.onRelease()
+        pendingSymbolSwitch = false
 
         when(getKeyboardMode(editorInfo ?: EditorInfo())) {
             KeyboardId.MODE_NUMBER, KeyboardId.MODE_DATE, KeyboardId.MODE_TIME, KeyboardId.MODE_DATETIME ->
@@ -418,13 +427,8 @@ class KeyboardState(private val switchActions: SwitchActions) {
                 // only in onReleaseKey?
             }
             Constants.CODE_SWITCH_ALPHA_SYMBOL -> {
-                symbolKeyState.onPress()
-                if(currentLayout.kind == KeyboardLayoutKind.Symbols
-                    || currentLayout.kind == KeyboardLayoutKind.Number) {
-                    setAlphabetLayout(autoCapsFlags)
-                } else {
-                    setSymbolLayout()
-                }
+                // Deferred to onReleaseKey (see pendingSymbolSwitch).
+                pendingSymbolSwitch = true
             }
             else -> {
                 shiftKeyState.onOtherKeyPressed()
@@ -459,9 +463,19 @@ class KeyboardState(private val switchActions: SwitchActions) {
                 if(!alphabetShiftState.isShiftLocked) lockShift()
             }
             Constants.CODE_SWITCH_ALPHA_SYMBOL -> {
+                val switchPending = pendingSymbolSwitch
+                pendingSymbolSwitch = false
                 finalizeChord(autoCapsFlags)
-                if(!withSliding)
-                    symbolKeyState.onRelease()
+                if(switchPending && !withSliding) {
+                    symbolKeyState.onPress()
+                    if(currentLayout.kind == KeyboardLayoutKind.Symbols
+                        || currentLayout.kind == KeyboardLayoutKind.Number) {
+                        setAlphabetLayout(autoCapsFlags)
+                    } else {
+                        setSymbolLayout()
+                    }
+                }
+                symbolKeyState.onRelease()
             }
 
             // Return back to main layout if on symbols, and space or enter was pressed

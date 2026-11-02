@@ -279,12 +279,32 @@ fun AutoFitText(
             density = this
         )
 
-        val scale = (size.width / measurement.size.width).coerceAtMost(1.0f)
+        // WrenBoard 1.5: shrink uniformly (no horizontal squash) down to a floor, then
+        // ellipsize instead of squeezing the glyphs edge to edge.
+        val minScale = 0.55f
+        val scale = (size.width / measurement.size.width).coerceAtMost(1.0f).coerceAtLeast(minScale)
+        val finalMeasurement = if (scale == minScale && measurement.size.width * minScale > size.width) {
+            measurer.measure(
+                text = AnnotatedString(text),
+                style = style,
+                overflow = TextOverflow.Ellipsis,
+                softWrap = false,
+                maxLines = 1,
+                constraints = Constraints(
+                    maxWidth = ceil(size.width / minScale).roundToInt().coerceAtLeast(1),
+                    maxHeight = ceil(size.height).roundToInt()
+                ),
+                layoutDirection = layoutDirection,
+                density = this
+            )
+        } else {
+            measurement
+        }
 
-        translate(left = (scale * (size.width - measurement.size.width)) / 2.0f, top = size.height / 2 - measurement.size.height / 2) {
-            scale(scaleX = scale, scaleY = 1.0f) {
+        translate(left = (scale * (size.width - finalMeasurement.size.width)) / 2.0f, top = (size.height - scale * finalMeasurement.size.height) / 2.0f) {
+            scale(scaleX = scale, scaleY = scale) {
                 drawText(
-                    measurement
+                    finalMeasurement
                 )
             }
         }
@@ -363,7 +383,9 @@ fun RowScope.SuggestionItem(words: SuggestedWords, idx: Int, isPrimary: Boolean,
         modifier = textButtonModifier
             .weight(slotWeight)
             .fillMaxHeight()
-            .then(if(isKeyStyledTheme()) {
+            .then(if(isKeyStyledTheme() && word != null) {
+                // WrenBoard 1.5: draw the chip background only for a slot that has a word;
+                // empty slots stay plain (no "empty suggestion boxes").
                 Modifier
                     // SwiftKey strip (review item 3): 39dp chip inside the 41dp bar
                     .padding(vertical = 1.dp)
@@ -385,7 +407,7 @@ fun RowScope.SuggestionItem(words: SuggestedWords, idx: Int, isPrimary: Boolean,
             if (word != null) {
                 val modifier = Modifier
                     .align(Center)
-                    .padding(2.dp)
+                    .padding(horizontal = 8.dp, vertical = 2.dp)
                     .testTag("SuggestionItemText")
                 if(isVerbatim) {
                     AutoFitText('"' + word + '"', style = textStyle.copy(fontStyle = FontStyle.Italic), modifier = modifier)
