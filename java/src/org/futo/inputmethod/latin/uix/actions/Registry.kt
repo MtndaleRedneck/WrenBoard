@@ -47,6 +47,8 @@ val AllActionsMap = mapOf(
     "gif" to GifAction,
     "share" to ShareAction,
     "info" to InfoAction,
+    // WrenBoard 1.5 (appended so existing action key codes do not move)
+    "save_word" to SaveWordAction,
 )
 
 val ActionToId = AllActionsMap.entries.associate { it.value to it.key }
@@ -270,7 +272,7 @@ val DefaultActionSettings = mapOf(
     ActionCategory.PinnedKey to listOf(),
     // WrenBoard 1.2 approved toolbar (render 03/10c): seven buttons then More, in this order
     // (emoji also stays on the bottom-row action key)
-    ActionCategory.Favorites to listOf(ClipboardHistoryAction, EmojiAction, GifAction, VoiceInputAction, ShareAction, InfoAction, SettingsAction),
+    ActionCategory.Favorites to listOf(ClipboardHistoryAction, EmojiAction, GifAction, VoiceInputAction, ShareAction, InfoAction, SaveWordAction, SettingsAction),
     // Hidden behind More (render 10c); everything else not listed is populated by ensureWellFormed
     ActionCategory.More to listOf(UndoAction, RedoAction, ThemeAction, TextEditAction),
     // Crossed out in the approved action list: stored in Settings (re-enable via the action editor)
@@ -290,6 +292,21 @@ val ActionsSettings = SettingsKey(
     stringPreferencesKey("actions_settings_map"),
     DefaultActionSettings.flattenToActionEditorItems().ensureWellFormed().serializeActionEditorItemListToString()
 )
+
+private val MigratedSaveWordToolbar = androidx.datastore.preferences.core.booleanPreferencesKey("migrated_save_word_toolbar")
+
+/** WrenBoard 1.5: put the new Save word button on existing toolbars once (new installs get it
+ * in the Favorites default). Idempotent; runs at IME start from LatinIME.onCreate. */
+fun migrateToolbarForSaveWord(context: Context) {
+    if (context.getSetting(MigratedSaveWordToolbar, false)) return
+    val current = context.getSettingBlocking(FavoriteActions).toActionList().toMutableList()
+    if (!current.contains(SaveWordAction)) {
+        val settingsIdx = current.indexOf(SettingsAction).takeIf { it >= 0 } ?: current.size
+        current.add(settingsIdx, SaveWordAction)
+        context.setSettingBlocking(FavoriteActions.key, current.serializeActionListToString())
+    }
+    context.setSettingBlocking(MigratedSaveWordToolbar, true)
+}
 
 val PinnedActions = SettingsKey(
     stringPreferencesKey("pinned_actions_s"),
