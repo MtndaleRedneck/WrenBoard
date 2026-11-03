@@ -1081,9 +1081,11 @@ if leg gifsearch; then
     adb logcat -c; adb shell input tap $GC; sleep 3.0
     CM=$(adb logcat -d -s IMETARGET:I 2>/dev/null | tr -d '\r' | grep 'CONTENT= mime=' | tail -1)
     F1b=$(field_now)
-    if echo "$CM" | grep -q 'mime=image/gif' && ! echo "$CM" | grep -q 'bytes=0'; then pass "B2 keyed: GIF insert delivered image/gif to the fixture via commitContent ($CM)"
-    elif [ "${WB_EXPECT_GIF:-0}" = "1" ]; then fail "B2 keyed: grid tap delivered no image/gif commitContent (marker: '${CM:-none}')"
-    else note "INFO: GIF results rendered but no commitContent marker"; fi
+    CB=$(echo "$CM" | sed -n 's/.*bytes=\([0-9]*\).*/\1/p')
+    CS=$(echo "$CM" | sed -n 's/.*sig=\([A-Za-z0-9]*\).*/\1/p')
+    if echo "$CM" | grep -q 'mime=image/gif' && [ "${CB:-0}" -gt 0 ] && [ "$CS" = "GIF" ]; then pass "B2 keyed: GIF insert delivered image/gif to the fixture via commitContent ($CM)"
+    elif [ "${WB_EXPECT_GIF:-0}" = "1" ]; then fail "B2 keyed: grid tap delivered no verified GIF commitContent (marker: '${CM:-none}')"
+    else note "INFO: GIF results rendered but no verified commitContent marker"; fi
     [ "$F1b" = "$F0" ] && pass "B2 keyed: GIF insert left host TEXT unchanged ('$F0')" || fail "B2 keyed: host text changed on GIF insert ('$F0' -> '$F1b')"
   elif [ "${WB_EXPECT_GIF:-0}" = "1" ]; then fail "B2 keyed: no GIF results within 12s on a keyed build"
   else note "INFO: no GIF results within 12s (keyless build) - results/insert not exercisable"; fi
@@ -1099,11 +1101,12 @@ if leg gifsearch; then
       adb shell input tap $((GX-GW/2+GW/16)) $((GY-GH/2+503*${WB_DENSITY:-420}/1600/2)); sleep 0.8
       FT=$(field_now); note "host field after emoji tap post-tab-switch: '$FT'"
       case "$FT" in "$F0"?*) pass "B2: tab switch GIF->emoji releases local capture (emoji reached host)";; *) fail "B2: after tab switch host field is '$FT' (wanted '$F0'+emoji)";; esac
+      F0="$FT"   # re-baseline: the host field now holds the emoji-appended text
     else fail "B2: no EMOJIGRID after tab switch"; fi
-    # back to the GIF tab for the arrow check
-    GT2=$(pos shots/gb2w.txt 'EMOJIGIFTAB'); [ -n "$GT2" ] && { adb shell input tap $GT2; sleep 1.2; }
+    # back to the GIF tab for the arrow check; re-acquire coords after the layout round-trip
+    GT2=$(pos shots/gb2w.txt 'EMOJIGIFTAB'); [ -n "$GT2" ] && { adb shell input tap $GT2; sleep 1.2; adb logcat -d -s WBDBG:I | tr -d '\r' > shots/gb2x.txt; GA=$(pos shots/gb2x.txt 'EMOJISEARCHGO'); }
   else fail "B2: no EMOJITAB marker"; fi
-  # check 3: the round arrow must not deliver ENTER to the host (keyless GIF tab: innocuous close)
+  # check 3: the round arrow must not deliver ENTER to the host (dismisses the search keyboard only)
   if [ -n "$GA" ]; then
     adb logcat -c; adb shell input tap $GA; sleep 1.2
     F2=$(field_now); note "host field after arrow: '$F2'"
