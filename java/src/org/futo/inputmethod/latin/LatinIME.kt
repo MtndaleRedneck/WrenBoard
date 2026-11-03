@@ -621,7 +621,12 @@ class LatinIME : InputMethodServiceCompose(), LatinIMELegacy.SuggestionStripCont
         return latinIMELegacy.setCandidatesView(view)
     }
 
+    // Monotonic editor/view lifetime identity for async action completions. No text stored.
+    var actionEditorGeneration: Long = 0
+        private set
+
     override fun onStartInput(attribute: EditorInfo?, restarting: Boolean) {
+        actionEditorGeneration++
         super.onStartInput(attribute, restarting)
         latinIMELegacy.onStartInput(attribute, restarting)
         uixManager.inputStarted(attribute)
@@ -639,6 +644,7 @@ class LatinIME : InputMethodServiceCompose(), LatinIMELegacy.SuggestionStripCont
     }
 
     override fun onFinishInputView(finishingInput: Boolean) {
+        actionEditorGeneration++
         super.onFinishInputView(finishingInput)
         latinIMELegacy.onFinishInputView(finishingInput)
         uixManager.onInputFinishing()
@@ -646,6 +652,7 @@ class LatinIME : InputMethodServiceCompose(), LatinIMELegacy.SuggestionStripCont
     }
 
     override fun onFinishInput() {
+        actionEditorGeneration++
         super.onFinishInput()
         latinIMELegacy.onFinishInput()
         uixManager.onInputFinishing()
@@ -913,6 +920,7 @@ class LatinIME : InputMethodServiceCompose(), LatinIMELegacy.SuggestionStripCont
     private var overrideEditorInfo: EditorInfo? = null
     fun overrideInputConnection(to: InputConnection?, editorInfo: EditorInfo?) {
         if(to == this.overrideInputConnection && editorInfo == overrideEditorInfo) return
+        actionEditorGeneration++
 
         imeManager.onFinishInput()
         this.overrideInputConnection = to
