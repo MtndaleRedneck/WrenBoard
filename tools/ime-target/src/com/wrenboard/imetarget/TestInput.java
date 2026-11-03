@@ -18,6 +18,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.TextView;
 import android.widget.LinearLayout;
 
 // Minimal deterministic input target for CI keyboard verification.
@@ -110,6 +111,16 @@ public class TestInput extends Activity {
             public void onTextChanged(CharSequence s, int a, int b, int c) {}
             public void afterTextChanged(Editable s) {
                 Log.i("IMETARGET", "FIELD=" + s.toString());
+            }
+        });
+        // B2: editor actions (e.g. an IME sending ENTER/ACTION to the host) are invisible in
+        // FIELD= when the action leaves the text unchanged - log them so checks can prove
+        // "no host action was delivered", not just "host text did not change".
+        edit.setOnEditorActionListener(new TextView.OnEditorActionListener() {
+            @Override
+            public boolean onEditorAction(TextView v, int actionId, android.view.KeyEvent event) {
+                Log.i("IMETARGET", "ACTION=" + actionId + (event != null ? " keycode=" + event.getKeyCode() : ""));
+                return false;
             }
         });
         root.addView(edit, new LinearLayout.LayoutParams(

@@ -1062,11 +1062,30 @@ if leg gifsearch; then
   F1=$(field); note "host field after GIF-search typing: '$F1'"
   [ "$F1" = "$F0" ] && pass "B2: typing in GIF search leaves host field byte-unchanged ('$F0')" || fail "B2: host field changed while typing in GIF search ('$F0' -> '$F1')"
   shot gb2_gif_query_typed
+  # check 2b: tab switch GIF->emoji releases the local capture - an emoji tap must reach the HOST
+  ET=$(pos shots/gb1.txt 'EMOJITAB')
+  if [ -n "$ET" ]; then
+    adb shell input tap $ET; sleep 1.5
+    adb logcat -d -s WBDBG:I | tr -d '\r' > shots/gb2w.txt
+    G=$(grep 'WINDOW EMOJIGRID' shots/gb2w.txt | tail -1)
+    GX=$(echo "$G" | sed -n 's/.*cx=\([0-9]*\).*/\1/p'); GY=$(echo "$G" | sed -n 's/.*cy=\([0-9]*\).*/\1/p')
+    GW=$(echo "$G" | sed -n 's/.* w=\([0-9]*\).*/\1/p'); GH=$(echo "$G" | sed -n 's/.* h=\([0-9]*\).*/\1/p')
+    if [ -n "$GW" ]; then
+      adb shell input tap $((GX-GW/2+GW/16)) $((GY-GH/2+503*${WB_DENSITY:-420}/1600/2)); sleep 0.8
+      FT=$(field); note "host field after emoji tap post-tab-switch: '$FT'"
+      case "$FT" in "$F0"?*) pass "B2: tab switch GIF->emoji releases local capture (emoji reached host)";; *) fail "B2: after tab switch host field is '$FT' (wanted '$F0'+emoji)";; esac
+    else fail "B2: no EMOJIGRID after tab switch"; fi
+    # back to the GIF tab for the arrow check
+    GT2=$(pos shots/gb2w.txt 'EMOJIGIFTAB'); [ -n "$GT2" ] && { adb shell input tap $GT2; sleep 1.2; }
+  else fail "B2: no EMOJITAB marker"; fi
   # check 3: the round arrow must not deliver ENTER to the host (keyless GIF tab: innocuous close)
   if [ -n "$GA" ]; then
-    adb shell input tap $GA; sleep 1.2
+    adb logcat -c; adb shell input tap $GA; sleep 1.2
     F2=$(field); note "host field after arrow: '$F2'"
-    [ "$F2" = "$F0" ] && pass "B2: round arrow delivers no host ENTER ('$F0')" || fail "B2: round arrow changed host field ('$F0' -> '$F2')"
+    [ "$F2" = "$F0" ] && pass "B2: round arrow leaves host field unchanged ('$F0')" || fail "B2: round arrow changed host field ('$F0' -> '$F2')"
+    A2=$(adb logcat -d -s IMETARGET:I 2>/dev/null | tr -d '\r' | grep 'ACTION=' | tail -3)
+    if [ -z "$A2" ]; then pass "B2: round arrow delivered NO host editor action (no ACTION= marker)"
+    else fail "B2: round arrow delivered host editor action: $A2"; fi
     shot gb3_after_arrow
   else fail "B2: no EMOJISEARCHGO marker for the round arrow"; fi
   # check 4: after the panel is closed, host typing works again (no stuck local capture)
