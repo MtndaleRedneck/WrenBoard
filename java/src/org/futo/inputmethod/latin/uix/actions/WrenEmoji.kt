@@ -554,7 +554,7 @@ private fun WrenGifPlaceholder(w: WrenEmojiWindow, view: View, modifier: Modifie
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text("GIFs powered by KLIPY", color = EmojiColors.Orange, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
                     Spacer(Modifier.height(6.dp))
-                    Text("Missing KLIPY_APP_KEY - set it in local.properties for this preview build.", color = EmojiColors.OrangeMuted, fontSize = 12.sp, textAlign = TextAlign.Center)
+                    Text("GIF search is not available in this build.", color = EmojiColors.OrangeMuted, fontSize = 12.sp, textAlign = TextAlign.Center)
                 }
             }
             return@Column
