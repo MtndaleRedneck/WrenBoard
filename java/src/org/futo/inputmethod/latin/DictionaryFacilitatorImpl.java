@@ -68,6 +68,7 @@ import javax.annotation.Nullable;
  * a client for interacting with dictionaries.
  */
 public class DictionaryFacilitatorImpl implements DictionaryFacilitator {
+    private static int sWriteQueuedOrdinal = 0;
     // TODO: Consolidate dictionaries in native code.
     public static final String TAG = DictionaryFacilitatorImpl.class.getSimpleName();
 
@@ -733,12 +734,12 @@ public class DictionaryFacilitatorImpl implements DictionaryFacilitator {
         final ExpandableBinaryDictionary userHistoryDictionary =
                 dictionaryGroup.getSubDict(Dictionary.TYPE_USER_HISTORY);
         if (userHistoryDictionary == null || !isForLocale(userHistoryDictionary.mLocale)) {
-            if (BuildConfig.DEBUG) Log.i("WBDBG", "STARTER drop '" + org.futo.inputmethod.engine.general.WrenTraceRedact.word(word) + "' reason=noHistoryDict");
+            if (BuildConfig.DEBUG) Log.i("WBDBG", "STARTER drop reason=noHistoryDict");
             return;
         }
         final int maxFreq = getFrequency(word);
         if (maxFreq == 0 && blockPotentiallyOffensive) {
-            if (BuildConfig.DEBUG) Log.i("WBDBG", "STARTER drop '" + org.futo.inputmethod.engine.general.WrenTraceRedact.word(word) + "' reason=blocked");
+            if (BuildConfig.DEBUG) Log.i("WBDBG", "STARTER drop reason=blocked");
             return;
         }
         final String lowerCasedWord = word.toLowerCase(dictionaryGroup.mLocale);
@@ -778,9 +779,8 @@ public class DictionaryFacilitatorImpl implements DictionaryFacilitator {
         final boolean isValid = maxFreq > 0;
         UserHistoryDictionary.addToDictionary(userHistoryDictionary, ngramContext, secondWord,
                 isValid, timeStampInSeconds);
-        if (BuildConfig.DEBUG) Log.i("WBDBG", "STARTER writeQueued '"
-                + org.futo.inputmethod.engine.general.WrenTraceRedact.word(secondWord)
-                + "' at " + SystemClock.uptimeMillis());
+        if (BuildConfig.DEBUG) Log.i("WBDBG", "STARTER writeQueued #" + (++sWriteQueuedOrdinal)
+                + " at " + SystemClock.uptimeMillis());
     }
 
     private void removeWord(final String dictName, final String word) {
