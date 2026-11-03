@@ -101,39 +101,46 @@ public class KeyPreviewView extends androidx.appcompat.widget.AppCompatTextView 
 
         currKey = key;
 
-        // Item 5b: centre the RENDERED glyph bounds (not the ascent/descent block) at 26% of the
-        // box height. TOP gravity is required by the padTop math and must be restored here: the
-        // icon branch above switches the view to CENTER and the view is reused across previews.
-        setGravity(Gravity.TOP | Gravity.CENTER_HORIZONTAL);
+        // Item 5b v4: draw the preview text manually in onDraw (drawPreviewText) with the rendered
+        // glyph bounds centred at 26% of the box height (Tab's target, sign-off via rendered
+        // before/after at 420dpi). Framework positioning could not reach it: the padTop required
+        // at this text size is negative, so v2/v3 rendered pixel-identical shots with the glyph
+        // centre at 39.3% of the box. No setText here: the framework layout plays no role.
+        setText(null);
         mPreviewText = key.getPreviewLabel();
-        applyGlyphPadTop();
+        computePreviewScaleX(key.getWidth(), mPreviewText);
+        invalidate();
     }
 
-    // Item 5b: the preview is usually configured before it is laid out, so getHeight() is 0 at
-    // setPreviewVisual() time and any padTop computed there would never be applied (v2 measured
-    // the rendered glyph at 39.3% of box height vs the 26% target on the 420dpi shot for exactly
-    // this reason). Re-apply once the size is known.
     private String mPreviewText;
+    private float mPreviewScaleX = 1.0f;
 
-    @Override
-    protected void onSizeChanged(final int w, final int h, final int oldw, final int oldh) {
-        super.onSizeChanged(w, h, oldw, oldh);
-        applyGlyphPadTop();
-    }
-
-    // With includeFontPadding=false the first line's baseline sits at padTop - fm.top, so the
-    // visible centre = padTop - fm.top + (b.top + b.bottom)/2; solve for padTop. Font-block
-    // centring landed the rendered glyph at 35% on the 420dpi emulator shot.
-    private void applyGlyphPadTop() {
-        if (mPreviewText == null || mPreviewText.isEmpty() || getHeight() <= 0) {
+    // Same scaling rule as setTextAndScaleX (fit the key width), without going through setText().
+    private void computePreviewScaleX(final int maxWidth, final String text) {
+        mPreviewScaleX = 1.0f;
+        if (text == null || sNoScaleXTextSet.contains(text)) {
             return;
         }
-        final android.graphics.Paint gp = getPaint();
-        final android.graphics.Paint.FontMetrics gfm = gp.getFontMetrics();
-        final android.graphics.Rect gb = new android.graphics.Rect();
-        gp.getTextBounds(mPreviewText, 0, mPreviewText.length(), gb);
-        final int padTop = (int)(getHeight() * 0.26f + gfm.top - (gb.top + gb.bottom) / 2f);
-        setPadding(getPaddingLeft(), Math.max(0, padTop), getPaddingRight(), 0);
+        final float width = getTextWidth(text, getPaint());
+        if (width <= maxWidth) {
+            sNoScaleXTextSet.add(text);
+            return;
+        }
+        mPreviewScaleX = maxWidth / width;
+    }
+
+    // Positions by RENDERED bounds: baseline = 26% of box height minus half the bounds' vertical
+    // extent; bounds centred horizontally. scaleX from computePreviewScaleX is applied to the
+    // paint BEFORE measuring so the centring uses the same width the draw produces.
+    private void drawPreviewText(final Canvas canvas) {
+        final android.graphics.Paint p = getPaint();
+        p.setColor(getCurrentTextColor());
+        p.setTextScaleX(mPreviewScaleX);
+        final android.graphics.Rect b = new android.graphics.Rect();
+        p.getTextBounds(mPreviewText, 0, mPreviewText.length(), b);
+        final float baseline = getHeight() * 0.26f - (b.top + b.bottom) / 2f;
+        final float x = (getWidth() - (b.right - b.left)) / 2f - b.left;
+        canvas.drawText(mPreviewText, x, baseline, p);
     }
 
     private boolean drawFlickKeys(final Canvas canvas) {
@@ -211,7 +218,11 @@ public class KeyPreviewView extends androidx.appcompat.widget.AppCompatTextView 
         mBackground.draw(canvas);
 
         if(!drawFlickKeys(canvas)) {
-            super.onDraw(canvas);
+            if (mPreviewText != null) {
+                drawPreviewText(canvas);
+            } else {
+                super.onDraw(canvas);
+            }
         }
     }
 
