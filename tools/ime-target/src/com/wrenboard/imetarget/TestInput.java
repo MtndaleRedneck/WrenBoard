@@ -18,12 +18,42 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.TextView;
 import android.widget.LinearLayout;
 
 // Minimal deterministic input target for CI keyboard verification.
 // White full-size EditText + control buttons + broadcast control + logcat text mirror.
 // Not part of the released app.
 public class TestInput extends Activity {
+
+    // EditText that accepts committed content (image/gif): logs the handoff and drains the
+    // provider stream so the sender's fetch path is fully exercised (commitContent, not text).
+    public static class GifEditText extends EditText {
+        public GifEditText(android.content.Context context) { super(context); }
+        @Override public android.view.inputmethod.InputConnection onCreateInputConnection(android.view.inputmethod.EditorInfo outAttrs) {
+            android.view.inputmethod.InputConnection base = super.onCreateInputConnection(outAttrs);
+            outAttrs.contentMimeTypes = new String[] {"image/gif"};
+            return new android.view.inputmethod.InputConnectionWrapper(base, true) {
+                @Override public boolean commitContent(android.view.inputmethod.InputContentInfo info, int flags, android.os.Bundle opts) {
+                    String mime = "-"; long n = 0; String sig = "";
+                    try {
+                        mime = info.getDescription().getMimeType(0);
+                        info.requestPermission();
+                        java.io.InputStream in = getContext().getContentResolver().openInputStream(info.getContentUri());
+                        byte[] buf = new byte[8192]; int r; boolean first = true;
+                        while ((r = in.read(buf)) != -1) {
+                            if (first && r >= 3) { sig = new String(buf, 0, 3, "US-ASCII"); first = false; }
+                            n += r;
+                        }
+                        in.close();
+                        info.releasePermission();
+                    } catch (Exception e) { Log.i("IMETARGET", "CONTENT= error=" + e); return false; }
+                    Log.i("IMETARGET", "CONTENT= mime=" + mime + " bytes=" + n + " sig=" + sig);
+                    return true;
+                }
+            };
+        }
+    }
     private static final String PREFS = "fixture";
     private static final String KEY_MODE = "mode";
     private static final String MODE_NORMAL = "NORMAL";
@@ -91,6 +121,10 @@ public class TestInput extends Activity {
                     } else if ("com.wrenboard.imetarget.NOCORRECT".equals(a)) {
                         boolean on = intent.getBooleanExtra("on", true);
                         setMode(on ? MODE_NOCORRECT : MODE_NORMAL);
+                    } else if ("com.wrenboard.imetarget.REPORT".equals(a)) {
+                        // On-demand current-content read: FIELD= is otherwise only logged on
+                        // change, so an UNCHANGED field is invisible after a logcat clear.
+                        Log.i("IMETARGET", "FIELD=" + edit.getText().toString());
                     } else if ("com.wrenboard.imetarget.SETCLIP".equals(a)) {
                         ClipboardManager cm =
                                 (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
@@ -109,7 +143,7 @@ public class TestInput extends Activity {
         root.setOrientation(LinearLayout.VERTICAL);
         root.setBackgroundColor(Color.WHITE);
 
-        edit = new EditText(this);
+        edit = new GifEditText(this);
         edit.setBackgroundColor(Color.WHITE);
         edit.setTextColor(Color.BLACK);
         edit.setMinLines(10);
@@ -118,6 +152,16 @@ public class TestInput extends Activity {
             public void onTextChanged(CharSequence s, int a, int b, int c) {}
             public void afterTextChanged(Editable s) {
                 Log.i("IMETARGET", "FIELD=" + s.toString());
+            }
+        });
+        // B2: editor actions (e.g. an IME sending ENTER/ACTION to the host) are invisible in
+        // FIELD= when the action leaves the text unchanged - log them so checks can prove
+        // "no host action was delivered", not just "host text did not change".
+        edit.setOnEditorActionListener(new TextView.OnEditorActionListener() {
+            @Override
+            public boolean onEditorAction(TextView v, int actionId, android.view.KeyEvent event) {
+                Log.i("IMETARGET", "ACTION=" + actionId + (event != null ? " keycode=" + event.getKeyCode() : ""));
+                return false;
             }
         });
         root.addView(edit, new LinearLayout.LayoutParams(
@@ -148,6 +192,7 @@ public class TestInput extends Activity {
         f.addAction("com.wrenboard.imetarget.NOLEARN");
         f.addAction("com.wrenboard.imetarget.NOCORRECT");
         f.addAction("com.wrenboard.imetarget.SETCLIP");
+        f.addAction("com.wrenboard.imetarget.REPORT");
         registerReceiver(control, f, Context.RECEIVER_EXPORTED);
 
         String mode = getSharedPreferences(PREFS, MODE_PRIVATE).getString(KEY_MODE, MODE_NORMAL);
