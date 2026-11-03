@@ -2744,6 +2744,8 @@ public final class InputLogic {
             // never silently drops the user's word from typing history.
             final String abandonedTypedWord =
                     WrenAbandonedCommitLearning.wordToLearn(mWordComposer.getTypedWord());
+            if (BuildConfig.DEBUG) Log.i("WBDBG", "STARTER abandonCommit word='" + abandonedTypedWord
+                    + "' at " + SystemClock.uptimeMillis());
             if (abandonedTypedWord != null) {
                 final NgramContext ngramContext = mConnection.getNgramContextFromNthPreviousWord(
                         settingsValues.mSpacingAndPunctuations,
