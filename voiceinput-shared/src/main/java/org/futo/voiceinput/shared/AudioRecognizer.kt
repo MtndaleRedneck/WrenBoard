@@ -24,6 +24,8 @@ import com.konovalov.vad.config.Mode
 import com.konovalov.vad.config.Model
 import com.konovalov.vad.config.SampleRate
 import com.konovalov.vad.models.VadModel
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
@@ -112,6 +114,8 @@ class AudioRecognizer(
         var switchJob: Job? = null
         var preload: Job? = null
         var decode: Job? = null
+        val publications = Channel<() -> Unit>(Channel.UNLIMITED)
+        var publisher: Job? = null
     }
     private class OwnedRecorder(val value: AudioRecord) {
         private val released = AtomicBoolean(false)
@@ -240,6 +244,8 @@ class AudioRecognizer(
         session = null // invalidate callbacks before any cancellation or cleanup
         if (old != null) {
             old.capturing = false
+            old.publications.cancel()
+            old.publisher?.cancel()
             old.routeRequest++
             old.switchJob?.cancel()
             old.preload?.cancel()
@@ -288,6 +294,9 @@ class AudioRecognizer(
         reset()
         val owner = CaptureSession()
         session = owner
+        owner.publisher = lifecycleScope.launch(Dispatchers.Main) {
+            for (publish in owner.publications) if (current(owner)) publish()
+        }
         listener.loading()
 
         if (context.checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
@@ -597,21 +606,24 @@ class AudioRecognizer(
         }
     }
 
+    private fun enqueue(owner: CaptureSession, publication: () -> Unit) {
+        if (current(owner)) owner.publications.trySend(publication)
+    }
     private fun runnerCallback(owner: CaptureSession): ModelInferenceCallback = object : ModelInferenceCallback {
-        private fun publish(block: () -> Unit) {
-            // Native inference invokes callbacks on Default. Synchronous Main dispatch keeps
-            // partial/status ordering before final delivery and rechecks ownership at publication.
-            if (Looper.myLooper() == Looper.getMainLooper()) {
-                if (current(owner)) block()
-            } else kotlinx.coroutines.runBlocking(Dispatchers.Main) {
-                if (current(owner)) block()
-            }
-        }
-        override fun updateStatus(state: InferenceState) = publish { listener.decodingStatus(state) }
-        override fun languageDetected(language: Language) = publish { listener.languageDetected(language) }
+        override fun updateStatus(state: InferenceState) = enqueue(owner) { listener.decodingStatus(state) }
+        override fun languageDetected(language: Language) = enqueue(owner) { listener.languageDetected(language) }
         override fun partialResult(string: String) {
-            if (!isBlankResult(string)) publish { listener.partialResult(string) }
+            if (!isBlankResult(string)) enqueue(owner) { listener.partialResult(string) }
         }
+    }
+    private suspend fun publishFinal(owner: CaptureSession, text: String) {
+        val delivered = CompletableDeferred<Unit>()
+        if (!current(owner)) return
+        if (owner.publications.trySend {
+            try { listener.finished(text) } finally { delivered.complete(Unit) }
+        }.isFailure) return
+        // Same ordered queue as partial/status. Reset cancels the owning decode job and queue.
+        delivered.await()
     }
 
     private suspend fun runModel(owner: CaptureSession) {
@@ -626,7 +638,7 @@ class AudioRecognizer(
         val floatArray = owner.samples.floats.array().sliceArray(0 until owner.samples.floats.position())
         // Exact zero only. This does not classify nonzero noise or reject quiet speech.
         if (isExactEmptyCapture(floatArray)) {
-            withContext(Dispatchers.Main) { if (current(owner)) listener.finished("") }
+            publishFinal(owner, "")
             return
         }
 
@@ -651,7 +663,7 @@ class AudioRecognizer(
 
         yield()
         if (!current(owner)) return
-        withContext(Dispatchers.Main) { if (current(owner)) listener.finished(text) }
+        publishFinal(owner, text)
     }
 
     private fun onFinishRecording(owner: CaptureSession) {
