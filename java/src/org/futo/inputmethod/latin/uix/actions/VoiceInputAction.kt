@@ -22,6 +22,7 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.yield
 import org.futo.inputmethod.latin.ATLCompat
@@ -162,6 +163,7 @@ private class VoiceInputActionWindow(
                 barStopped.value = false
                 wasFinished = false
                 cancelPlayed = false
+                startSoundGate.reset()
                 rv.reset()
                 rv.start()
             }
@@ -239,13 +241,11 @@ private class VoiceInputActionWindow(
             return@launch
         }
 
-        this@VoiceInputActionWindow.recognizerView.value = recognizerView
-
-        //yield()
-        recognizerView.reset()
-
-        //yield()
-        recognizerView.start()
+        withContext(Dispatchers.Main) {
+            this@VoiceInputActionWindow.recognizerView.value = recognizerView
+            recognizerView.reset()
+            recognizerView.start()
+        }
     }
 
     private var inputTransaction = manager.createInputTransaction()
@@ -302,6 +302,7 @@ private class VoiceInputActionWindow(
 
     private var wasFinished = false
     private var cancelPlayed = false
+    private val startSoundGate = CaptureStartSoundGate()
     override fun cancelled() {
         android.util.Log.i("WBDBG", "WINDOW VOICE capture cancelled wasFinished=$wasFinished")
         if (!wasFinished) {
@@ -315,7 +316,9 @@ private class VoiceInputActionWindow(
 
     override fun recordingStarted(device: MicrophoneDeviceState) {
         android.util.Log.i("WBDBG", "WINDOW VOICE capture started")
-        if (shouldPlaySounds) {
+        // recordingStarted also reports hardware route updates for this capture.
+        // Do not replay ON for those notifications; reset only for a new utterance.
+        if (shouldPlaySounds && startSoundGate.take()) {
             state.soundPlayer?.playStartSound()
         }
 
