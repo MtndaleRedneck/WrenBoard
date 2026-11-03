@@ -228,9 +228,12 @@ public class InputTestsBase extends ServiceTestCase<LatinIME> {
         });
         EditorInfo ei = new EditorInfo();
         final InputConnection ic = mEditText.onCreateInputConnection(ei);
-        final LayoutInflater inflater =
-                (LayoutInflater)getContext().getSystemService(Context.LAYOUT_INFLATER_SERVICE);
-        final ViewGroup vg = new FrameLayout(getContext());
+        // The keyboard view hierarchy requires the SERVICE as its context: MainKeyboardView
+        // walks the context for DynamicThemeProviderOwner (implemented by LatinIME), and the
+        // androidx.window layout listener requires a UI context (an InputMethodService
+        // qualifies). The mock test context satisfies neither and crashes the process.
+        final LayoutInflater inflater = LayoutInflater.from(getService());
+        final ViewGroup vg = new FrameLayout(getService());
         mInputView = inflater.inflate(R.layout.input_view, vg);
         ei = enrichEditorInfo(ei);
         getService().onCreateInputMethodInterface().startInput(ic, ei);
