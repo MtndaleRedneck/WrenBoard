@@ -1533,10 +1533,24 @@ if leg settingspreview; then
   # Paid-notice preservation is exercised on this disposable emulator only, never a user's account.
   dbg "dsbool:already_paid=true" 0.8
   opensettings "" 3
+  dumpui sp_paid_transition
+  if grep -q 'text="Thank you"' shots/sp_paid_transition.xml; then
+    XY=$(node_center sp_paid_transition "Continue")
+    [ -n "$XY" ] && { adb shell input tap $XY; sleep 1.5; }
+    opensettings "" 2
+  fi
+  dumpui sp_paid_root
+  grep -q 'text="WrenBoard Settings"' shots/sp_paid_root.xml || fail "paid fixture did not return to actual Home root"
   for i in 1 2 3; do adb shell input swipe 540 1800 540 500 400; sleep 0.5; done
   shot sp_paid_notice_home; dumpui sp_paid_notice_home
   uitext sp_paid_notice_home | grep -q "paid version" && pass "paid notice visible on Home" || fail "paid notice absent from Home in paid fixture state"
   dbg "dsbool:already_paid=false" 0.8
+  adb logcat -d -s WBDBG:I > shots/sp_paid_reset_raw.txt
+  grep -q 'DSBOOL already_paid=false' shots/sp_paid_reset_raw.txt || fail "disposable paid fixture reset not acknowledged"
+  opensettings "" 2
+  for i in 1 2 3; do adb shell input swipe 540 1800 540 500 400; sleep 0.5; done
+  dumpui sp_unpaid_restored; shot sp_unpaid_restored
+  uitext sp_unpaid_restored | grep -q "paid version" && fail "paid notice remains after disposable fixture reset" || pass "paid notice absent after disposable fixture reset"
 
 fi
 
