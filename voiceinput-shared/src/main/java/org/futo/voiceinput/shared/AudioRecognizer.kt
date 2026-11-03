@@ -598,17 +598,19 @@ class AudioRecognizer(
     }
 
     private fun runnerCallback(owner: CaptureSession): ModelInferenceCallback = object : ModelInferenceCallback {
-        override fun updateStatus(state: InferenceState) {
-            if (current(owner)) listener.decodingStatus(state)
+        private fun publish(block: () -> Unit) {
+            // Native inference invokes callbacks on Default. Synchronous Main dispatch keeps
+            // partial/status ordering before final delivery and rechecks ownership at publication.
+            if (Looper.myLooper() == Looper.getMainLooper()) {
+                if (current(owner)) block()
+            } else kotlinx.coroutines.runBlocking(Dispatchers.Main) {
+                if (current(owner)) block()
+            }
         }
-
-        override fun languageDetected(language: Language) {
-            if (current(owner)) listener.languageDetected(language)
-        }
-
+        override fun updateStatus(state: InferenceState) = publish { listener.decodingStatus(state) }
+        override fun languageDetected(language: Language) = publish { listener.languageDetected(language) }
         override fun partialResult(string: String) {
-            if (!current(owner) || isBlankResult(string)) return
-            listener.partialResult(string)
+            if (!isBlankResult(string)) publish { listener.partialResult(string) }
         }
     }
 
