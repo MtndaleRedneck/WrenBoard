@@ -861,6 +861,22 @@ if leg clipboard; then
     F=$(field); note "field after card tap: ${F:0:80}"
     [ -n "$F" ] && pass "tap on a card pastes it into the field (retained interaction)" || fail "tap on a card pasted nothing"
   else fail "no card position for the tap leg"; fi
+  # Slow-drag leg (Tab review): a manual stream with dwells must still delete - the drag claims on
+  # first slop-crossing motion, dwells after that cannot open the long-press menu.
+  adb logcat -c; dbg close 0.8; dbg "open:clipboard_history" 2.0; wlog cl5u
+  C=$(pos shots/cl5u.txt 'CLIPCARD i=1 ')
+  if [ -n "$C" ]; then read -r X Y <<< "$C"
+    adb logcat -c
+    adb shell "input motionevent DOWN $X $Y"; sleep 0.2
+    adb shell "input motionevent MOVE $((X-150)) $Y"; sleep 0.3; shot cl05v_slowdrag_150
+    adb shell "input motionevent MOVE $((X-350)) $Y"; sleep 0.3
+    adb shell "input motionevent MOVE $((X-650)) $Y"; sleep 0.3
+    adb shell "input motionevent UP $((X-650)) $Y"; sleep 1.5; wlog cl5v; shot cl05v_slowdrag_after
+    if grep -q 'CLIP removed=1' shots/cl5v.txt; then pass "slow drag with dwells deletes the clip"
+    elif grep -q 'WINDOW CLIPMENU' shots/cl5v.txt; then fail "slow drag opened the long-press menu instead of dragging"
+    else fail "slow drag did not delete"; fi
+    U=$(pos shots/cl5v.txt 'CLIPUNDO'); [ -n "$U" ] && { adb logcat -c; adb shell input tap $U; sleep 1.0; wlog cl5w; grep -q 'CLIP undo restored=1' shots/cl5w.txt && pass "Undo after slow drag" || fail "Undo after slow drag failed"; } || fail "no Undo bar after slow drag"
+  else fail "no card position for the slow-drag leg"; fi
   adb logcat -c; dbg close 0.8; dbg "open:clipboard_history" 2.0; wlog cl6
   D=$(pos shots/cl6.txt 'CLIPDOTS i=2 ')
   if [ -n "$D" ]; then adb logcat -c; adb shell input tap $D; sleep 1.0; wlog cl7
