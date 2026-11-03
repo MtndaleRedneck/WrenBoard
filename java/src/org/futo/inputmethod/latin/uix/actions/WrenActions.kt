@@ -114,27 +114,33 @@ val SaveWordAction = Action(
         if (blockedField) {
             WrenSaveWordNotice.show(context.getString(R.string.wren_word_save_blocked_field))
         } else {
-        val ic = manager.getLatinIMEForDebug().currentInputConnection
+        val ic = ime.currentInputConnection
         fun isWordChar(c: Char) = c.isLetterOrDigit() || c == '\'' || c == '-'
-        fun String?.cleanWord(): String? =
-            this?.trim()?.takeIf { it.isNotEmpty() && it.none(Char::isWhitespace) }
-        // A multi-word selection is ambiguous: ask for one word instead of silently
-        // falling back to the last typed word.
+        // Explicit selection needs no cursor reads. Null cursor responses are NOT empty edges.
         val selectedRaw = ic?.getSelectedText(0)?.toString()?.trim()
         val multiWord = selectedRaw != null && selectedRaw.any(Char::isWhitespace)
-        val selected = if (multiWord) null else selectedRaw.cleanWord()
-        // The word under the cursor: before-cursor tail joined to the after-cursor head,
-        // so a mid-word save gets the whole word. (ExtractedText.partialStartOffset/EndOffset
-        // are change-range fields of a partial extract, not the composing span - not usable here.)
-        val beforeTail = ic?.getTextBeforeCursor(200, 0)?.toString()?.takeLastWhile(::isWordChar)
-        val afterHead = ic?.getTextAfterCursor(200, 0)?.toString()?.takeWhile(::isWordChar)
-        val atCursor = (beforeTail.orEmpty() + afterHead.orEmpty()).cleanWord()
-        val lastTyped = ic?.getTextBeforeCursor(200, 0)?.toString()
-            ?.trimEnd()?.takeLastWhile(::isWordChar).cleanWord()
-        // Explicit selection first, then the word at the cursor, then the word before the cursor.
-        val word = selected ?: atCursor ?: lastTyped
+        val selected = selectedRaw?.takeIf { it.isNotEmpty() && !multiWord }
+        var ambiguousBoundary = false
+        val word = if (selected != null || multiWord) selected else {
+            val before = ic?.getTextBeforeCursor(200, 0)?.toString()
+            val after = ic?.getTextAfterCursor(200, 0)?.toString()
+            if (before == null || after == null) {
+                ambiguousBoundary = true
+                null
+            } else {
+                val left = before.takeLastWhile(::isWordChar)
+                val right = after.takeWhile(::isWordChar)
+                val prior = before.trimEnd().takeLastWhile(::isWordChar)
+                // A word touching a full read boundary may be a fragment. Fail closed.
+                ambiguousBoundary = (before.length >= 200 &&
+                    (left.length == before.length || prior.length == before.trimEnd().length)) ||
+                    (after.length >= 200 && right.length == after.length)
+                if (ambiguousBoundary) null else
+                    (left + right).ifEmpty { prior }.takeIf { it.isNotEmpty() }
+            }
+        }
         when {
-            multiWord -> WrenSaveWordNotice.show(context.getString(R.string.wren_word_select_one))
+            multiWord || ambiguousBoundary -> WrenSaveWordNotice.show(context.getString(R.string.wren_word_select_one))
             word == null -> WrenSaveWordNotice.show(context.getString(R.string.wren_word_type_first))
             else -> {
                 // Everything the chip needs is snapshotted here on the UI thread; the provider
