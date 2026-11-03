@@ -742,7 +742,7 @@
     <string name="wren_cd_lock_emoji">Lock emoji</string>
     <string name="wren_cd_unlock_emoji">Unlock emoji</string>
     <string name="wren_search_emojis">Search emojis</string>
-    <string name="wren_search_gifs">Search KLIPY</string> <!-- KLIPY integration terms require this exact search placeholder -->
+    <string name="wren_search_gifs">Search KLIPY GIFs</string>
     <string name="wren_emoji_lock">Lock</string>
     <string name="wren_emoji_unlock">Unlock</string>
     <string name="wren_gif_recents">Recents</string>
