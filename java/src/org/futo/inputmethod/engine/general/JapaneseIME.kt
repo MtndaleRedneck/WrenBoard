@@ -1218,6 +1218,9 @@ class JapaneseIME(val helper: IMEHelper) : IMEInterface {
         }
     }
 
+    // The executor keeps working after its history is cleared in place; nothing to rebuild.
+    override fun recreateUserHistoryDictionaries() { }
+
     private var prevSuggestions: SuggestedWords? = null
     override fun requestSuggestionRefresh() {
         if(prevSuggestions != null) showSuggestionStrip(prevSuggestions)
