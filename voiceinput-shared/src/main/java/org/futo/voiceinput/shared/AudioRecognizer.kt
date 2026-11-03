@@ -14,6 +14,7 @@ import android.media.MediaRecorder
 import android.media.MicrophoneDirection
 import android.net.Uri
 import android.os.Build
+import android.os.Looper
 import android.provider.Settings
 import android.util.Log
 import androidx.lifecycle.LifecycleCoroutineScope
@@ -23,6 +24,7 @@ import com.konovalov.vad.config.Mode
 import com.konovalov.vad.config.Model
 import com.konovalov.vad.config.SampleRate
 import com.konovalov.vad.models.VadModel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -104,7 +106,7 @@ class AudioRecognizer(
     private class CaptureSession {
         val samples = SampleBuffer()
         @Volatile var capturing = true
-        var routeRequest = 0L
+        @Volatile var routeRequest = 0L
         var recorder: OwnedRecorder? = null
         var reader: Job? = null
         var switchJob: Job? = null
@@ -121,6 +123,10 @@ class AudioRecognizer(
     }
     @Volatile private var session: CaptureSession? = null
     private fun current(owner: CaptureSession) = session === owner
+    private fun requireMain() {
+        check(Looper.myLooper() == Looper.getMainLooper()) { "Audio capture controls require Main" }
+    }
+
     private val modelRunner = MultiModelRunner(modelManager)
     private val canExpandSpace = settings.recordingConfiguration.canExpandSpace
     private val useVAD = settings.recordingConfiguration.useVADAutoStop
@@ -229,6 +235,7 @@ class AudioRecognizer(
     }
 
     fun reset() {
+        requireMain()
         val old = session
         session = null // invalidate callbacks before any cancellation or cleanup
         if (old != null) {
@@ -252,12 +259,14 @@ class AudioRecognizer(
     }
 
     fun finish() {
+        requireMain()
         val owner = session ?: return
         if (!owner.capturing) return
         onFinishRecording(owner)
     }
 
     fun cancel() {
+        requireMain()
         reset()
         listener.cancelled()
     }
@@ -275,6 +284,7 @@ class AudioRecognizer(
     }
 
     fun start() {
+        requireMain()
         reset()
         val owner = CaptureSession()
         session = owner
@@ -289,7 +299,9 @@ class AudioRecognizer(
 
     private fun requestPermission(owner: CaptureSession) {
         listener.needPermission { wasGranted ->
-            if (wasGranted && current(owner) && owner.capturing) startRecording(owner)
+            lifecycleScope.launch(Dispatchers.Main) {
+                if (wasGranted && current(owner) && owner.capturing) startRecording(owner)
+            }
         }
     }
 
@@ -498,6 +510,7 @@ class AudioRecognizer(
     }
 
     private fun createRecorderAndJob(preferBluetoothMic: Boolean, owner: CaptureSession) {
+        requireMain()
         if (!current(owner) || !owner.capturing) return
         val oldReader = owner.reader // capture before suspension, never adopt a newer reader
         val oldRecorder = owner.recorder
@@ -519,8 +532,10 @@ class AudioRecognizer(
                     deviceName = bluetoothInfo.second,
                     bluetoothPreferredByUser = settings.recordingConfiguration.preferBluetoothMic,
                     setBluetooth = { selected ->
-                        if (current(owner) && owner.capturing && owner.routeRequest == request &&
-                            selected != preferBluetoothMic) createRecorderAndJob(selected, owner)
+                        lifecycleScope.launch(Dispatchers.Main) {
+                            if (current(owner) && owner.capturing && owner.routeRequest == request &&
+                                selected != preferBluetoothMic) createRecorderAndJob(selected, owner)
+                        }
                     }
                 )
                 val activeRecorder = OwnedRecorder(createAudioRecorder())
@@ -528,6 +543,12 @@ class AudioRecognizer(
                 activeRecorder.value.startRecording()
                 owner.recorder = activeRecorder
                 listener.recordingStarted(state)
+                // Listener may synchronously reset/restart. Never assign a reader to that old owner.
+                if (!current(owner) || !owner.capturing || owner.routeRequest != request) {
+                    activeRecorder.stop()
+                    activeRecorder.release()
+                    return@launch
+                }
                 reportActualRoute(activeRecorder, state, owner, request)
                 activeRecorder.value.addOnRoutingChangedListener({
                     reportActualRoute(activeRecorder, state, owner, request)
@@ -541,6 +562,11 @@ class AudioRecognizer(
                 reader.invokeOnCompletion { activeRecorder.release() }
                 owner.reader = reader
                 reader.start()
+            } catch (cancelled: CancellationException) {
+                created?.stop()
+                created?.release()
+                if (owner.recorder === created) owner.recorder = null
+                throw cancelled
             } catch (e: Exception) {
                 created?.stop()
                 created?.release()
@@ -555,6 +581,7 @@ class AudioRecognizer(
     }
 
     private fun startRecording(owner: CaptureSession) {
+        requireMain()
         if (!current(owner) || !owner.capturing) return
         focusAudio()
         createRecorderAndJob(settings.recordingConfiguration.preferBluetoothMic, owner)
@@ -602,6 +629,7 @@ class AudioRecognizer(
         }
 
         yield()
+        if (!current(owner)) return
         val outputText = try {
              modelRunner.run(
                 floatArray,
@@ -625,6 +653,7 @@ class AudioRecognizer(
     }
 
     private fun onFinishRecording(owner: CaptureSession) {
+        requireMain()
         // Stop also works during a pending route switch: preserve this session's collected
         // audio, cancel the pending restart, then wait for its captured reader before decode.
         owner.capturing = false
