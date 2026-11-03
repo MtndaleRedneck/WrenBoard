@@ -10,7 +10,6 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
@@ -415,10 +414,12 @@ private fun WrenClipCard(w: WrenClipboardWindow, entry: ClipboardEntry, view: Vi
             .clip(shape)
             .background(WrenPanelColors.Card, shape)
             .border(1.dp, WrenPanelColors.CardBorder, shape)
-            .combinedClickable(
-                onClick = { w.paste(entry, view) },
-                onLongClick = { w.menuFor.value = entry }
-            )
+            // Swipe-delete determinism (wb12-check cl04 failures, reproduced on 1.4 too): the card
+            // long-press menu raced the horizontal drag - a slow or emulator-batched touch sequence
+            // hit the long-press timeout before touch slop, opening the Pin menu and cancelling the
+            // swipe. The 3-dot button opens the same menu, so the card long-press is removed: the
+            // drag now has no competitor and deletes deterministically at any drag speed.
+            .clickable { w.paste(entry, view) }
     ) {
         val bitmap = remember(entry) {
             if (entry.text == null && entry.backingFile != null) {
