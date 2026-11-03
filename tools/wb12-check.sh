@@ -1537,14 +1537,19 @@ if leg settingspreview; then
   if [ -n "$XY" ]; then
     adb shell input tap $XY; sleep 1
     dumpui sp_license_opened; shot sp_license_via_about_top
-    uitext sp_license_opened | grep -q "FUTO Source First License 1.1-kb" && pass "About license row opens exact bundled license" || fail "About license row did not open exact license"
-    for i in $(seq 1 16); do
-      dumpui sp_license_scrolled
-      uitext sp_license_scrolled | grep -q "Trademark" && break
-      adb shell input swipe 540 1800 540 450 400; sleep 0.3
-    done
+    python3 - shots/sp_license_opened.xml <<'LICENSEXML' && pass "About license row opens exact bundled license title/text" || fail "About license row did not open exact license"
+import sys, xml.etree.ElementTree as E
+text='\n'.join(n.get('text','') for n in E.parse(sys.argv[1]).iter('node'))
+assert 'FUTO Source First License 1.1-kb' in text
+LICENSEXML
+    # Accessibility exposes the complete Text node even when it extends below viewport.
+    # Never infer scroll position from a body substring. Capture the bounded scroll end
+    # for actual-pixel inspection of the final clause, and keep XML as document identity only.
+    for i in $(seq 1 16); do adb shell input swipe 540 1800 540 450 400; sleep 0.3; done
+    dumpui sp_license_scrolled
     shot sp_license_via_about_bottom
-    uitext sp_license_scrolled | grep -q "Trademark" && pass "license scroll reaches final Definitions/Trademark text" || fail "license final text not reached by scroll"
+    note "INFO: license scroll-end pixels require visual inspection of final Definitions/Trademark clause; XML body is not viewport proof"
+
   else fail "About license row missing from actual UI"; fi
   # Paid-notice preservation is exercised on this disposable emulator only, never a user's account.
   dbg "dsbool:already_paid=true" 0.8
