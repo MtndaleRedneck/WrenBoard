@@ -292,12 +292,12 @@ abstract public class ExpandableBinaryDictionary extends Dictionary {
         final Runnable task = new Runnable() {
             @Override
             public void run() {
-                if (BuildConfig.DEBUG && Dictionary.TYPE_USER_HISTORY.equals(mDictName)) {
+                if (BuildConfig.DEBUG && Dictionary.TYPE_USER_HISTORY.equals(mDictType)) {
                     Log.i("WBDBG", "STARTER writeTaskStart at "
                             + android.os.SystemClock.uptimeMillis());
                 }
                 if (getBinaryDictionary() == null) {
-                    if (BuildConfig.DEBUG && Dictionary.TYPE_USER_HISTORY.equals(mDictName)) {
+                    if (BuildConfig.DEBUG && Dictionary.TYPE_USER_HISTORY.equals(mDictType)) {
                         Log.i("WBDBG", "STARTER writeDropped-nullDict at "
                                 + android.os.SystemClock.uptimeMillis());
                     }
@@ -401,7 +401,7 @@ abstract public class ExpandableBinaryDictionary extends Dictionary {
                     if (DEBUG) {
                         Log.e(TAG, "Cannot update counter. dictionary: " + mDictName);
                     }
-                } else if (BuildConfig.DEBUG && Dictionary.TYPE_USER_HISTORY.equals(mDictName)) {
+                } else if (BuildConfig.DEBUG && Dictionary.TYPE_USER_HISTORY.equals(mDictType)) {
                     Log.i("WBDBG", "STARTER stored '" + word + "' at "
                             + android.os.SystemClock.uptimeMillis());
                 }
