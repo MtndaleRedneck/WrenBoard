@@ -200,7 +200,12 @@ if leg keyboard; then
   # fix1b: starter words come from the person's own typing history; I/The/You only stand in when there is none
   for i in 1 2 3; do clear_field; type_word zebra; tapcode 32; sleep 0.6; done
   note "field after learning: '$(field)'"
-  # Under emulator load the learned-word broadcast can land after the first read; retry before judging.
+  # Deterministic readiness: wait until the app has LOGGED all three learn writes (wave2-480 read
+  # an empty history for >10s on a slow runner; blind retries only measure weather).
+  for i in $(seq 1 40); do
+    [ "$(adb logcat -d -s WBDBG:I 2>/dev/null | tr -d '\r' | grep -c "STARTER learn 'zebra'")" -ge 3 ] && break; sleep 1
+  done
+  note "learn writes seen: $(adb logcat -d -s WBDBG:I 2>/dev/null | tr -d '\r' | grep -c "STARTER learn 'zebra'")"
   clear_field; adb logcat -c; focus_target; sleep 2; S2=$(sugg)
   for i in 1 2 3; do echo "$S2" | grep -qi zebra && break; sleep 2; S2=$(sugg); done
   note "starter words after typing 'zebra' 3x at the start of a field: [$S2]"
@@ -655,7 +660,12 @@ if leg emoji; then
     [ -n "$F" ] && pass "tapping emojis types them" || fail "tapping emojis typed nothing"
     # long-press an emoji that has skin tones (row 2 has hands on most fonts; take first cell of row 1 as fallback)
     adb logcat -c
-    adb shell input motionevent DOWN $((LEFT+CW/2)) $((TOP+RH/2)); sleep 1.2; adb shell input motionevent UP $((LEFT+CW/2)) $((TOP+RH/2)); sleep 1.0
+    # Anchor the hold to the APP-VISIBLE down: under input backlog a host-timed DOWN/1.2s/UP can be
+    # delivered as a tap (a1953b045, wave2-480). Wait for the cell's EMOJITOUCH DOWN marker first;
+    # a late UP only makes the hold longer, which is still a valid long-press.
+    adb shell input motionevent DOWN $((LEFT+CW/2)) $((TOP+RH/2))
+    for i in $(seq 1 24); do sleep 0.5; adb logcat -d -s WBDBG:I 2>/dev/null | tr -d '\r' | grep -q "EMOJITOUCH DOWN" && break; done
+    sleep 1.5; adb shell input motionevent UP $((LEFT+CW/2)) $((TOP+RH/2)); sleep 1.0
     shot e02_longpress_popup; wlog em1
     grep -q 'EMOJI popup' shots/em1.txt && pass "long-press opens the popup ($(grep 'EMOJI popup' shots/em1.txt | tail -1 | sed 's/.*EMOJI //'))" || fail "long-press opened no popup"
     L=$(pos shots/em1.txt 'EMOJILOCKBTN')
@@ -961,6 +971,9 @@ if leg update; then
       sleep 2
       FOC=$(adb shell dumpsys window 2>/dev/null | tr -d '\r' | grep -m1 'mCurrentFocus')
       case "$FOC" in *packageinstaller*|*PackageInstaller*) INST="$FOC"; break;; esac
+      # mCurrentFocus can lag the actual window on a slow emulator (run 41600879995: the installer
+      # dialog was in the uiautomator dump while focus still read the launcher) - trust the dump.
+      dumpui _inst_probe; uitext _inst_probe | grep -q "Do you want to update this app?" && { INST="dump:installer-dialog (focus said: $FOC)"; break; }
       case "$FOC" in *chrome*|*browser*|*Browser*) break;; esac
     done
     note "focus after Update ($1): $FOC"
@@ -1059,7 +1072,13 @@ if leg settings; then
   if uitext st00 | grep -q "Update available"; then XY=$(node_center st00 "Skip this version"); [ -n "$XY" ] && { adb shell input tap $XY; sleep 2; note "  skipped the seeded update prompt"; }; dumpui st00; fi
   uitext st00 | grep -q "Personal dictionary" && fail "Settings opened on the Personal dictionary page"
   shot st01_settings_home; dumpui st01; T=$(uitext st01)
-  adb shell input swipe 540 1700 540 700 400; sleep 1.5; shot st01b_settings_home_scrolled; dumpui st01b; T="$T$(uitext st01b)"
+  # scroll-until-visible: a loaded emulator can swallow a single fling (run 41600879995 lost the
+  # lower groups); keep scrolling until FUTO is in view, max 4 tries. Final check below stays strict.
+  for i in 1 2 3 4; do
+    adb shell input swipe 540 1700 540 700 400; sleep 1.5; shot st01b_settings_home_scrolled; dumpui st01b
+    uitext st01b | grep -q "FUTO" && break
+  done
+  T="$T$(uitext st01b)"
   note "home: ${T:0:700}"
   ok=1; for w in "Keyboard" "Typing" "Voice" "Clipboard &amp; emoji" "Backup" "About" "FUTO"; do echo "$T" | grep -q "$w" || { ok=0; note "missing on home: $w"; }; done
   [ $ok = 1 ] && pass "home shows the six groups and FUTO" || fail "home is missing groups"
