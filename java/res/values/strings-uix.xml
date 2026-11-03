@@ -684,6 +684,7 @@
     <string name="wren_stickers_toggle">Stickers</string>
     <string name="wren_word_already_saved">Already saved</string>
     <string name="wren_word_type_first">Type a word first</string>
+    <string name="wren_futo_license">FUTO Source First License</string>
     <string name="wren_about_title">About WrenBoard</string>
     <string name="wren_set_keyboard">Keyboard</string>
     <string name="wren_set_keyboard_sub">Theme, toolbar buttons, rows, height, sound</string>

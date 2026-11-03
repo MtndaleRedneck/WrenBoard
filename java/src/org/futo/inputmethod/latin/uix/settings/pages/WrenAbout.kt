@@ -43,9 +43,28 @@ val WrenAboutMenu = UserSettingsMenu(
             navigateTo = "help",
         ),
         userSettingNavigationItem(
+            title = R.string.wren_futo_license,
+            style = NavigationItemStyle.MiscNoArrow,
+            navigateTo = "wren_license",
+        ),
+        userSettingNavigationItem(
             title = R.string.credits_menu_title,
             style = NavigationItemStyle.MiscNoArrow,
             navigateTo = "credits",
         ),
     )
+)
+
+/** Exact bundled repository license text, not a summary or a legal interpretation. */
+val WrenLicenseMenu = UserSettingsMenu(
+    title = R.string.wren_futo_license,
+    navPath = "wren_license", registerNavPath = true,
+    settings = listOf(userSettingDecorationOnly {
+        val context = androidx.compose.ui.platform.LocalContext.current
+        val license = androidx.compose.runtime.remember {
+            context.assets.open("wrenboard-futo-license.txt").bufferedReader().use { it.readText() }
+        }
+        Text(license, style = Typography.Body.RegularMl,
+            modifier = Modifier.fillMaxWidth().padding(16.dp))
+    })
 )
