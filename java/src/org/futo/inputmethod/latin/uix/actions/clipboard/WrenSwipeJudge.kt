@@ -15,4 +15,15 @@ object WrenSwipeJudge {
 
     fun judge(dragPx: Float, completed: Boolean): Outcome =
         if (completed && abs(dragPx) > DELETE_THRESHOLD_PX) Outcome.Delete else Outcome.SnapBack
+
+    enum class LiftOutcome { Paste, JudgeSwipe }
+
+    /**
+     * What a lift (UP) means at a given accumulated travel. A lift before the drag has claimed
+     * (travel within touch slop) is a tap: paste the clip. A lift carrying travel past slop is a
+     * finished or abandoned swipe and must be judged, never pasted - including when the UP event
+     * itself carries the travel (coalesced fast flicks deliver their tail in the final event).
+     */
+    fun liftOutcome(dragPx: Float, slopPx: Float): LiftOutcome =
+        if (abs(dragPx) > slopPx) LiftOutcome.JudgeSwipe else LiftOutcome.Paste
 }
