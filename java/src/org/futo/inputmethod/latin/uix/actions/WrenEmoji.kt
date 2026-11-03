@@ -292,7 +292,7 @@ fun WrenEmojiPanel(w: WrenEmojiWindow) {
                     // search). Shown while the search row has focus; the letters keyboard is
                     // raised for it and dismissed by the round arrow.
                     Box(Modifier.weight(1f).wbPos("GIFSEARCHFIELD")) {
-                        ActionTextEditor(text = w.gifQuery, autofocus = true, autocorrect = true, textSize = 16.sp, placeholder = stringResource(R.string.wren_search_gifs))
+                        ActionTextEditor(text = w.gifQuery, autofocus = true, autocorrect = true, noPersonalizedLearning = true, textSize = 16.sp, placeholder = stringResource(R.string.wren_search_gifs))
                     }
                 } else {
                     Box(Modifier.weight(1f).wbPos("GIFSEARCHFIELD")) {
