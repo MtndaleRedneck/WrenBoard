@@ -387,11 +387,15 @@ abstract public class ExpandableBinaryDictionary extends Dictionary {
                 if (binaryDictionary == null) {
                     return;
                 }
-                if (!binaryDictionary.updateEntriesForWordWithNgramContext(ngramContext, word,
-                        isValidWord, count, timestamp)) {
+                final boolean updated = binaryDictionary.updateEntriesForWordWithNgramContext(
+                        ngramContext, word, isValidWord, count, timestamp);
+                if (!updated) {
                     if (DEBUG) {
                         Log.e(TAG, "Cannot update counter. dictionary: " + mDictName);
                     }
+                } else if (BuildConfig.DEBUG && Dictionary.TYPE_USER_HISTORY.equals(mDictName)) {
+                    Log.i("WBDBG", "STARTER stored '" + word + "' at "
+                            + android.os.SystemClock.uptimeMillis());
                 }
             }
         });
