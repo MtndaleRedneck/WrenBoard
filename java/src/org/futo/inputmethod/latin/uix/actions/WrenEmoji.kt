@@ -173,7 +173,11 @@ class WrenEmojiWindow(val manager: KeyboardManagerForAction) : ActionWindow() {
     override val showTitleBar: Boolean get() = false
     override val positionIsUserManagable: Boolean get() = false
     override val showCloseButton: Boolean get() = false
-    override val fixedWindowHeight: Dp get() = if (searching.value) 104.dp else WrenEmojiPanelHeight
+    // Active GIF search keeps the window compact (tab row + search row + one grid row) so the
+    // raised letters keyboard plus window never covers the host app (owner: "not full screen").
+    // Dismissing the search keyboard restores full panel height with the host visible above.
+    override val fixedWindowHeight: Dp
+        get() = if (searching.value) 104.dp else if (gifSearching.value) 240.dp else WrenEmojiPanelHeight
 
     @Composable
     override fun windowName(): String = stringResource(R.string.action_emoji_title)
