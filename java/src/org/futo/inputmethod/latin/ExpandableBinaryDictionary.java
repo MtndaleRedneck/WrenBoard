@@ -396,7 +396,8 @@ abstract public class ExpandableBinaryDictionary extends Dictionary {
      */
     public void updateEntriesForWord(@Nonnull final NgramContext ngramContext,
             final String word, final boolean isValidWord, final int count, final int timestamp) {
-        final int learnTraceId = org.futo.inputmethod.engine.general.WrenLearnTrace.id();
+        final int learnTraceId = BuildConfig.DEBUG
+                ? org.futo.inputmethod.engine.general.WrenLearnTrace.id() : 0;
         updateDictionaryWithWriteLock(new Runnable() {
             @Override
             public void run() {

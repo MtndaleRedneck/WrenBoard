@@ -10,6 +10,9 @@ udq() { adb shell "content query --uri $UDURI --projection word:frequency:locale
 udins() { adb shell "content insert --uri $UDURI --bind word:s:$1 --bind frequency:i:$2 ${3:+--bind locale:s:$3}" >/dev/null 2>&1; }
 udclear() { adb shell "content delete --uri $UDURI --where \"word like 'zqprobe%'\"" >/dev/null 2>&1; }
 # strip capture, same mechanism as wb12-check's sugg(): WBDBG logcat -> key=value parse
+# NOTE: suggestion logging is counts-only (SUGG [n=N]) - this probe's suggestibility reads
+# return counts, not words, and it needs a rework before any future run. Parked with the
+# SwiftKey-import MAYBE decision.
 udsugg() { adb logcat -d -s WBDBG:I 2>/dev/null | tr -d '\r' > shots/_uds.txt; python3 tools/wb12_kv.py shots/_uds.txt sugg; }
 
 udclear   # clean slate even if a previous probe died mid-run
