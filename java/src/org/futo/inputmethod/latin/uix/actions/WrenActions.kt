@@ -1,8 +1,11 @@
 package org.futo.inputmethod.latin.uix.actions
 
+import android.content.Context
 import android.content.Intent
 import android.util.Log
-import android.widget.Toast
+import android.provider.UserDictionary
+import android.view.inputmethod.ExtractedTextRequest
+import kotlinx.coroutines.flow.MutableStateFlow
 import org.futo.inputmethod.compat.UserDictionaryCompatUtils
 import org.futo.inputmethod.latin.R
 import org.futo.inputmethod.latin.uix.Action
@@ -75,26 +78,49 @@ val InfoAction = Action(
     windowImpl = null,
 )
 
-/** Save word: adds the selection (single word) or the last typed word to the personal dictionary. */
+/** Save word (1.5 item 12, Tab's pinned candidate for owner review - owner asked only for the
+ * button, 9:50 AM): saves the word being typed, else the last typed word, else the selection,
+ * into the personal dictionary. Confirms on the centre suggestion chip for 1.2 s - no toast. */
 val SaveWordAction = Action(
-    icon = R.drawable.wren_ic_spellcheck,
+    icon = R.drawable.wren_ic_bookmark_add,
     name = R.string.wren_action_save_word,
     simplePressImpl = { manager, _ ->
-        val ime = manager.getLatinIMEForDebug()
-        val ic = ime.currentInputConnection
-        val selected = ic?.getSelectedText(0)?.toString()?.trim()
-        val word = if (!selected.isNullOrEmpty() && selected.none { it.isWhitespace() }) {
-            selected
-        } else {
-            val before = ic?.getTextBeforeCursor(200, 0)?.toString() ?: ""
-            before.trimEnd().takeLastWhile { it.isLetterOrDigit() || it == '\'' || it == '-' || it == '.' }
-        }
-        if (word.isNotEmpty()) {
-            UserDictionaryCompatUtils.addWord(manager.getContext(), word, 250, null, null)
-            Toast.makeText(manager.getContext(),
-                manager.getContext().getString(R.string.wren_word_saved, word),
-                Toast.LENGTH_SHORT).show()
+        val context = manager.getContext()
+        val ic = manager.getLatinIMEForDebug().currentInputConnection
+        fun String?.cleanWord(): String? =
+            this?.trim()?.takeIf { it.isNotEmpty() && it.none(Char::isWhitespace) }
+        val composing = ic?.getExtractedText(ExtractedTextRequest(), 0)?.let { et ->
+            if (et.partialStartOffset >= 0 && et.partialEndOffset > et.partialStartOffset)
+                et.text?.subSequence(et.partialStartOffset, et.partialEndOffset)?.toString() else null
+        }.cleanWord()
+        val lastTyped = ic?.getTextBeforeCursor(200, 0)?.toString()
+            ?.trimEnd()?.takeLastWhile { it.isLetterOrDigit() || it == '\'' || it == '-' }.cleanWord()
+        val selected = ic?.getSelectedText(0)?.toString().cleanWord()
+        val word = composing ?: lastTyped ?: selected
+        when {
+            word == null -> WrenSaveWordNotice.show(context.getString(R.string.wren_word_type_first))
+            alreadyInUserDictionary(context, word) ->
+                WrenSaveWordNotice.show(context.getString(R.string.wren_word_already_saved))
+            else -> {
+                UserDictionaryCompatUtils.addWord(context, word, 250, null, null)
+                WrenSaveWordNotice.show(context.getString(R.string.wren_word_saved_chip, word))
+            }
         }
     },
     windowImpl = null,
 )
+
+private fun alreadyInUserDictionary(context: Context, word: String): Boolean = try {
+    context.contentResolver.query(
+        UserDictionary.Words.CONTENT_URI, arrayOf(UserDictionary.Words.WORD),
+        "${UserDictionary.Words.WORD}=?", arrayOf(word), null
+    )?.use { it.moveToFirst() } == true
+} catch (_: Exception) { false }
+
+/** Transient centre-chip text (save-word confirmation). New instance per show so StateFlow re-emits. */
+object WrenSaveWordNotice {
+    data class Notice(val text: String, val at: Long = android.os.SystemClock.uptimeMillis())
+    val notice = MutableStateFlow<Notice?>(null)
+    fun show(text: String) { notice.value = Notice(text) }
+    fun clear() { notice.value = null }
+}

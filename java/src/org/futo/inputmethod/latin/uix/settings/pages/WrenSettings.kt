@@ -1,6 +1,7 @@
 package org.futo.inputmethod.latin.uix.settings.pages
 
 import androidx.compose.foundation.layout.Column
+import org.futo.inputmethod.latin.uix.gif.WrenStickersEnabled
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height

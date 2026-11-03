@@ -50,6 +50,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -118,7 +119,10 @@ import androidx.datastore.preferences.core.intPreferencesKey
 import org.futo.inputmethod.engine.ExpandableSuggestionBarConfiguration
 import org.futo.inputmethod.latin.DisplayTop4Setting
 import org.futo.inputmethod.latin.R
+import kotlinx.coroutines.delay
+import org.futo.inputmethod.latin.Dictionary
 import org.futo.inputmethod.latin.SuggestedWords
+import org.futo.inputmethod.latin.uix.actions.WrenSaveWordNotice
 import org.futo.inputmethod.latin.SuggestedWords.SuggestedWordInfo
 import org.futo.inputmethod.latin.SuggestedWords.SuggestedWordInfo.KIND_EMOJI_SUGGESTION
 import org.futo.inputmethod.latin.SuggestedWords.SuggestedWordInfo.KIND_TYPED
@@ -547,12 +551,17 @@ fun RowScope.SuggestionItems(words: SuggestedWords, onClick: (i: Int) -> Unit, o
     val boldCentre = isKeyStyledTheme()
     var centreSuggestion: SuggestedWordInfo? = null
     // SwiftKey strip (review item 3): chip widths 256/344/258px at 1080px and a 105px-empty right
-    // edge, i.e. side/centre/side weights of 0.98/1.32/0.99 plus a fixed trailing margin.
-    val sideWeight = 0.98f
-    val centreWeight = 1.32f
+    // edge. 1.5 item-15 candidate (Tab-proposed, NOT owner-approved, pending actual-pixel WBDBG
+    // verification at the real density): asymmetric per-slot weights 0.9770/1.3128/0.9842, which
+    // with 40dp left and 40dp right margins plus two 2.3dp gaps land 255.97/344.00/257.9px at
+    // 1080px/420dpi. Baseline (S11, owner-approved 2026-11-01): uniform side weights 0.98/1.32/0.99
+    // with a 42dp left margin, giving 253.97/342.09/256.57px.
+    val leftWeight = 0.9770f
+    val centreWeight = 1.3128f
+    val rightWeight = 0.9842f
     var slotIndex = 0
     val suggestionItem = @Composable { suggestion: SuggestedWordInfo? ->
-        val w = if (slotIndex++ % 3 == 1) centreWeight else sideWeight
+        val w = when (slotIndex++ % 3) { 0 -> leftWeight; 1 -> centreWeight; else -> rightWeight }
         if(suggestion != null) {
             val idx = words.indexOf(suggestion)
             SuggestionItem(
@@ -582,11 +591,41 @@ fun RowScope.SuggestionItems(words: SuggestedWords, onClick: (i: Int) -> Unit, o
         }
     }
 
+    // WrenBoard 1.5 item 12 (Tab's pinned candidate for owner review - not owner-approved): the
+    // save-word confirmation takes the centre chip for 1.2 s, three boxes kept, then suggestions return.
+    val saveNotice by WrenSaveWordNotice.notice.collectAsState()
+    if (saveNotice != null) {
+        LaunchedEffect(saveNotice) { delay(1200); WrenSaveWordNotice.clear() }
+        val noticeInfo = SuggestedWordInfo(saveNotice!!.text, "", SuggestedWordInfo.MAX_SCORE,
+            SuggestedWordInfo.KIND_PREDICTION, Dictionary.DICTIONARY_HARDCODED,
+            SuggestedWordInfo.NOT_AN_INDEX, SuggestedWordInfo.NOT_A_CONFIDENCE)
+        val noticeWords = SuggestedWords(ArrayList(listOf(noticeInfo)), null, null, false, false, false,
+            SuggestedWords.INPUT_STYLE_TYPING, 0)
+        suggestionItem(null)
+        SuggestionSeparator()
+        centreSuggestion = noticeInfo
+        SuggestionItem(noticeWords, 0, isPrimary = false, onClick = { }, onLongClick = { },
+            forcePrimary = isKeyStyledTheme(), isEmoji = false, slotWeight = centreWeight)
+        SuggestionSeparator()
+        suggestionItem(null)
+        if (isKeyStyledTheme()) Spacer(Modifier.width(40.dp))
+        return
+    }
+
     when {
         layout.isGestureBatch ->
             suggestionItem(layout.presentableSuggestions.firstOrNull())
 
-        layout.emojiMatches.isEmpty() && layout.presentableSuggestions.size <= 1 -> {
+        layout.emojiMatches.isEmpty() && layout.presentableSuggestions.isEmpty() -> {
+            // WrenBoard 1.5 item 14 (review candidate): zero actual suggestions - hide all boxes,
+            // preserve the full strip height and slot geometry, no divider. (S11's kept boxes are
+            // for the one/two-word case below, not for an empty strip.)
+            Spacer(Modifier.weight(leftWeight))
+            Spacer(Modifier.weight(centreWeight))
+            Spacer(Modifier.weight(rightWeight))
+        }
+
+        layout.emojiMatches.isEmpty() && layout.presentableSuggestions.size == 1 -> {
             // S11 (owner-approved 2026-11-01, WhatsApp): one suggestion still shows three chip
             // boxes, word in the centre, empty boxes kept - SwiftKey's layout.
             suggestionItem(null)
@@ -1089,7 +1128,9 @@ fun ActionWindowBar(
     onExpand: () -> Unit
 ) {
     Column(Modifier.height(ActionBarHeight)) {
-        ActionSep()
+        // WrenBoard 1.5 item 5d (Tab's cosmetic value, candidate): no 1dp divider between the
+        // toolbar and the suggestion strip on the Wren skin - the toolbar colour runs straight in.
+        if(!LocalThemeProvider.current.keyBorders) ActionSep()
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
@@ -1152,7 +1193,9 @@ fun CollapsibleSuggestionsBar(
     suggestionStripListener: SuggestionStripViewListener,
 ) {
     Column(Modifier.height(ActionBarHeight)) {
-        ActionSep()
+        // WrenBoard 1.5 item 5d (Tab's cosmetic value, candidate): no 1dp divider between the
+        // toolbar and the suggestion strip on the Wren skin - the toolbar colour runs straight in.
+        if(!LocalThemeProvider.current.keyBorders) ActionSep()
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
@@ -1163,7 +1206,10 @@ fun CollapsibleSuggestionsBar(
                 if(showClose) {
                     CloseActionWindowButton(onClose)
                 } else {
-                    Spacer(Modifier.width(42.dp))
+                    // 1.5 item-15 candidate (see weights note below): 40dp = the 105px left margin of
+                    // Tab's 1080px geometry; baseline was 42dp. When the close button shows, the left
+                    // offset is the button width instead - deviation noted for pixel verification.
+                    Spacer(Modifier.width(40.dp))
                 }
 
                 if (words != null) {

@@ -85,14 +85,19 @@ private class TopLineGradientDrawable(
 ) : GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, intArrayOf(top, bottom)) {
     // SwiftKey list items 2+3: Tab's pixel measurements are off a ~420dpi phone; scale with density.
     private val px420 = dm.density / 2.625f
-    // PARITY 1: 2px soft halo around the key (SwiftKey reads ~58/53/39 fading out), drawn inside the
-    // drawable's outer edge - the 1px key gap lets it read as surrounding the key.
-    private val haloPx = 2.0f * px420
-    private val haloPaint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+    // WrenBoard 1.5 item 5c (Tab's cosmetic values, candidate pending owner pixel sign-off): the halo
+    // is two crisp 1px rings just outside the key border - outer #393939 (9 levels under the #424242
+    // board), inner #2E2E2E (20 under). Replaces the PARITY 1 single blurred #353535 stroke.
+    private val haloPx = 1.0f * px420
+    private val haloOuterPaint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
         style = android.graphics.Paint.Style.STROKE
-        color = 0xFF353535.toInt()
-        strokeWidth = haloPx
-        maskFilter = android.graphics.BlurMaskFilter(haloPx * 0.75f, android.graphics.BlurMaskFilter.Blur.NORMAL)
+        color = 0xFF393939.toInt()
+        strokeWidth = haloPx.coerceAtLeast(1f)
+    }
+    private val haloInnerPaint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+        style = android.graphics.Paint.Style.STROKE
+        color = 0xFF2E2E2E.toInt()
+        strokeWidth = haloPx.coerceAtLeast(1f)
     }
     // PARITY 1: 1px side rim 2px inside the border, #616161 at the top fading to ~#0B0B0B.
     private val rimPaint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
@@ -100,16 +105,13 @@ private class TopLineGradientDrawable(
         strokeWidth = (1.0f * px420).coerceAtLeast(1f)
     }
     private val linePaint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
-        color = 0xFF6E6E6E.toInt()
+        color = 0xFF6D6D6D.toInt() // item 5c: 1px #6D6D6D
         strokeWidth = (1.0f * px420).coerceAtLeast(1f)
     }
     override fun draw(canvas: android.graphics.Canvas) {
         if (!chrome) { super.draw(canvas); drawTopLine(canvas, bounds); return }
-        // halo first, centered on the outer edge so roughly half lands past the fill
-        val outer = android.graphics.RectF(bounds)
-        canvas.drawRoundRect(outer, radiusPx, radiusPx, haloPaint)
-        // fill + border inset by the halo, so the halo stays visible around them
-        val inset = (haloPx / 2f).toInt().coerceAtLeast(1)
+        // fill + border inset by 2px so both halo rings sit just outside the key border
+        val inset = (2.0f * px420).toInt().coerceAtLeast(2)
         val save = canvas.save()
         canvas.clipRect(android.graphics.RectF(bounds))
         canvas.translate(0f, 0f)
@@ -119,6 +121,11 @@ private class TopLineGradientDrawable(
         val inner = android.graphics.Rect(bounds)
         bounds = orig
         canvas.restoreToCount(save)
+        // two crisp halo rings just outside the border: inner ring 1px out, outer ring 2px out
+        val ringInner = android.graphics.RectF(inner).apply { inset(-haloPx, -haloPx) }
+        canvas.drawRoundRect(ringInner, radiusPx, radiusPx, haloInnerPaint)
+        val ringOuter = android.graphics.RectF(inner).apply { inset(-2.0f * haloPx, -2.0f * haloPx) }
+        canvas.drawRoundRect(ringOuter, radiusPx, radiusPx, haloOuterPaint)
         // side rims: vertical gradient #616161 -> #0B0B0B, 2px inside the border
         val rimX_l = inner.left + 2.0f * px420 + rimPaint.strokeWidth / 2f
         val rimX_r = inner.right - 2.0f * px420 - rimPaint.strokeWidth / 2f
