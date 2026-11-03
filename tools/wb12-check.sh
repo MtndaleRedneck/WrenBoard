@@ -1316,8 +1316,8 @@ if leg saveword; then
   dictdel() { adb shell content delete --uri content://user_dictionary/words --where "word='$1'" >/dev/null 2>&1; }
   wait_mode() { local want=$1 i; for i in $(seq 1 12); do [ "$(adb logcat -d -s IMETARGET:I 2>/dev/null | tr -d '\r' | grep -oE 'MODE=[A-Z]+ APPLIED' | tail -1)" = "MODE=$want APPLIED" ] && return 0; sleep 1; done; return 1; }
   SWP="zqxwjpos"; SWT="zqxwjtail"; SW2="zqxwjctb"; SW3="zqxwjctc"; SW4="zqxwjctd"
-  for w in $SWP $SWT $SW2 $SW3 $SW4; do dictdel "$w"; done
-  for w in $SWP $SWT $SW2 $SW3 $SW4; do
+  for w in $SWP $SWT $SW2 $SW3 $SW4 zqxwvisible; do dictdel "$w"; done
+  for w in $SWP $SWT $SW2 $SW3 $SW4 zqxwvisible; do
     dict_has "$w" "baseline"; b=$?
     [ $b -eq 0 ] && { dictdel "$w"; dict_has "$w" "baseline"; b=$?; }
     [ $b -eq 0 ] && fail "baseline: canary $w could not be cleared from the user dictionary"
@@ -1370,14 +1370,24 @@ if leg saveword; then
   clear_field
   adb shell am broadcast -a com.wrenboard.imetarget.PASSWORD --ez on false -p "$TPKG" >/dev/null 2>&1; sleep 1.0
   # Distinct privacy classification: visible password is NOT in isPasswordInputType.
+  adb logcat -c
   adb shell am broadcast -a com.wrenboard.imetarget.VISIBLEPASSWORD --ez on true -p "$TPKG" >/dev/null 2>&1
-  VP_APPLIED=$(adb logcat -d -s IMETARGET:I | grep 'VISIBLEPASSWORD=ON APPLIED' | tail -1)
-  [ -n "$VP_APPLIED" ] || fail "visible-password mode not applied"
+  VP_APPLIED=""
+  for i in 1 2 3 4 5; do
+    VP_APPLIED=$(adb logcat -d -s IMETARGET:I | grep 'VISIBLEPASSWORD=ON APPLIED' | tail -1)
+    [ -n "$VP_APPLIED" ] && break
+    sleep 0.5
+  done
+  [ -n "$VP_APPLIED" ] || fail "visible-password fixture restart was not requested"
   sleep 1; tap_field; clear_field
   adb shell input text zqxwvisible; sleep 0.5
   VP_PRE=0
   [ -n "$VP_APPLIED" ] && [ "$(field)" = "zqxwvisible" ] && VP_PRE=1 || fail "visible-password fixture canary missing"
   adb logcat -c; dbg "open:save_word" 0.4; shot sw_visible_password_blocked
+  adb logcat -d -s WBDBG:I > shots/sw_visible_password_raw.txt
+  grep -q 'SAVEWORD blocked visiblePassword=true' shots/sw_visible_password_raw.txt &&
+    pass "visible-password classification observed in actual blocked action" ||
+    fail "visible-password action did not observe blocked classification"
   # Source is guarded before text retrieval; runtime refusal still needs the positive
   # persistence control before the provider-negative can qualify.
   negcheck zqxwvisible "visible password field" $VP_PRE
@@ -1413,7 +1423,7 @@ if leg saveword; then
   adb logcat -c; dbg "open:save_word" 1.5; shot sw04_codefield_blocked
   negcheck "$SW4" "code field (com.replit.*)" $PRE3
   adb shell am broadcast -a com.wrenboard.imetarget.CLEAR -p com.replit.wbcodefield >/dev/null 2>&1
-  for w in $SWP $SWT $SW2 $SW3 $SW4; do dictdel "$w"; done
+  for w in $SWP $SWT $SW2 $SW3 $SW4 zqxwvisible; do dictdel "$w"; done
   focus_target
 fi
 if leg update; then
