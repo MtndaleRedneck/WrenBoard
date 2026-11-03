@@ -823,7 +823,14 @@ if leg clipboard; then
     # first-attempt verdict permanent, and on failure run a separate diagnostic manual-stream attempt
     # with mid-gesture frames. No green-by-retry: a first-attempt FAIL stands in the record.
     note "swipe attempt 1: input swipe ($X,$Y)->($((X-600)),$Y) 300ms; cards=$(grep -c 'CLIPCARD' shots/cl3.txt); target=$(grep 'CLIPCARD i=1 ' shots/cl3.txt | head -1 | cut -c1-140)"
-    adb logcat -c; adb shell input swipe $X $Y $((X-600)) $Y 300; sleep 1.5; wlog cl4
+    if [ "${WB_LOAD:-0}" = 1 ]; then
+      # controlled CPU load on the emulator (self-terminating after 180s) to make input-pipeline
+      # backlog reproducible instead of weather-dependent; host-side injection times are logged.
+      adb shell 'for i in 1 2 3 4 5 6; do timeout 180 sh -c "while :; do :; done" >/dev/null 2>&1 & done'
+      note "LOAD: 6 CPU spinners on the emulator for 180 s (WB_LOAD=1)"
+    fi
+    note "inject t0=$(date +%s.%N)"
+    adb logcat -c; adb shell input swipe $X $Y $((X-600)) $Y 300; note "inject t1=$(date +%s.%N)"; sleep 1.5; wlog cl4
     grep -q 'CLIP removed=1' shots/cl4.txt || { sleep 1.5; wlog cl4; }
     shot cl04_swiped_undo
     if grep -q 'CLIP removed=1' shots/cl4.txt; then pass "swipe deletes the clip"; else
