@@ -657,9 +657,9 @@ private fun WrenGifPlaceholder(w: WrenEmojiWindow, view: View, modifier: Modifie
             failed.value -> "Couldn't load GIFs - check connection"
             gifs.value.isEmpty() && mode.value == "recents" -> "No recent GIFs yet"
             gifs.value.isEmpty() -> "No GIFs found"
-            else -> "Powered by KLIPY"
+            else -> ""
         }
-        Text(status, color = EmojiColors.OrangeMuted, fontSize = 10.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp))
+        if (status.isNotEmpty()) Text(status, color = EmojiColors.OrangeMuted, fontSize = 10.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp))
         // Bottom bar: abc (back to letters) / Recents + category labels / backspace (edits the
         // GIF query only - it can never touch the host field).
         Row(Modifier.fillMaxWidth().height(44.dp).background(EmojiColors.Bar), verticalAlignment = Alignment.CenterVertically) {
