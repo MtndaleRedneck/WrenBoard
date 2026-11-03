@@ -2739,6 +2739,18 @@ public final class InputLogic {
         // Complete any pending suggestions query first
         if(!ensureSuggestionStripCompleted(settingsValues, separator)) {
             mConnection.finishComposingText();
+            // The typed text is finalized as-is (no autocorrection). Learn it exactly as a
+            // typed-word commit would, so a suggestion pass that misses its time budget
+            // never silently drops the user's word from typing history.
+            final String abandonedTypedWord =
+                    WrenAbandonedCommitLearning.wordToLearn(mWordComposer.getTypedWord());
+            if (abandonedTypedWord != null) {
+                final NgramContext ngramContext = mConnection.getNgramContextFromNthPreviousWord(
+                        settingsValues.mSpacingAndPunctuations,
+                        WrenAbandonedCommitLearning.nthPreviousWord(mWordComposer.isComposingWord()));
+                performAdditionToUserHistoryDictionary(settingsValues, abandonedTypedWord,
+                        ngramContext, -1 /* importance, same as commitTyped */);
+            }
             mWordComposer.reset(true);
             return false;
         }
