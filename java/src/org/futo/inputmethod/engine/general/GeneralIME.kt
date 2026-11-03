@@ -619,12 +619,15 @@ class GeneralIME(val helper: IMEHelper) : IMEInterface, WordLearner, SuggestionS
 
             updateSuggestionJob = newJob
 
-            return runBlocking {
+            val waitStart = android.os.SystemClock.uptimeMillis()
+            val completed = runBlocking {
                 (withTimeoutOrNull(450L) {
                     newJob.join()
                     true
                 } == true)
             }
+            if (BuildConfig.DEBUG) Log.i("WBDBG", "STARTER ensureCompleted=$completed elapsed=${android.os.SystemClock.uptimeMillis() - waitStart}ms")
+            return completed
         }
         return true
     }
