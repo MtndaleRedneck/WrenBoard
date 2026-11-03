@@ -1,5 +1,6 @@
 package org.futo.inputmethod.latin.uix.actions
 
+import android.os.Build
 import android.view.View
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -26,6 +27,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
@@ -40,6 +42,7 @@ import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -63,6 +66,19 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
 import androidx.datastore.preferences.core.stringPreferencesKey
+import coil.compose.AsyncImage
+import coil.decode.ImageDecoderDecoder
+import coil.request.ImageRequest
+import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.flow.debounce
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.TextStyle
+import org.futo.inputmethod.latin.uix.gif.KlipyClient
+import org.futo.inputmethod.latin.uix.gif.KlipyClient.KlipyGif
+import org.futo.inputmethod.latin.uix.gif.klipyCustomerId
+import org.futo.inputmethod.latin.uix.gif.KlipyInsert
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.futo.inputmethod.latin.R
@@ -498,45 +514,102 @@ private fun WrenEmojiSearch(w: WrenEmojiWindow, emojis: List<EmojiItem>, view: V
  * GIF tab. No free GIF source is wired in (every GIF service needs an account key), so the tab shows its
  * search field and mood chips with an empty grid. Flagged as open in the 1.2 report.
  */
+@OptIn(FlowPreview::class)
 @Composable
 private fun WrenGifPlaceholder(w: WrenEmojiWindow, view: View, modifier: Modifier) {
-    Column(modifier.fillMaxWidth().background(Brush.verticalGradient(listOf(EmojiColors.GridTop, EmojiColors.GridMid, EmojiColors.GridBottom)))) {
-        // Empty placeholder tiles (no text: Ezzy wants no hint text in panels).
-        Row(Modifier.weight(1f).fillMaxWidth().padding(8.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            listOf(listOf(0.42f, 0.58f), listOf(0.6f, 0.4f)).forEach { col ->
-                Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    col.forEach { frac ->
-                        Box(Modifier.fillMaxWidth().weight(frac).clip(RoundedCornerShape(0.dp)).background(Color(0xFF55524E)))
-                    }
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val appKey = org.futo.inputmethod.latin.BuildConfig.KLIPY_APP_KEY
+    val hasKey = appKey.isNotBlank()
+    val customerId = remember { if (hasKey) klipyCustomerId(context) else "" }
+    val query = remember { mutableStateOf("") }
+    val gifs = remember { mutableStateOf<List<KlipyGif>>(emptyList()) }
+    val loading = remember { mutableStateOf(false) }
+    val failed = remember { mutableStateOf(false) }
+    // "trending" (default), "recents", or "search" (query drives results)
+    val mode = remember { mutableStateOf("trending") }
+
+    val canInsert = remember { KlipyInsert.canOffer(w.manager) }
+
+    LaunchedEffect(hasKey, canInsert) {
+        if (!hasKey || !canInsert) return@LaunchedEffect
+        snapshotFlow { Pair(mode.value, query.value) }.debounce(300).collect { (m, q) ->
+            loading.value = true; failed.value = false
+            try {
+                gifs.value = when {
+                    m == "recents" -> KlipyClient.recent(appKey, customerId)
+                    q.isBlank() -> KlipyClient.trending(appKey, customerId)
+                    else -> KlipyClient.search(appKey, customerId, q)
                 }
+            } catch (_: Exception) {
+                failed.value = true; gifs.value = emptyList()
             }
-        }
-        val chip = remember { mutableStateOf(0) }
-        Row(Modifier.fillMaxWidth().height(47.dp).background(EmojiColors.Bar), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.width(56.dp).fillMaxHeight().clickable {
-                w.manager.closeActionWindow()
-                w.manager.performHapticAndAudioFeedback(Constants.CODE_SWITCH_ALPHA_SYMBOL, view)
-            }, contentAlignment = Alignment.Center) { Text("abc", color = EmojiColors.Orange, fontSize = 17.9.sp) }
-            Row(Modifier.weight(1f).fillMaxHeight().horizontalScroll(rememberScrollState()), verticalAlignment = Alignment.CenterVertically) {
-                listOf(R.string.wren_gif_recents, R.string.wren_gif_happy, R.string.wren_gif_sad, R.string.wren_gif_laugh).forEachIndexed { i, label ->
-                    val active = chip.value == i
-                    Box(Modifier.fillMaxHeight().clickable { chip.value = i }.padding(horizontal = 12.dp), contentAlignment = Alignment.Center) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            if (i == 0) {
-                                Ic(if (active) R.drawable.wren_ic_schedule_fill else R.drawable.wren_ic_schedule, if (active) EmojiColors.Orange else EmojiColors.OrangeMuted, 20.dp, desc = stringResource(R.string.wren_cd_recent))
-                                Spacer(Modifier.width(5.dp))
-                            }
-                            Text(stringResource(label), color = if (active) EmojiColors.Orange else EmojiColors.OrangeMuted, fontSize = 15.sp,
-                                fontWeight = if (active) FontWeight.Medium else FontWeight.Normal)
-                        }
-                        if (active) Box(Modifier.align(Alignment.BottomCenter).padding(bottom = 2.dp).width(27.dp).height(2.3.dp).background(EmojiColors.Orange, RoundedCornerShape(1.dp)))
-                    }
-                }
-            }
-            Box(Modifier.width(44.dp).fillMaxHeight().repeatablyClickableAction { repeated ->
-                w.manager.backspace(1)
-                if (!repeated) w.manager.performHapticAndAudioFeedback(Constants.CODE_DELETE, view)
-            }, contentAlignment = Alignment.Center) { Ic(R.drawable.wren_ic_backspace_fill, EmojiColors.Orange, 30.dp, desc = stringResource(R.string.wren_cd_backspace)) }
+            loading.value = false
         }
     }
+
+    Column(modifier = modifier.fillMaxWidth()) {
+        if (!hasKey) {
+            Box(modifier = Modifier.fillMaxWidth().padding(12.dp).clip(RoundedCornerShape(12.dp)).background(EmojiColors.Field).padding(18.dp), contentAlignment = Alignment.Center) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("GIFs powered by KLIPY", color = EmojiColors.Orange, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                    Spacer(Modifier.height(6.dp))
+                    Text("Missing KLIPY_APP_KEY - set it in local.properties for this preview build.", color = EmojiColors.OrangeMuted, fontSize = 12.sp, textAlign = TextAlign.Center)
+                }
+            }
+            return@Column
+        }
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp), contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)) {
+            item {
+                Box(Modifier.clip(RoundedCornerShape(8.dp)).background(EmojiColors.Chip.copy(alpha = 0.5f)).clickable { w.tab.value = 0 }.padding(horizontal = 12.dp, vertical = 6.dp)) {
+                    Text("\u2190 emoji", color = EmojiColors.OrangeMuted, fontSize = 13.sp)
+                }
+            }
+            items(listOf("Recents", "Trending", "happy", "sad", "laugh", "love")) { label ->
+                Box(Modifier.clip(RoundedCornerShape(8.dp)).background(EmojiColors.Chip).clickable {
+                    when (label) {
+                        "Recents" -> { mode.value = "recents"; query.value = "" }
+                        "Trending" -> { mode.value = "trending"; query.value = "" }
+                        else -> { mode.value = "search"; query.value = label }
+                    }
+                }.padding(horizontal = 12.dp, vertical = 6.dp)) {
+                    Text(label, color = EmojiColors.OrangeMuted, fontSize = 13.sp)
+                }
+            }
+        }
+        Box(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp).clip(RoundedCornerShape(8.dp)).background(EmojiColors.Chip).padding(horizontal = 12.dp, vertical = 9.dp)) {
+            if (query.value.isEmpty()) Text("Search KLIPY", color = EmojiColors.OrangeMuted, fontSize = 14.sp)
+            BasicTextField(value = query.value,
+                onValueChange = { query.value = it; if (it.isNotEmpty()) mode.value = "search" },
+                textStyle = TextStyle(color = EmojiColors.Orange, fontSize = 14.sp),
+                singleLine = true, modifier = Modifier.fillMaxWidth())
+        }
+        LazyVerticalGrid(columns = GridCells.Fixed(3), modifier = Modifier.weight(1f),
+            contentPadding = PaddingValues(6.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            items(gifs.value, key = { it.id }) { gif ->
+                AsyncImage(
+                    model = ImageRequest.Builder(context).data(gif.gridPreview()?.url)
+                        .apply { if (Build.VERSION.SDK_INT >= 28) decoderFactory(ImageDecoderDecoder.Factory()) }
+                        .build(),
+                    contentDescription = gif.title,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(8.dp))
+                        .background(EmojiColors.Field).clickable {
+                            KlipyInsert.insert(w.manager, appKey, gif)
+                        })
+            }
+        }
+        val status = when {
+            !canInsert -> "This app does not accept GIFs here"
+            loading.value -> "Loading\u2026"
+            failed.value -> "Couldn't load GIFs - check connection"
+            gifs.value.isEmpty() && mode.value == "recents" -> "No recent GIFs yet"
+            gifs.value.isEmpty() -> "No GIFs found"
+            else -> "Powered by KLIPY"
+        }
+        Text(status, color = EmojiColors.OrangeMuted, fontSize = 10.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp))
+    }
 }
+

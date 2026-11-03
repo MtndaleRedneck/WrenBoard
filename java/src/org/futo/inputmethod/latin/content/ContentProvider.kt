@@ -14,9 +14,12 @@ import java.util.UUID
 
 val FONT_AUTHORITY = BuildConfig.APPLICATION_ID + ".font"
 private val CODE_RENDERED_FONT_IMAGE = 1
+private val CODE_KLIPY_GIF = 2
 
 private val URI_MATCHER = UriMatcher(UriMatcher.NO_MATCH).apply {
     addURI(FONT_AUTHORITY, "render/*", CODE_RENDERED_FONT_IMAGE)
+    // WrenBoard 1.5 (item 1): in-memory piped KLIPY GIFs, nothing kept on disk
+    addURI(FONT_AUTHORITY, "gif/*", CODE_KLIPY_GIF)
 }
 
 class KbContentProvider: ContentProvider() {
@@ -41,11 +44,15 @@ class KbContentProvider: ContentProvider() {
             ParcelFileDescriptor.MODE_READ_ONLY
         )
 
-        if (URI_MATCHER.match(uri) != CODE_RENDERED_FONT_IMAGE) {
+        val match = URI_MATCHER.match(uri)
+        if (match != CODE_RENDERED_FONT_IMAGE && match != CODE_KLIPY_GIF) {
             throw IllegalArgumentException("Unsupported URI: $uri")
         }
 
         val id = uri.lastPathSegment ?: throw IllegalArgumentException("Invalid URI")
+        if (match == CODE_KLIPY_GIF) {
+            return org.futo.inputmethod.latin.uix.gif.KlipyGifPipe.openStream(UUID.fromString(id))
+        }
         return ImageTyperState.renderRequest(context!!, UUID.fromString(id))
     }
 
@@ -53,6 +60,7 @@ class KbContentProvider: ContentProvider() {
     override fun getType(uri: Uri): String =
         when(URI_MATCHER.match(uri)) {
             CODE_RENDERED_FONT_IMAGE -> "image/png"
+            CODE_KLIPY_GIF -> "image/gif"
             else -> throw IllegalArgumentException("Unsupported URI: $uri")
         }
 

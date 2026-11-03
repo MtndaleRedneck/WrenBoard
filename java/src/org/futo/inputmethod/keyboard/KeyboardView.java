@@ -630,10 +630,22 @@ public class KeyboardView extends View {
         // Draw key icon.
         if (icon != null) {
             final float size = kdc.getTextSize() * 1.75f;
+            final float iconDm = getResources().getDisplayMetrics().density;
 
             int iconWidth;
+            Integer iconHeightOverride = null;
             if (key.getCode() == Constants.CODE_SPACE && icon instanceof NinePatchDrawable) {
                 iconWidth = (int)(keyWidth * mSpacebarIconWidthRatio);
+            } else if (KeyboardIconsSet.NAME_SPACE_KEY_FOR_NUMBER_LAYOUT.equals(key.getIconId())) {
+                // WrenBoard 1.5 item 5e (Tab's cosmetic value, candidate): number-layout space
+                // glyph is a bracket 24dp wide x 6dp tall (2dp stroke lives in the vector).
+                iconWidth = (int)(24.0f * iconDm);
+                iconHeightOverride = (int)(6.0f * iconDm);
+            } else if (KeyboardIconsSet.NAME_EMOJI_NORMAL_KEY.equals(key.getIconId())
+                    || KeyboardIconsSet.NAME_EMOJI_ACTION_KEY.equals(key.getIconId())) {
+                // WrenBoard 1.5 item 5f (Tab's cosmetic value, candidate): emoji key icon 17dp
+                // (45px at 420dpi, 51 at 480), centred - the centring below already does that.
+                iconWidth = (int)(17.0f * iconDm);
             } else if (FULL_SIZE_ICON_IDS.contains(key.getIconId())) {
                 // WrenBoard 1.4 SwiftKey parity (items 9/11): the 32dp key artwork (shift states, delete,
                 // enter, arrow row) renders at its full designed box; every other icon keeps the cap below.
@@ -643,12 +655,12 @@ public class KeyboardView extends View {
             }
             int iconHeight = icon.getIntrinsicHeight();
 
-            if(!FULL_SIZE_ICON_IDS.contains(key.getIconId()) && iconWidth > size) {
+            if(iconHeightOverride == null && !FULL_SIZE_ICON_IDS.contains(key.getIconId()) && iconWidth > size) {
                 //iconHeight = (int)((float)iconHeight / (float)iconWidth * (float)size);
                 iconWidth = (int)size;
             }
 
-            iconHeight = iconWidth;
+            iconHeight = (iconHeightOverride != null) ? iconHeightOverride : iconWidth;
 
             final int iconY;
             if (key.isAlignIconToBottom()) {

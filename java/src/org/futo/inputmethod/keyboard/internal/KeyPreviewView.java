@@ -61,11 +61,24 @@ public class KeyPreviewView extends androidx.appcompat.widget.AppCompatTextView 
 
     public KeyPreviewView(final Context context, final AttributeSet attrs, final int defStyleAttr) {
         super(context, attrs, defStyleAttr);
-        // S4: glyph centres on the row above (~26% of the box), not at the bottom of the top area
-        setGravity(Gravity.CENTER | Gravity.CENTER_HORIZONTAL);
+        // WrenBoard 1.5 item 5b (Tab's target, sign-off via rendered before/after at 420dpi): the
+        // glyph centre sits at 26% of the box height from the top ("centred on the row above").
+        // Gravity.CENTER only looked like that while the old balloon background carried large
+        // bottom padding; the flat raised box has none, so position it explicitly.
+        setGravity(Gravity.TOP | Gravity.CENTER_HORIZONTAL);
         setIncludeFontPadding(false);
 
         mDrawableProvider = DynamicThemeProvider.obtainFromContext(context);
+    }
+
+    @Override
+    protected void onSizeChanged(final int w, final int h, final int oldw, final int oldh) {
+        super.onSizeChanged(w, h, oldw, oldh);
+        // padTop so the single-line glyph block centres at 26% of the box height (item 5b).
+        final android.graphics.Paint.FontMetrics fm = getPaint().getFontMetrics();
+        final float textH = fm.descent - fm.ascent;
+        final int padTop = (int)(h * 0.26f - textH / 2f);
+        setPadding(getPaddingLeft(), Math.max(0, padTop), getPaddingRight(), 0);
     }
 
     @Nullable
@@ -94,6 +107,14 @@ public class KeyPreviewView extends androidx.appcompat.widget.AppCompatTextView 
         setTextAndScaleX(key.getWidth(), key.getPreviewLabel());
 
         currKey = key;
+
+        // item 5b: text size just changed; re-place the glyph block if the box is already laid out
+        if (getHeight() > 0) {
+            final android.graphics.Paint.FontMetrics fm = getPaint().getFontMetrics();
+            final float textH = fm.descent - fm.ascent;
+            final int padTop = (int)(getHeight() * 0.26f - textH / 2f);
+            setPadding(getPaddingLeft(), Math.max(0, padTop), getPaddingRight(), 0);
+        }
     }
 
     private boolean drawFlickKeys(final Canvas canvas) {
