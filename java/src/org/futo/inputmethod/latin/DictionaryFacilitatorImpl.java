@@ -68,7 +68,6 @@ import javax.annotation.Nullable;
  * a client for interacting with dictionaries.
  */
 public class DictionaryFacilitatorImpl implements DictionaryFacilitator {
-    private static int sWriteQueuedOrdinal = 0;
     // TODO: Consolidate dictionaries in native code.
     public static final String TAG = DictionaryFacilitatorImpl.class.getSimpleName();
 
@@ -734,12 +733,12 @@ public class DictionaryFacilitatorImpl implements DictionaryFacilitator {
         final ExpandableBinaryDictionary userHistoryDictionary =
                 dictionaryGroup.getSubDict(Dictionary.TYPE_USER_HISTORY);
         if (userHistoryDictionary == null || !isForLocale(userHistoryDictionary.mLocale)) {
-            if (BuildConfig.DEBUG) Log.i("WBDBG", "STARTER drop reason=noHistoryDict");
+            if (BuildConfig.DEBUG) Log.i("WBDBG", "STARTER drop id=" + org.futo.inputmethod.engine.general.WrenLearnTrace.id() + " reason=noHistoryDict");
             return;
         }
         final int maxFreq = getFrequency(word);
         if (maxFreq == 0 && blockPotentiallyOffensive) {
-            if (BuildConfig.DEBUG) Log.i("WBDBG", "STARTER drop reason=blocked");
+            if (BuildConfig.DEBUG) Log.i("WBDBG", "STARTER drop id=" + org.futo.inputmethod.engine.general.WrenLearnTrace.id() + " reason=blocked");
             return;
         }
         final String lowerCasedWord = word.toLowerCase(dictionaryGroup.mLocale);
@@ -779,7 +778,8 @@ public class DictionaryFacilitatorImpl implements DictionaryFacilitator {
         final boolean isValid = maxFreq > 0;
         UserHistoryDictionary.addToDictionary(userHistoryDictionary, ngramContext, secondWord,
                 isValid, timeStampInSeconds);
-        if (BuildConfig.DEBUG) Log.i("WBDBG", "STARTER writeQueued #" + (++sWriteQueuedOrdinal)
+        if (BuildConfig.DEBUG) Log.i("WBDBG", "STARTER writeQueued id="
+                + org.futo.inputmethod.engine.general.WrenLearnTrace.id()
                 + " at " + SystemClock.uptimeMillis());
     }
 

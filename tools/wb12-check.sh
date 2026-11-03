@@ -125,6 +125,7 @@ for i in $(seq 1 30); do IME=$(adb shell ime list -a -s 2>/dev/null | tr -d '\r'
 note "ime id: $IME"
 
 if leg setup; then
+  dbg "synthetictrace:on" 0.5   # allow SUGG content logging on this test device (default: counts only)
   note "== SETUP: no wall, settings usable before WrenBoard is on =="
   adb shell ime disable "$IME" >/dev/null 2>&1
   adb shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1; sleep 6

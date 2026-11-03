@@ -142,7 +142,7 @@ class GeneralIME(val helper: IMEHelper) : IMEInterface, WordLearner, SuggestionS
         val isWordBlacklisted = SuggestionBlacklist.getCapitalVariants(word, settings.current.mLocale).any { !suggestionBlacklist.isWordOk(it) }
         if(isWordBlacklisted) return
 
-        if (BuildConfig.DEBUG) android.util.Log.i("WBDBG", "STARTER learn at ${android.os.SystemClock.uptimeMillis()}")
+        if (BuildConfig.DEBUG) android.util.Log.i("WBDBG", "STARTER learn id=${WrenLearnTrace.id()} at ${android.os.SystemClock.uptimeMillis()}")
         dictionaryFacilitator.addToUserHistory(
             word, wasCapitalized,
             ngramContext, timestamp,

@@ -58,7 +58,6 @@ import javax.annotation.Nullable;
  */
 abstract public class ExpandableBinaryDictionary extends Dictionary {
     private static final boolean DEBUG = false;
-    private int mWriteTaskOrdinal = 0;
 
     /** Used for Log actions from this class */
     private static final String TAG = ExpandableBinaryDictionary.class.getSimpleName();
@@ -289,20 +288,25 @@ abstract public class ExpandableBinaryDictionary extends Dictionary {
     }
 
     private void updateDictionaryWithWriteLock(@Nonnull final Runnable updateTask) {
+        updateDictionaryWithWriteLock(updateTask, 0);
+    }
+
+    private void updateDictionaryWithWriteLock(@Nonnull final Runnable updateTask,
+            final int learnTraceId) {
         reloadDictionaryIfRequired();
         final Runnable task = new Runnable() {
             @Override
             public void run() {
                 final boolean traceThisDict =
-                        BuildConfig.DEBUG && Dictionary.TYPE_USER_HISTORY.equals(mDictType);
-                final int taskOrdinal = traceThisDict ? ++mWriteTaskOrdinal : 0;
+                        BuildConfig.DEBUG && Dictionary.TYPE_USER_HISTORY.equals(mDictType)
+                                && learnTraceId != 0;
                 if (traceThisDict) {
-                    Log.i("WBDBG", "STARTER writeTaskStart #" + taskOrdinal + " at "
+                    Log.i("WBDBG", "STARTER writeTaskStart id=" + learnTraceId + " at "
                             + android.os.SystemClock.uptimeMillis());
                 }
                 if (getBinaryDictionary() == null) {
                     if (traceThisDict) {
-                        Log.i("WBDBG", "STARTER writeDropped-nullDict #" + taskOrdinal + " at "
+                        Log.i("WBDBG", "STARTER writeDropped-nullDict id=" + learnTraceId + " at "
                                 + android.os.SystemClock.uptimeMillis());
                     }
                     return;
@@ -392,6 +396,7 @@ abstract public class ExpandableBinaryDictionary extends Dictionary {
      */
     public void updateEntriesForWord(@Nonnull final NgramContext ngramContext,
             final String word, final boolean isValidWord, final int count, final int timestamp) {
+        final int learnTraceId = org.futo.inputmethod.engine.general.WrenLearnTrace.id();
         updateDictionaryWithWriteLock(new Runnable() {
             @Override
             public void run() {
@@ -405,12 +410,13 @@ abstract public class ExpandableBinaryDictionary extends Dictionary {
                     if (DEBUG) {
                         Log.e(TAG, "Cannot update counter. dictionary: " + mDictName);
                     }
-                } else if (BuildConfig.DEBUG && Dictionary.TYPE_USER_HISTORY.equals(mDictType)) {
-                    Log.i("WBDBG", "STARTER stored #" + mWriteTaskOrdinal + " at "
+                } else if (BuildConfig.DEBUG && Dictionary.TYPE_USER_HISTORY.equals(mDictType)
+                        && learnTraceId != 0) {
+                    Log.i("WBDBG", "STARTER stored id=" + learnTraceId + " at "
                             + android.os.SystemClock.uptimeMillis());
                 }
             }
-        });
+        }, learnTraceId);
     }
 
     /**
