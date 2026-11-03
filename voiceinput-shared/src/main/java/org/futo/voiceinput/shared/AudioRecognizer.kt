@@ -384,7 +384,8 @@ class AudioRecognizer(
                 numConsecutiveNonSpeech = 0
             }
 
-            val rms = sqrt(samples.sumOf { (it.toFloat() / Short.MAX_VALUE.toFloat()).pow(2).toDouble() } / samples.size).toFloat()
+            // Only valid samples from this read; the rest of the buffer may be stale.
+            val rms = validSampleRms(samples, nRead)
 
             if (startSoundPassed && ((rms > 0.01) || (numConsecutiveSpeech > 8))) {
                 hasTalked = true
@@ -577,6 +578,11 @@ class AudioRecognizer(
         }
 
         val floatArray = floatSamples.array().sliceArray(0 until floatSamples.position())
+        // Exact zero only. This does not classify nonzero noise or reject quiet speech.
+        if (isExactEmptyCapture(floatArray)) {
+            withContext(Dispatchers.Main) { listener.finished("") }
+            return
+        }
 
         yield()
         val outputText = try {
