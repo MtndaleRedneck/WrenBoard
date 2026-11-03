@@ -2017,18 +2017,19 @@ public final class InputLogic {
         // If correction is not enabled, we don't add words to the user history dictionary.
         // That's to avoid unintended additions in some sensitive fields, or fields that
         // expect to receive non-words.
-        if (BuildConfig.DEBUG) Log.i("WBDBG", "STARTER learnEnter '" + suggestion
+        if (BuildConfig.DEBUG) Log.i("WBDBG", "STARTER learnEnter '"
+                + org.futo.inputmethod.engine.general.WrenTraceRedact.word(suggestion)
                 + "' at " + SystemClock.uptimeMillis());
         if (!settingsValues.mAutoCorrectionEnabledPerTextFieldSettings) {
-            if (BuildConfig.DEBUG) Log.i("WBDBG", "STARTER learnSkip '" + suggestion + "' reason=autocorrectOff");
+            if (BuildConfig.DEBUG) Log.i("WBDBG", "STARTER learnSkip '" + org.futo.inputmethod.engine.general.WrenTraceRedact.word(suggestion) + "' reason=autocorrectOff");
             return;
         }
         if (!settingsValues.isPersonalizationEnabled()) {
-            if (BuildConfig.DEBUG) Log.i("WBDBG", "STARTER learnSkip '" + suggestion + "' reason=personalizationOff");
+            if (BuildConfig.DEBUG) Log.i("WBDBG", "STARTER learnSkip '" + org.futo.inputmethod.engine.general.WrenTraceRedact.word(suggestion) + "' reason=personalizationOff");
             return;
         }
         if (settingsValues.mInputAttributes.mNoLearning) {
-            if (BuildConfig.DEBUG) Log.i("WBDBG", "STARTER learnSkip '" + suggestion + "' reason=noLearning");
+            if (BuildConfig.DEBUG) Log.i("WBDBG", "STARTER learnSkip '" + org.futo.inputmethod.engine.general.WrenTraceRedact.word(suggestion) + "' reason=noLearning");
             return;
         }
 
@@ -2036,7 +2037,7 @@ public final class InputLogic {
             // Since we don't unlearn when the user backspaces on a slow InputConnection,
             // turn off learning to guard against adding typos that the user later deletes.
             Log.w(TAG, "Skipping learning due to slow InputConnection.");
-            if (BuildConfig.DEBUG) Log.i("WBDBG", "STARTER learnSkip '" + suggestion + "' reason=slowConn");
+            if (BuildConfig.DEBUG) Log.i("WBDBG", "STARTER learnSkip '" + org.futo.inputmethod.engine.general.WrenTraceRedact.word(suggestion) + "' reason=slowConn");
             return;
         }
 
@@ -2051,7 +2052,8 @@ public final class InputLogic {
 
         StatsUtils.onWordLearned(mImeHelper.getContext(), suggestion);
 
-        if (BuildConfig.DEBUG) Log.i("WBDBG", "STARTER learnRequest '" + suggestion
+        if (BuildConfig.DEBUG) Log.i("WBDBG", "STARTER learnRequest '"
+                + org.futo.inputmethod.engine.general.WrenTraceRedact.word(suggestion)
                 + "' at " + SystemClock.uptimeMillis());
         mIme.addToHistory(suggestion, wasAutoCapitalized,
                 ngramContext, timeStampInSeconds, settingsValues.mBlockPotentiallyOffensive,
@@ -2739,20 +2741,7 @@ public final class InputLogic {
         // Complete any pending suggestions query first
         if(!ensureSuggestionStripCompleted(settingsValues, separator)) {
             mConnection.finishComposingText();
-            // The typed text is finalized as-is (no autocorrection). Learn it exactly as a
-            // typed-word commit would, so a suggestion pass that misses its time budget
-            // never silently drops the user's word from typing history.
-            final String abandonedTypedWord =
-                    WrenAbandonedCommitLearning.wordToLearn(mWordComposer.getTypedWord());
-            if (BuildConfig.DEBUG) Log.i("WBDBG", "STARTER abandonCommit word='" + abandonedTypedWord
-                    + "' at " + SystemClock.uptimeMillis());
-            if (abandonedTypedWord != null) {
-                final NgramContext ngramContext = mConnection.getNgramContextFromNthPreviousWord(
-                        settingsValues.mSpacingAndPunctuations,
-                        WrenAbandonedCommitLearning.nthPreviousWord(mWordComposer.isComposingWord()));
-                performAdditionToUserHistoryDictionary(settingsValues, abandonedTypedWord,
-                        ngramContext, -1 /* importance, same as commitTyped */);
-            }
+            learnAbandonedTypedWord(settingsValues);
             mWordComposer.reset(true);
             return false;
         }
@@ -2790,6 +2779,31 @@ public final class InputLogic {
             }
         }
         return true;
+    }
+
+    /**
+     * Learning half of an abandoned auto-correct commit (suggestions missed their time
+     * budget): the typed text is finalized as-is, so it must be learned exactly as a
+     * typed-word commit would learn it, or a slow device silently stops building typing
+     * history. Package-private so instrumented wiring tests can drive the real path.
+     */
+    void learnAbandonedTypedWord(final SettingsValues settingsValues) {
+        final String abandonedTypedWord =
+                WrenAbandonedCommitLearning.wordToLearn(mWordComposer.getTypedWord());
+        if (BuildConfig.DEBUG) Log.i("WBDBG", "STARTER abandonCommit word='"
+                + org.futo.inputmethod.engine.general.WrenTraceRedact.word(abandonedTypedWord)
+                + "' at " + SystemClock.uptimeMillis());
+        if (abandonedTypedWord != null) {
+            final NgramContext ngramContext = mConnection.getNgramContextFromNthPreviousWord(
+                    settingsValues.mSpacingAndPunctuations,
+                    WrenAbandonedCommitLearning.nthPreviousWord(mWordComposer.isComposingWord()));
+            // Same learning-pipeline order as commitChosenWord: onWordCommitted updates
+            // per-locale dictionary confidence first; without it addToUserHistory's
+            // confidence-based group selection can silently refuse the write.
+            mDictionaryFacilitator.onWordCommitted(abandonedTypedWord);
+            performAdditionToUserHistoryDictionary(settingsValues, abandonedTypedWord,
+                    ngramContext, -1 /* importance, same as commitTyped */);
+        }
     }
 
     /**
