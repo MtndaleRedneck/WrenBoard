@@ -72,10 +72,10 @@ private val wrenLayoutNames = setOf(
     R.string.size_settings_title,
     R.string.keyboard_settings_show_number_row,
     R.string.keyboard_settings_show_arrow_row,
-    R.string.morekey_settings_title,
     R.string.keyboard_settings_hide_when_hardware_keyboard_is_connected,
 )
-private val wrenLayoutRows get() = KeyboardSettingsMenu.settings.filter { it.name in wrenLayoutNames }
+private val wrenLayoutRows get() = KeyboardSettingsMenu.settings.filter { it.name in wrenLayoutNames } +
+        LongPressMenu.settings.filter { it.name == R.string.morekey_settings_layout }
 
 val WrenLayoutMenu = UserSettingsMenu(
     title = R.string.wren_set_layout,
