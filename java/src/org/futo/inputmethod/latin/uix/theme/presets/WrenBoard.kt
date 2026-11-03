@@ -25,7 +25,8 @@ import org.futo.inputmethod.v2keyboard.KeyVisualStyle
 // Colors measured from the user's reference design.
 
 private val AccentOrange = Color(0xFFFF8A14)
-private val HintGrey = 0xFFECECEC.toInt()
+// WrenBoard 1.5 (item 10, candidate): SwiftKey's hint symbols are pure #FFFFFF.
+private val HintGrey = 0xFFFFFFFF.toInt()
 
 private val darkScheme = extendedDarkColorScheme(
     primary=AccentOrange,
@@ -100,18 +101,23 @@ private class TopLineGradientDrawable(
         strokeWidth = haloPx.coerceAtLeast(1f)
     }
     // PARITY 1: 1px side rim 2px inside the border, #616161 at the top fading to ~#0B0B0B.
+    // WrenBoard 1.5 (item 10, candidate): Tab measured SwiftKey's rim ~25 levels over the fill
+    // vs our ~14 - brighten the top stop.
     private val rimPaint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
         style = android.graphics.Paint.Style.STROKE
         strokeWidth = (1.0f * px420).coerceAtLeast(1f)
     }
     private val linePaint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
-        color = 0xFF6D6D6D.toInt() // item 5c: 1px #6D6D6D
-        strokeWidth = (1.0f * px420).coerceAtLeast(1f)
+        // WrenBoard 1.5 (item 10, candidate): SwiftKey's top highlight is a 2px soft line about
+        // #52-#58, not our hard 1px #6D6D6D.
+        color = 0xFF565656.toInt()
+        strokeWidth = (2.0f * px420).coerceAtLeast(1.5f)
     }
     override fun draw(canvas: android.graphics.Canvas) {
         if (!chrome) { super.draw(canvas); drawTopLine(canvas, bounds); return }
-        // fill + border inset by 2px so both halo rings sit just outside the key border
-        val inset = (2.0f * px420).toInt().coerceAtLeast(2)
+        // WrenBoard 1.5 (item 10, candidate): inset 2px -> 1px so the halo hugs the border and the
+        // visible key-to-key gap tightens toward SwiftKey's 6px@420.
+        val inset = (1.0f * px420).toInt().coerceAtLeast(1)
         val save = canvas.save()
         canvas.clipRect(android.graphics.RectF(bounds))
         canvas.translate(0f, 0f)
@@ -123,19 +129,66 @@ private class TopLineGradientDrawable(
         canvas.restoreToCount(save)
         // two crisp halo rings just outside the border: inner ring 1px out, outer ring 2px out
         val ringInner = android.graphics.RectF(inner).apply { inset(-haloPx, -haloPx) }
-        canvas.drawRoundRect(ringInner, radiusPx, radiusPx, haloInnerPaint)
+        canvas.drawRoundRect(ringInner, radiusPx + haloPx, radiusPx + haloPx, haloInnerPaint)
         val ringOuter = android.graphics.RectF(inner).apply { inset(-2.0f * haloPx, -2.0f * haloPx) }
-        canvas.drawRoundRect(ringOuter, radiusPx, radiusPx, haloOuterPaint)
+        canvas.drawRoundRect(ringOuter, radiusPx + 2.0f * haloPx, radiusPx + 2.0f * haloPx, haloOuterPaint)
         // side rims: vertical gradient #616161 -> #0B0B0B, 2px inside the border
         val rimX_l = inner.left + 2.0f * px420 + rimPaint.strokeWidth / 2f
         val rimX_r = inner.right - 2.0f * px420 - rimPaint.strokeWidth / 2f
         rimPaint.shader = android.graphics.LinearGradient(
             0f, inner.top.toFloat(), 0f, inner.bottom.toFloat(),
-            0xFF616161.toInt(), 0xFF0B0B0B.toInt(), android.graphics.Shader.TileMode.CLAMP
+            0xFF707070.toInt(), 0xFF0B0B0B.toInt(), android.graphics.Shader.TileMode.CLAMP
         )
-        canvas.drawLine(rimX_l, inner.top + radiusPx, rimX_l, inner.bottom - 1f, rimPaint)
-        canvas.drawLine(rimX_r, inner.top + radiusPx, rimX_r, inner.bottom - 1f, rimPaint)
+        canvas.drawLine(rimX_l, inner.top + radiusPx, rimX_l, inner.bottom - radiusPx, rimPaint)
+        canvas.drawLine(rimX_r, inner.top + radiusPx, rimX_r, inner.bottom - radiusPx, rimPaint)
         drawTopLine(canvas, inner)
+        drawBorderNoBottom(canvas, inner)
+        drawBottomFade(canvas, inner)
+    }
+
+    // WrenBoard 1.5 (item 10, candidate): 1px #0C0C0C on top and sides only (was a full stroke);
+    // bottom edge fades into the gap over 3-4px instead.
+    private val borderPaint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+        style = android.graphics.Paint.Style.STROKE
+        color = 0xFF0C0C0C.toInt()
+        strokeWidth = 1.0f
+    }
+    private fun drawBorderNoBottom(canvas: android.graphics.Canvas, b: android.graphics.Rect) {
+        // Rounded path, not straight full-length lines: the straight version squared the rounded
+        // corners. 1px stroke centred on the edge (half-px offset keeps it one crisp pixel);
+        // sides stop above the bottom fade.
+        val half = borderPaint.strokeWidth / 2f
+        // Straight sides must stop where the lower rounded corner begins, not project
+        // past its silhouette as dark feet. The clipped fade owns the bottom edge.
+        val stop = b.bottom - radiusPx
+        val r = radiusPx
+        val path = android.graphics.Path().apply {
+            moveTo(b.left + half, stop)
+            lineTo(b.left + half, b.top + r)
+            arcTo(android.graphics.RectF(b.left + half, b.top + half, b.left + half + 2 * r, b.top + half + 2 * r), 180f, 90f)
+            lineTo(b.right - half - r, b.top + half)
+            arcTo(android.graphics.RectF(b.right - half - 2 * r, b.top + half, b.right - half, b.top + half + 2 * r), 270f, 90f)
+            lineTo(b.right - half, stop)
+        }
+        canvas.drawPath(path, borderPaint)
+    }
+    private val bottomFadePaint = android.graphics.Paint().apply { isDither = true }
+    private fun drawBottomFade(canvas: android.graphics.Canvas, b: android.graphics.Rect) {
+        val fadeH = 3.5f * px420
+        bottomFadePaint.shader = android.graphics.LinearGradient(
+            0f, b.bottom - fadeH, 0f, b.bottom.toFloat(),
+            intArrayOf(0x000C0C0C, 0x660C0C0C, 0xCC0C0C0C.toInt()),
+            floatArrayOf(0f, 0.6f, 1f),
+            android.graphics.Shader.TileMode.CLAMP
+        )
+        // Fade must stay inside the rounded fill, not leave square feet in the gap.
+        val saved = canvas.save()
+        val clip = android.graphics.Path().apply {
+            addRoundRect(android.graphics.RectF(b), radiusPx, radiusPx, android.graphics.Path.Direction.CW)
+        }
+        canvas.clipPath(clip)
+        canvas.drawRect(b.left.toFloat(), b.bottom - fadeH, b.right.toFloat(), b.bottom.toFloat(), bottomFadePaint)
+        canvas.restoreToCount(saved)
     }
     private fun drawTopLine(canvas: android.graphics.Canvas, b: android.graphics.Rect) {
         // center lands 3 SwiftKey px from the key's top edge (1px border + 2px gap + half the 1px line)
@@ -147,14 +200,18 @@ private class TopLineGradientDrawable(
 private fun keyGradient(context: android.content.Context, top: Int, bottom: Int, chrome: Boolean = true): GradientDrawable {
     val radiusPx = TypedValue.applyDimension(
         TypedValue.COMPLEX_UNIT_DIP,
-        4.0f,
+        // WrenBoard 1.5 (item 10, candidate): Tab measured SwiftKey corners ~13-14px@420 (~5.3dp)
+        // vs our ~10px (4.0dp).
+        5.3f,
         context.resources.displayMetrics
     )
     return TopLineGradientDrawable(top, bottom, radiusPx, context.resources.displayMetrics, chrome).apply {
         shape = GradientDrawable.RECTANGLE
         cornerRadius = radiusPx
         // SwiftKey list item 2: 1px #0C0C0C key border lives on the gradient; KeyBackground outline is off.
-        setStroke((1.0f * context.resources.displayMetrics.density / 2.625f).toInt().coerceAtLeast(1), 0xFF0C0C0C.toInt())
+        // WrenBoard 1.5 (item 10, candidate): SwiftKey has NO hard bottom outline - the border draws on
+        // the top and sides only, and the bottom fades into the gap over 3-4px. The stroke here drops to
+        // the top+sides lines drawn in TopLineGradientDrawable; the fade lives there too.
     }
 }
 
@@ -252,7 +309,9 @@ private fun wrenKeyBackgrounds(context: android.content.Context) = KeyedBitmaps(
                 foregroundColor = AccentOrange.toArgb(),
                 hintColor = HintGrey,
                 outlineColor = null,
-                background = keyGradient(context, 0xFF424242.toInt(), 0xFF242424.toInt())
+                // WrenBoard 1.5 (item 10, candidate): SwiftKey's number-row keys are visibly lighter
+                // (top #54-#5A); target top about #56, bottom unchanged.
+                background = keyGradient(context, 0xFF565656.toInt(), 0xFF242424.toInt())
             )
         ),
         // Base letter/functional keys: charcoal vertical gradient with thin dark border
@@ -287,7 +346,9 @@ val WrenBoardTheme = ThemeOption(
                 keyRoundness = 0.78f,
                 // SwiftKey list item 1: letters measured ~35% too big at 1.0; 0.74 matches Tab's SwiftKey spec
                 // (Ezzy's phone renders ~0.82; Tab re-measures there in the consolidated review).
-                textSizeMultiplier = 0.74f,
+                // WrenBoard 1.5 (item 10, candidate): Tab's 1.5 measurement has our letters 14% SMALL
+                // (x-height 28px vs SwiftKey 32px, tall letters 40 vs 45): 0.74 * 1.14 = 0.84.
+                textSizeMultiplier = 0.84f,
                 // PARITY 6: hint symbols at SwiftKey's size (Tab measured 1.3-size, target x1.2)
                 hintSizeMultiplier = 1.2f,
                 // WrenBoard 1.3 (teardown item 5): no orange transformer marker under suggestions.
