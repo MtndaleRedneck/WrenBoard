@@ -13,10 +13,19 @@
  */
 package org.futo.inputmethod.latin.inputlogic;
 
+import android.os.SystemClock;
+import android.view.inputmethod.EditorInfo;
+import android.view.inputmethod.InputConnection;
+
+import org.futo.inputmethod.engine.general.GeneralIME;
+import org.futo.inputmethod.latin.Dictionary;
 import org.futo.inputmethod.latin.NgramContext;
 import org.futo.inputmethod.latin.SuggestedWords;
 import org.futo.inputmethod.latin.settings.Settings;
 
+import java.io.File;
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
@@ -66,7 +75,10 @@ public class WrenAbandonedCommitWiringTests extends WrenWiringTestBase {
     /**
      * Actual starter-OUTPUT identity: the production starter-words function shows
      * exactly the fallback set on a fresh history, then exactly the learned word with
-     * no padding once the word is in the user history.
+     * no padding once the word is in the user history. UNIT-level composition: the
+     * learned-word leg feeds a manually constructed input whose source dict is the real
+     * user-history dictionary; the wire-level coverage (real empty-field prediction) is
+     * testEmptyFieldPredictionRealWireSurfacesLearnedWord.
      */
     public void testStarterOutputIdentityFallbackThenLearnedWord() throws Exception {
         // Fresh history (per setUp's explicit clear): exactly the fallback set, in order.
@@ -152,12 +164,72 @@ public class WrenAbandonedCommitWiringTests extends WrenWiringTestBase {
         forceSlowInputConnection();
         mRecorder.clearRecords();
         type("zebra");
+        assertTrue("slow-connection gate engaged just before the call",
+                mInputLogic.mConnection.hasSlowInputConnection());
         callAbandonedLearn();
         assertEquals("no user-history write at all on a slow input connection",
                 0, mRecorder.totalLearnCount());
         resetSlowInputConnection();
     }
 
+
+    /**
+     * REAL WIRE: a word learned through the real commit path surfaces in the actual
+     * empty-field prediction the engine delivers - the full production pipeline
+     * (updateSuggestions -> real dictionaries -> showSuggestionStrip(starterWordsIfNeeded)
+     * -> inputLogic.setSuggestedWords), not a manually constructed input. The delivered
+     * strip is exactly the learned word, still sourced from the real user-history dict.
+     * Claim bound: the transformer passes through to legacy here (asserted below), so the
+     * transformer leg itself is outside this test's coverage.
+     */
+    public void testEmptyFieldPredictionRealWireSurfacesLearnedWord() throws Exception {
+        // Dynamic absence: the setUp clear is real, so the learned word is absent first.
+        assertFalse("history starts empty (clear actually deleted the history file)",
+                isInLocaleGroupHistory(Locale.US, "zebra"));
+        // Precondition: transformer passes through to legacy in this environment
+        // (USE_TRANSFORMER_FINETUNING defaults false; no model files on the runner).
+        final Field lmF = getField(GeneralIME.class, "languageModelFacilitator");
+        final Object lm = lmF.get(mGeneralIme);
+        final Method pass = lm.getClass().getDeclaredMethod("shouldPassThroughToLegacy");
+        pass.setAccessible(true);
+        assertTrue("transformer passes through to legacy here", (Boolean) pass.invoke(lm));
+
+        mRecorder.clearRecords();
+        type("zebra ");
+        runMessages();
+        assertTrue("zebra stored", waitForHistoryWord("zebra", HISTORY_WRITE_TIMEOUT_MS));
+
+        // Restart input on an empty field, mirroring setUp's input-start sequence.
+        mLatinIMELegacy.onFinishInputView(true);
+        mLatinIMELegacy.onFinishInput();
+        runMessages();
+        mEditText.setText("");
+        final EditorInfo ei = enrichEditorInfo(new EditorInfo());
+        final InputConnection ic = mEditText.onCreateInputConnection(ei);
+        getService().onCreateInputMethodInterface().startInput(ic, ei);
+        getService().onStartInputView(ei, false);
+
+        // The actual production trigger for a fresh suggestion pass on the empty field.
+        mGeneralIme.updateSuggestions(SuggestedWords.INPUT_STYLE_TYPING);
+        mGeneralIme.ensureSuggestionsCompleted();
+
+        SuggestedWords delivered = null;
+        final long deadline = SystemClock.uptimeMillis() + 5000;
+        while (SystemClock.uptimeMillis() < deadline) {
+            final SuggestedWords w = mInputLogic.mSuggestedWords;
+            if (w != null && w.size() > 0) {
+                delivered = w;
+                break;
+            }
+            Thread.sleep(50);
+        }
+        assertNotNull("engine delivered empty-field suggestions", delivered);
+        assertEquals("delivered strip is exactly the learned word", 1, delivered.size());
+        assertEquals("zebra", delivered.getWord(0));
+        assertEquals("delivered word is sourced from the real user-history dictionary",
+                Dictionary.TYPE_USER_HISTORY,
+                delivered.getInfo(0).mSourceDict.mDictType);
+    }
     /**
      * Multi-locale with SIMULTANEOUS groups: with several locale groups loaded at
      * once, a zero-confidence write is refused (the refusal branch requires
@@ -165,7 +237,18 @@ public class WrenAbandonedCommitWiringTests extends WrenWiringTestBase {
      * onWordCommitted first - lands the word in the confidence-selected locale group.
      */
     public void testMultiLocaleSimultaneousGroupsConfidenceSelection() throws Exception {
+        // Both locales' history files persist across runs. fr has no live dictionary
+        // yet, so delete its file directly (the same removal the clear performs); en_US is
+        // held by the recorder, so clear it through the real API and await the deletion.
+        final File frFile = new File(getContext().getFilesDir(),
+                "UserHistoryDictionary." + Locale.FRANCE + ".dict");
+        if (frFile.exists()) assertTrue("delete stale fr history file", frFile.delete());
+        mRecorder.clearUserHistoryDictionary(getContext());
+        awaitUserHistoryFileAbsent(Locale.US, 10_000);
+        awaitUserHistoryFileAbsent(Locale.FRANCE, 10_000);
         resetFacilitatorLocales(Arrays.asList(Locale.US, Locale.FRANCE));
+        assertFalse("en_US history empty after clear", isInLocaleGroupHistory(Locale.US, "zebra"));
+        assertFalse("fr history empty after clear", isInLocaleGroupHistory(Locale.FRANCE, "zebra"));
         assertTrue("precondition: several locale groups loaded simultaneously",
                 mRecorder.getLocales().size() > 1);
 
