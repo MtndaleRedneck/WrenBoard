@@ -477,11 +477,11 @@ public class KeyboardView extends View {
             // WrenBoard 1.5 (Tab's exact 20:45 spec, candidate, targeted): only the symbols
             // page-2 shift key labelled "123" (CODE_SHIFT; the letters-page "123" key is
             // CODE_SWITCH_ALPHA_SYMBOL, the page-1 shift is "{&=", and "abc" is the alphabet
-            // key - all explicitly left alone). Same style ratio renders it 39px tall on the
-            // 4-row symbols keyboard vs 29px on the 5-row letters keyboard (measured at
-            // 420dpi); Tab's target is 62x29px, so pin this one label down by 29/39.
+            // key - all explicitly left alone). Measured at 420dpi with one method across the
+            // same run's shots: this key rendered 44x22 vs the letters "123" at 63x30; Tab's
+            // target 62x29 is the letters label. Scale up by 30/22 to match it.
             if (key.getCode() == Constants.CODE_SHIFT && "123".equals(label)) {
-                paint.setTextSize(kdc.getTextSize() * (29.0f / 39.0f));
+                paint.setTextSize(kdc.getTextSize() * (30.0f / 22.0f));
             }
             final float labelCharHeight = TypefaceUtils.getReferenceCharHeight(paint);
             final float labelCharWidth = TypefaceUtils.getReferenceCharWidth(paint);
