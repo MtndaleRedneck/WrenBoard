@@ -86,6 +86,8 @@ object WbDebug {
                             val v = ime.latinIMELegacy.mKeyboardSwitcher.mainKeyboardView
                             logKeyboard(v, v?.keyboard)
                         }
+                        cmd.startsWith("suggreport:") ->
+                            ime.uixManager.debugReportSuggestionCount(cmd.removePrefix("suggreport:"))
                         cmd == "expand" -> ime.uixManager.debugSetActionsExpanded(true)
                         cmd == "collapse" -> ime.uixManager.debugSetActionsExpanded(false)
                         cmd == "close" -> ime.uixManager.closeActionWindow()
