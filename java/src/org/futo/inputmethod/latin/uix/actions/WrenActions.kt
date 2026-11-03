@@ -80,9 +80,10 @@ val InfoAction = Action(
     windowImpl = null,
 )
 
-/** Save word (1.5 item 12, Tab's pinned candidate for owner review - owner asked only for the
- * button, 9:50 AM): saves the word being typed, else the last typed word, else the selection,
- * into the personal dictionary. Confirms on the centre suggestion chip for 1.2 s - no toast. */
+/** Save word (1.5 item 12): saves the word being typed, else the last typed word, else the
+ * selection, into the personal dictionary. Confirms on the centre suggestion chip for 1.2 s -
+ * no toast. (Request provenance lives in the conversation record; this comment is not
+ * authorization evidence.) */
 val SaveWordAction = Action(
     icon = R.drawable.wren_ic_bookmark_add,
     name = R.string.wren_action_save_word,
