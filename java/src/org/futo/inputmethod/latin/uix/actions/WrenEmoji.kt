@@ -336,6 +336,8 @@ private fun EmojiCell(
                 awaitEachGesture {
                     val d = awaitFirstDown(requireUnconsumed = false)
                     val t0 = android.os.SystemClock.uptimeMillis()
+                    // immediate marker: lets the harness anchor the hold to the APP-VISIBLE down
+                    android.util.Log.i("WBDBG", "EMOJITOUCH DOWN rx=$t0 ev=${d.uptimeMillis}")
                     var upEv = -1L
                     while (true) {
                         val ch = awaitPointerEvent(PointerEventPass.Initial)
