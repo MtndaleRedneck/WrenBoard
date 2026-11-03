@@ -1322,6 +1322,21 @@ if leg saveword; then
     [ $b -eq 0 ] && { dictdel "$w"; dict_has "$w" "baseline"; b=$?; }
     [ $b -eq 0 ] && fail "baseline: canary $w could not be cleared from the user dictionary"
   done
+  APP_POS=0; APP_BASELINE=0
+  app_fixture() { # fixed synthetic set only; results never contain a token
+    local name=$1 mode=$2 i
+    adb logcat -c; dbg "savefixture:$mode" 0.3
+    for i in $(seq 1 10); do
+      adb logcat -d -s WBDBG:I | tr -d '\r' > "shots/${name}_app_raw.txt"
+      [ "$(grep -c 'SAVEFIXTURE .*case=' "shots/${name}_app_raw.txt")" -ge 6 ] && return 0
+      sleep 0.3
+    done
+    fail "$name: app fixture result incomplete"; return 1
+  }
+  app_fixture sw_baseline reset
+  if [ "$(grep -c 'SAVEFIXTURE .*reset=true .*result=ABSENT currentEditor=true currentRequest=true$' shots/sw_baseline_app_raw.txt)" -eq 6 ]; then
+    APP_BASELINE=1; pass "fixed same-app fixture baseline: six synthetic cases absent after reset"
+  else fail "fixed same-app baseline not established; query errors are not absence"; fi
   POS_OK=0
   # positive + priority: two different words; the SELECTED one (first) must be saved, the word
   # before the cursor (last typed, nonempty) must NOT. Proves the selected-over-lastTyped branch
@@ -1341,6 +1356,7 @@ if leg saveword; then
   # only the selected word's same-app absent -> write-returned -> present transition in
   # the same current editor/request. It does NOT qualify shell negatives or tail absence.
   if [ "$PRE0" = 1 ] && grep -qE '^.*SAVEWORD_RESULT request=[0-9]+ before=ABSENT after=PRESENT writeReturned=true selected=true currentEditor=true currentRequest=true persisted=true$' shots/sw01_wbdbg_raw.txt; then
+    APP_POS=1
     pass "selected word persisted and re-queried present in the actual app/current editor/request (bounded same-app control only)"
   else
     fail "same-app selected-word persistence control not established (inspect content-free action result)"
@@ -1357,10 +1373,22 @@ if leg saveword; then
   elif [ $rt -eq 0 ]; then fail "priority: the LAST-TYPED word was saved over the explicit selection"
   elif [ $rp -eq 1 ]; then fail "shell provider did not expose the selected word; shell-negative controls unqualified (not evidence the app action is dead)"; fi
   fi
+  app_fixture sw_after_positive query
+  if [ "$APP_BASELINE" = 1 ] && [ "$APP_POS" = 1 ] &&
+     grep -q 'SAVEFIXTURE .*case=0 result=PRESENT currentEditor=true currentRequest=true$' shots/sw_after_positive_app_raw.txt &&
+     grep -q 'SAVEFIXTURE .*case=1 result=ABSENT currentEditor=true currentRequest=true$' shots/sw_after_positive_app_raw.txt; then
+    pass "same-app fixed fixture: selected case present, different tail case absent"
+  else fail "same-app selected/tail fixture not established"; fi
   dictdel "$SWP"; dictdel "$SWT"
   negcheck() { # <token> <label> <precondition 0/1>
     local tok="$1" lbl="$2" pre="$3"
     [ "$pre" = 1 ] || { note "INFO: $lbl negative not executed (honest-execution precondition failed above)"; return 1; }
+    local caseid
+    case "$tok" in zqxwjctb) caseid=2;; zqxwjctc) caseid=3;; zqxwjctd) caseid=4;; zqxwvisible) caseid=5;; *) fail "unknown fixed fixture case"; return 1;; esac
+    app_fixture "sw_negative_$caseid" query
+    if [ "$APP_BASELINE" = 1 ] && [ "$APP_POS" = 1 ] && grep -q "SAVEFIXTURE .*case=$caseid result=ABSENT currentEditor=true currentRequest=true$" "shots/sw_negative_${caseid}_app_raw.txt"; then
+      pass "$lbl: same-app fixed synthetic case remains absent after attempted action (bounded fixture only)"
+    else fail "$lbl: same-app negative fixture unqualified/present/error"; fi
     dict_has "$tok" "$lbl"; local r=$?
     if [ $r -eq 0 ]; then fail "$lbl: save word WROTE the token to the user dictionary"; return 1
     elif [ $r -eq 2 ]; then return 1
