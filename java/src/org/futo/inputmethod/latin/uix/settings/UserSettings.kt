@@ -2,6 +2,8 @@ package org.futo.inputmethod.latin.uix.settings
 
 import androidx.annotation.DrawableRes
 import androidx.annotation.StringRes
+import androidx.compose.foundation.background
+import androidx.compose.ui.Modifier
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -133,7 +135,9 @@ fun UserSettingsMenu.render(showBack: Boolean = true, showTitle: Boolean = true)
 fun UserSettingsMenuScreen(menu: UserSettingsMenu) {
     // WrenBoard 1.2: in the WrenBoard style the six group pages show their rows in labelled cards (render 10b).
     val sections = if (useDataStoreValue(WrenSettingsStyle)) org.futo.inputmethod.latin.uix.settings.pages.WrenMenuSections[menu.navPath] else null
-    ScrollableList {
+    // WrenBoard 1.5 (item 9 transition glitch): Wren-style pages paint the defined-but-unwired page brush so the
+    // previous page can never show through the gaps between cards during predictive-back/transitions.
+    ScrollableList(modifier = if (sections == null) Modifier else Modifier.background(wrenPageBrush)) {
         if (sections == null) {
             menu.render()
         } else {

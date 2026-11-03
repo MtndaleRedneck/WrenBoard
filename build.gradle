@@ -273,6 +273,9 @@ android {
             //it.buildConfigField "String", "FUTOPAY_URL", "\"https://pay.futo.org/api/PaymentPortal?product=voiceinput&success=futo-keyboard%3a%2f%2flicense%2factivate\""
             it.buildConfigField "String", "FUTOPAY_URL", "\"https://pay2.futo.org/checkout/polar/futo-keyboard/futo-keyboard-voiceinput/checkout-ready?success=redirect-to-organization-page\""
             it.buildConfigField "String", "FUTOPAY_PRICE", "\"~\$6.99\""
+            // WrenBoard 1.5 (item 1): KLIPY GIF search key, injected at build time (CI Actions secret
+            // KLIPY_APP_KEY -> env), never committed. Empty = GIF tab keeps its placeholder state.
+            it.buildConfigField "String", "KLIPY_APP_KEY", "\"${System.getenv('KLIPY_APP_KEY') ?: ''}\""
 
             it.buildConfigField "String", "GOOGLEPAY_URL", "\"https://play.google.com/store/apps/details?id=org.futo.keyboardpayment\""
             it.buildConfigField "String", "GOOGLEPAY_PRICE", "\"~\$11.99\""
@@ -434,6 +437,8 @@ dependencies {
     //implementation 'com.squareup.okhttp3:okhttp:4.11.0'
     implementation 'org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.1'
     implementation 'org.jetbrains.kotlinx:kotlinx-serialization-json-jvm:1.7.1'
+    implementation 'io.coil-kt:coil-compose:2.7.0' // WrenBoard 1.5 (item 1): GIF grid thumbs; in-app thumbnail cache is the KLIPY-allowed category
+    implementation 'io.coil-kt:coil-gif:2.7.0' // animated GIF decoding for grid previews (API 28+ ImageDecoder)
 
     implementation 'com.akuleshov7:ktoml-core:0.7.1'
 

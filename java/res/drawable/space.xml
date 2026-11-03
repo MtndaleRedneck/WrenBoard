@@ -1,13 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- WrenBoard 1.5 item 5e (Tab's cosmetic value, candidate): number-layout space glyph is a
+     bracket 24dp wide x 6dp tall, 2dp stroke. Tinted to the key label colour at draw time. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp"
-    android:height="24dp"
+    android:height="6dp"
     android:viewportWidth="24"
-    android:viewportHeight="24">
+    android:viewportHeight="6">
   <path
-      android:pathData="M4,16L4,19C4,19.552 4.448,20 5,20L19,20C19.552,20 20,19.552 20,19L20,16"
-      android:strokeLineJoin="round"
+      android:pathData="M1,3 L1,5 L23,5 L23,3"
       android:strokeWidth="2"
-      android:fillColor="#00000000"
-      android:strokeColor="#ffffff"
-      android:strokeLineCap="round"/>
+      android:strokeColor="#FFFFFF"
+      android:strokeLineCap="butt"
+      android:fillColor="#00000000"/>
 </vector>

@@ -16,6 +16,7 @@ import org.futo.inputmethod.latin.uix.USE_SYSTEM_VOICE_INPUT
 import org.futo.inputmethod.latin.uix.actions.clipboard.ClipboardHistoryAction
 import org.futo.inputmethod.latin.uix.actions.fonttyper.FontTyperAction
 import org.futo.inputmethod.latin.uix.getSetting
+import org.futo.inputmethod.latin.uix.getSettingBlocking
 import org.futo.inputmethod.latin.uix.setSettingBlocking
 
 // Note: indices must stay stable
