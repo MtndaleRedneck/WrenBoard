@@ -35,15 +35,20 @@ public class TestInput extends Activity {
             outAttrs.contentMimeTypes = new String[] {"image/gif"};
             return new android.view.inputmethod.InputConnectionWrapper(base, true) {
                 @Override public boolean commitContent(android.view.inputmethod.InputContentInfo info, int flags, android.os.Bundle opts) {
-                    String mime = "-"; long n = -1;
+                    String mime = "-"; long n = -1; String sig = "";
                     try {
                         mime = info.getDescription().getMimeType(0);
                         info.requestPermission();
                         java.io.InputStream in = getContext().getContentResolver().openInputStream(info.getContentUri());
-                        n = 0; byte[] buf = new byte[8192]; int r; while ((r = in.read(buf)) != -1) n += r; in.close();
+                        byte[] buf = new byte[8192]; int r; boolean first = true;
+                        while ((r = in.read(buf)) != -1) {
+                            if (first && r >= 3) { sig = new String(buf, 0, 3, "US-ASCII"); first = false; }
+                            n += r;
+                        }
+                        in.close();
                         info.releasePermission();
                     } catch (Exception e) { Log.i("IMETARGET", "CONTENT= error=" + e); return false; }
-                    Log.i("IMETARGET", "CONTENT= mime=" + mime + " bytes=" + n);
+                    Log.i("IMETARGET", "CONTENT= mime=" + mime + " bytes=" + n + " sig=" + sig);
                     return true;
                 }
             };
@@ -178,6 +183,7 @@ public class TestInput extends Activity {
         f.addAction("com.wrenboard.imetarget.NOLEARN");
         f.addAction("com.wrenboard.imetarget.NOCORRECT");
         f.addAction("com.wrenboard.imetarget.SETCLIP");
+        f.addAction("com.wrenboard.imetarget.REPORT");
         registerReceiver(control, f, Context.RECEIVER_EXPORTED);
 
         String mode = getSharedPreferences(PREFS, MODE_PRIVATE).getString(KEY_MODE, MODE_NORMAL);
