@@ -1323,20 +1323,38 @@ if leg saveword; then
     [ $b -eq 0 ] && fail "baseline: canary $w could not be cleared from the user dictionary"
   done
   APP_POS=0; APP_BASELINE=0
-  app_fixture() { # fixed synthetic set only; results never contain a token
+  APP_LAST_ID=0; APP_RESET_OK=0
+  app_fixture() { # consume one fresh complete six-case command, never mixed async output
     local name=$1 mode=$2 i
     adb logcat -c; dbg "savefixture:$mode" 0.3
-    for i in $(seq 1 10); do
-      adb logcat -d -s WBDBG:I | tr -d '\r' > "shots/${name}_app_raw.txt"
-      [ "$(grep -c 'SAVEFIXTURE .*case=' "shots/${name}_app_raw.txt")" -ge 6 ] && return 0
+    for i in $(seq 1 15); do
+      adb logcat -d -s WBDBG:I | tr -d '\r' > "shots/${name}_app_all_raw.txt"
+      if python3 - "$name" "$mode" "$APP_LAST_ID" <<'FIXTUREBLOCK'
+import re,sys
+name,mode,last=sys.argv[1],sys.argv[2],int(sys.argv[3]); reset=str(mode=='reset').lower()
+s=open('shots/'+name+'_app_all_raw.txt').read()
+accepted=re.findall(r'SAVEFIXTURE_ACCEPT id=(\d+) reset='+reset,s)
+assert len(accepted)==1 and int(accepted[0])>last
+id=accepted[0]
+assert len(re.findall(r'SAVEFIXTURE_BEGIN id='+id+r' reset='+reset,s))==1
+assert len(re.findall(r'SAVEFIXTURE_END id='+id+r' reset='+reset,s))==1
+rows=re.findall(r'SAVEFIXTURE id='+id+r' request=\d+ reset='+reset+r' case=(\d+) result=(PRESENT|ABSENT|ERROR) currentEditor=(true|false) currentRequest=(true|false)',s)
+assert len(rows)==6 and sorted(int(r[0]) for r in rows)==list(range(6))
+assert all(r[1]!='ERROR' and r[2:]==('true','true') for r in rows)
+open('shots/'+name+'_app_raw.txt','w').write('\n'.join('case='+r[0]+' result='+r[1]+' currentEditor='+r[2]+' currentRequest='+r[3] for r in rows)+'\n')
+open('shots/'+name+'_app_id.txt','w').write(id)
+FIXTUREBLOCK
+      then APP_LAST_ID=$(cat "shots/${name}_app_id.txt"); return 0; fi
       sleep 0.3
     done
-    fail "$name: app fixture result incomplete"; return 1
+    : > "shots/${name}_app_raw.txt"
+    fail "$name: fresh complete same-app fixture unavailable/error/stale; no affected assertion credit"
+    return 1
   }
-  app_fixture sw_baseline reset
-  if [ "$(grep -c 'SAVEFIXTURE .*reset=true .*result=ABSENT currentEditor=true currentRequest=true$' shots/sw_baseline_app_raw.txt)" -eq 6 ]; then
-    APP_BASELINE=1; pass "fixed same-app fixture baseline: six synthetic cases absent after reset"
-  else fail "fixed same-app baseline not established; query errors are not absence"; fi
+  if app_fixture sw_baseline reset && [ "$(grep -c 'result=ABSENT currentEditor=true currentRequest=true$' shots/sw_baseline_app_raw.txt)" -eq 6 ]; then
+    APP_BASELINE=1; APP_RESET_OK=1; pass "fixed same-app fixture baseline: six synthetic cases absent after reset"
+  else fail "fixed same-app reset/baseline failed; stopping saveword leg to avoid reset racing action"; fi
+  if [ "$APP_RESET_OK" = 1 ]; then
   POS_OK=0
   # positive + priority: two different words; the SELECTED one (first) must be saved, the word
   # before the cursor (last typed, nonempty) must NOT. Proves the selected-over-lastTyped branch
@@ -1373,10 +1391,9 @@ if leg saveword; then
   elif [ $rt -eq 0 ]; then fail "priority: the LAST-TYPED word was saved over the explicit selection"
   elif [ $rp -eq 1 ]; then fail "shell provider did not expose the selected word; shell-negative controls unqualified (not evidence the app action is dead)"; fi
   fi
-  app_fixture sw_after_positive query
-  if [ "$APP_BASELINE" = 1 ] && [ "$APP_POS" = 1 ] &&
-     grep -q 'SAVEFIXTURE .*case=0 result=PRESENT currentEditor=true currentRequest=true$' shots/sw_after_positive_app_raw.txt &&
-     grep -q 'SAVEFIXTURE .*case=1 result=ABSENT currentEditor=true currentRequest=true$' shots/sw_after_positive_app_raw.txt; then
+  if app_fixture sw_after_positive query && [ "$APP_BASELINE" = 1 ] && [ "$APP_POS" = 1 ] &&
+     grep -q 'case=0 result=PRESENT currentEditor=true currentRequest=true$' shots/sw_after_positive_app_raw.txt &&
+     grep -q 'case=1 result=ABSENT currentEditor=true currentRequest=true$' shots/sw_after_positive_app_raw.txt; then
     pass "same-app fixed fixture: selected case present, different tail case absent"
   else fail "same-app selected/tail fixture not established"; fi
   dictdel "$SWP"; dictdel "$SWT"
@@ -1385,8 +1402,7 @@ if leg saveword; then
     [ "$pre" = 1 ] || { note "INFO: $lbl negative not executed (honest-execution precondition failed above)"; return 1; }
     local caseid
     case "$tok" in zqxwjctb) caseid=2;; zqxwjctc) caseid=3;; zqxwjctd) caseid=4;; zqxwvisible) caseid=5;; *) fail "unknown fixed fixture case"; return 1;; esac
-    app_fixture "sw_negative_$caseid" query
-    if [ "$APP_BASELINE" = 1 ] && [ "$APP_POS" = 1 ] && grep -q "SAVEFIXTURE .*case=$caseid result=ABSENT currentEditor=true currentRequest=true$" "shots/sw_negative_${caseid}_app_raw.txt"; then
+    if app_fixture "sw_negative_$caseid" query && [ "$APP_BASELINE" = 1 ] && [ "$APP_POS" = 1 ] && grep -q "case=$caseid result=ABSENT currentEditor=true currentRequest=true$" "shots/sw_negative_${caseid}_app_raw.txt"; then
       pass "$lbl: same-app fixed synthetic case remains absent after attempted action (bounded fixture only)"
     else fail "$lbl: same-app negative fixture unqualified/present/error"; fi
     dict_has "$tok" "$lbl"; local r=$?
@@ -1460,7 +1476,11 @@ if leg saveword; then
   negcheck "$SW4" "code field (com.replit.*)" $PRE3
   adb shell am broadcast -a com.wrenboard.imetarget.CLEAR -p com.replit.wbcodefield >/dev/null 2>&1
   for w in $SWP $SWT $SW2 $SW3 $SW4 zqxwvisible; do dictdel "$w"; done
+  if app_fixture sw_cleanup reset && [ "$(grep -c 'result=ABSENT currentEditor=true currentRequest=true$' shots/sw_cleanup_app_raw.txt)" -eq 6 ]; then
+    pass "fixed same-app synthetic fixture cleanup verified absent"
+  else fail "fixed same-app synthetic fixture cleanup unverified"; fi
   focus_target
+  fi # baseline reset completed before action execution
 fi
 if leg update; then
   ensure_ime; focus_target

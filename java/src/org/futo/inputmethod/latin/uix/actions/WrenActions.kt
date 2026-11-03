@@ -203,9 +203,14 @@ private fun queryUserDictionary(context: Context, word: String): DictionaryPrese
         ?: DictionaryPresence.ERROR
 } catch (_: Exception) { DictionaryPresence.ERROR }
 
+private var saveFixtureGeneration = 0L
+
 /** Fixed synthetic fixture only. No command argument can retrieve or delete arbitrary words. */
 internal fun querySaveWordFixture(ime: org.futo.inputmethod.latin.LatinIME, reset: Boolean) {
     if (!org.futo.inputmethod.latin.BuildConfig.DEBUG) return
+    val fixture = ++saveFixtureGeneration
+    // Synchronous acceptance binds this command before its asynchronous provider work.
+    Log.i("WBDBG", "SAVEFIXTURE_ACCEPT id=$fixture reset=$reset")
     val editor = ime.actionEditorGeneration
     val request = WrenSaveWordNotice.currentRequest()
     val context = ime.applicationContext
@@ -220,11 +225,13 @@ internal fun querySaveWordFixture(ime: org.futo.inputmethod.latin.LatinIME, rese
                 index to result
             }
         }
+        Log.i("WBDBG", "SAVEFIXTURE_BEGIN id=$fixture reset=$reset")
         results.forEach { (index, result) ->
-            Log.i("WBDBG", "SAVEFIXTURE request=$request reset=$reset case=$index result=$result " +
+            Log.i("WBDBG", "SAVEFIXTURE id=$fixture request=$request reset=$reset case=$index result=$result " +
                 "currentEditor=${ime.actionEditorGeneration == editor} " +
                 "currentRequest=${WrenSaveWordNotice.isCurrentRequest(request)}")
         }
+        Log.i("WBDBG", "SAVEFIXTURE_END id=$fixture reset=$reset")
     }
 }
 
