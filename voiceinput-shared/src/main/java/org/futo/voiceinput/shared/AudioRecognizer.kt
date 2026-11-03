@@ -630,8 +630,8 @@ class AudioRecognizer(
     private suspend fun publishFinal(owner: CaptureSession, text: String) {
         val delivered = CompletableDeferred<Unit>()
         if (!current(owner)) return
-        owner.terminalWaiter = delivered
         val publisher = owner.publisher ?: return
+        owner.terminalWaiter = delivered
         val completion = publisher.invokeOnCompletion { failure ->
             if (failure == null) delivered.cancel() else delivered.completeExceptionally(failure)
         }
