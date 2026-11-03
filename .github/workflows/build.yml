@@ -16,8 +16,9 @@ jobs:
   android:
     runs-on: ubuntu-latest
     env:
-      VERSION_NAME: 1.4.0
-      VERSION_CODE: "5"
+      # WrenBoard 1.5 release packaging: the in-app updater offers 1.5 only above 1.4.0/5
+      VERSION_NAME: 1.5.0
+      VERSION_CODE: "6"
     steps:
       - uses: actions/checkout@v4
       - name: Init build submodules (swipe weights excluded; bundled English voice model cleared, provenance in README-WRENBOARD.md)
