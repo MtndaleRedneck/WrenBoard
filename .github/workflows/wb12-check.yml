@@ -29,6 +29,10 @@ on:
         description: "1 = keyed run: GIF results + fixture commitContent insert are REQUIRED (scratch evidence runs)"
         required: false
         default: "0"
+      audio_capture:
+        description: "1 = optional emitted digital tone capture, not device audibility"
+        required: false
+        default: "0"
       load:
         description: "1 = CPU load on the emulator during the swipe leg (input-backlog experiment)"
         required: false
@@ -77,6 +81,15 @@ jobs:
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
+      - name: Prepare optional isolated digital audio sink
+        if: inputs.audio_capture == '1'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y pulseaudio ffmpeg
+          pulseaudio --start --exit-idle-time=-1
+          pactl load-module module-null-sink sink_name=wren_capture sink_properties=device.description=WrenCapture
+          pactl set-default-sink wren_capture
+          pactl list short sinks
       - name: Run WrenBoard 1.2 checks on the emulator
         timeout-minutes: 45
         env:
@@ -85,6 +98,10 @@ jobs:
           WB_DENSITY: ${{ inputs.density }}
           WB_LOAD: ${{ inputs.load }}
           WB_EXPECT_GIF: ${{ inputs.expect_gif }}
+          WB_AUDIO_CAPTURE: ${{ inputs.audio_capture }}
+          QEMU_AUDIO_DRV: ${{ inputs.audio_capture == '1' && 'pa' || 'none' }}
+          PULSE_SINK: wren_capture
+          QEMU_PA_SINK: wren_capture
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 34
@@ -93,9 +110,9 @@ jobs:
           profile: Nexus 6
           ram-size: 4096M
           heap-size: 576M
-          emulator-options: -no-window -gpu swangle_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none
+          emulator-options: -no-window -gpu swangle_indirect -no-snapshot ${{ inputs.audio_capture == '1' && '-audio pa' || '-noaudio' }} -no-boot-anim -camera-back none
           disable-animations: true
-          script: WB_LOCAL_APK_URL=http://127.0.0.1:8765/wb-debug.apk bash tools/wb12-check.sh wb-debug.apk tools/ime-target/out/imetarget.apk
+          script: WB_LOCAL_APK_URL=http://127.0.0.1:8765/wb-debug.apk bash tools/wb12-audio-capture.sh wb-debug.apk tools/ime-target/out/imetarget.apk
       - name: Unit tests (update prompt status, swipe delete, starter words)
         if: always()
         run: |
