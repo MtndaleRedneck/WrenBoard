@@ -488,6 +488,9 @@ public class KeyboardView extends View {
 
             // Vertical label text alignment.
             labelBaseline = centerY + labelCharHeight / 2.0f;
+            // WrenBoard 1.5 (item 10, candidate): SwiftKey's letters sit lower in the key
+            // (x-height top ~53% of key height vs our ~47%) - bias labels down ~6% of key height.
+            labelBaseline += keyHeight * 0.06f;
 
 
             if(kdc.getCenteredHint() && kdc.getHintLabel() != null && !key.getHasHintLabel() && !key.getHasShiftedLetterHint()) {
