@@ -839,6 +839,34 @@ if leg symbols; then
   sleep 1
 fi
 
+if leg voiceaudio; then
+  note "== VOICEAUDIO: real app start and cancellation, output captured externally =="
+  dbg "prefbool:enable_sounds=true" 0.5
+  focus_target; clear_field
+  adb shell media volume --stream 1 --set 7 >/dev/null 2>&1
+  adb logcat -c; dbg expand 1.5
+  VI=$(adb logcat -d -s WBDBG:I | tr -d '\r' | grep 'ACTION name=Voice_Input' | tail -1)
+  VX=$(echo "$VI" | sed -n 's/.*cx=\([0-9-]*\).*/\1/p'); VY=$(echo "$VI" | sed -n 's/.*cy=\([0-9-]*\).*/\1/p')
+  if [ -n "$VX" ] && [ -n "$VY" ]; then
+    date -u +%Y-%m-%dT%H:%M:%S.%NZ > shots/audio_app_open_time.txt
+    adb shell input tap "$VX" "$VY"
+    for i in $(seq 1 20); do
+      adb logcat -d -s WBDBG:I | tr -d '\r' > shots/audio_app_events.txt
+      grep -q 'VOICE capture started' shots/audio_app_events.txt && break
+      sleep 1
+    done
+    shot audio_capture_active
+    sleep 2
+    date -u +%Y-%m-%dT%H:%M:%S.%NZ > shots/audio_app_cancel_time.txt
+    dbg close 2
+    adb logcat -d -s WBDBG:I | tr -d '\r' > shots/audio_app_events.txt
+    grep -q 'VOICE capture started' shots/audio_app_events.txt && pass "audio: actual app capture start callback" || fail "audio: no actual capture start callback"
+    grep -q 'VOICE capture cancelled' shots/audio_app_events.txt && pass "audio: actual app cancellation callback" || fail "audio: no actual cancellation callback"
+    adb shell dumpsys audio > shots/audio_routes.txt
+    sleep 3
+  else fail "audio: no current voice action coordinates"; fi
+fi
+
 if leg states; then
   note "== STATES: press states, 123 page 2, voice strip (SwiftKey-parity views, evidence capture) =="
   focus_target; clear_field; geom letters >/dev/null
