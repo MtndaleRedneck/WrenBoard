@@ -225,7 +225,6 @@ public final class InputLogic {
     }
 
     private int numCursorUpdatesSinceInputStarted = 0;
-    private int mLearnTraceOrdinal = 0;
     /**
      * Initializes the input logic for input in an editor.
      *
@@ -2018,19 +2017,20 @@ public final class InputLogic {
         // If correction is not enabled, we don't add words to the user history dictionary.
         // That's to avoid unintended additions in some sensitive fields, or fields that
         // expect to receive non-words.
-        final int learnTraceOrdinal = BuildConfig.DEBUG ? ++mLearnTraceOrdinal : 0;
-        if (BuildConfig.DEBUG) Log.i("WBDBG", "STARTER learnEnter #" + learnTraceOrdinal
+        final int learnTraceId = org.futo.inputmethod.engine.general.WrenLearnTrace.begin();
+        if (BuildConfig.DEBUG) Log.i("WBDBG", "STARTER learnEnter id=" + learnTraceId
                 + " at " + SystemClock.uptimeMillis());
+        try {
         if (!settingsValues.mAutoCorrectionEnabledPerTextFieldSettings) {
-            if (BuildConfig.DEBUG) Log.i("WBDBG", "STARTER learnSkip #" + learnTraceOrdinal + " reason=autocorrectOff");
+            if (BuildConfig.DEBUG) Log.i("WBDBG", "STARTER learnSkip id=" + learnTraceId + " reason=autocorrectOff");
             return;
         }
         if (!settingsValues.isPersonalizationEnabled()) {
-            if (BuildConfig.DEBUG) Log.i("WBDBG", "STARTER learnSkip #" + learnTraceOrdinal + " reason=personalizationOff");
+            if (BuildConfig.DEBUG) Log.i("WBDBG", "STARTER learnSkip id=" + learnTraceId + " reason=personalizationOff");
             return;
         }
         if (settingsValues.mInputAttributes.mNoLearning) {
-            if (BuildConfig.DEBUG) Log.i("WBDBG", "STARTER learnSkip #" + learnTraceOrdinal + " reason=noLearning");
+            if (BuildConfig.DEBUG) Log.i("WBDBG", "STARTER learnSkip id=" + learnTraceId + " reason=noLearning");
             return;
         }
 
@@ -2038,7 +2038,7 @@ public final class InputLogic {
             // Since we don't unlearn when the user backspaces on a slow InputConnection,
             // turn off learning to guard against adding typos that the user later deletes.
             Log.w(TAG, "Skipping learning due to slow InputConnection.");
-            if (BuildConfig.DEBUG) Log.i("WBDBG", "STARTER learnSkip #" + learnTraceOrdinal + " reason=slowConn");
+            if (BuildConfig.DEBUG) Log.i("WBDBG", "STARTER learnSkip id=" + learnTraceId + " reason=slowConn");
             return;
         }
 
@@ -2053,11 +2053,14 @@ public final class InputLogic {
 
         StatsUtils.onWordLearned(mImeHelper.getContext(), suggestion);
 
-        if (BuildConfig.DEBUG) Log.i("WBDBG", "STARTER learnRequest #" + learnTraceOrdinal
+        if (BuildConfig.DEBUG) Log.i("WBDBG", "STARTER learnRequest id=" + learnTraceId
                 + " at " + SystemClock.uptimeMillis());
         mIme.addToHistory(suggestion, wasAutoCapitalized,
                 ngramContext, timeStampInSeconds, settingsValues.mBlockPotentiallyOffensive,
                 importance);
+        } finally {
+            org.futo.inputmethod.engine.general.WrenLearnTrace.end();
+        }
     }
 
     private boolean ensureSuggestionStripCompleted(final SettingsValues settingsValues,
