@@ -207,7 +207,9 @@ if leg keyboard; then
   for i in $(seq 1 40); do
     [ "$(adb logcat -d -s WBDBG:I 2>/dev/null | tr -d '\r' | grep -c "STARTER writeQueued")" -ge 3 ] && break; sleep 1
   done
-  note "learn writes seen: $(adb logcat -d -s WBDBG:I 2>/dev/null | tr -d '\r' | grep -c "STARTER writeQueued")"
+  WC=$(adb logcat -d -s WBDBG:I 2>/dev/null | tr -d '\r' | grep -c "STARTER writeQueued")
+  note "learn writes seen: $WC"
+  [ "$WC" -ge 3 ] && pass "all 3 typed words reached the learn queue ($WC)" || fail "only $WC of 3 required learn writes seen"
   clear_field; adb logcat -c; focus_target; sleep 2; S2=$(sugg)
   # Content-free readiness: wait until the strip update is logged as sourced from history
   # (the wordless "STARTER history chosen=N from=... history=M" line), not for a word.
@@ -217,8 +219,21 @@ if leg keyboard; then
   grep 'STARTER' shots/_s.txt | tail -3 | sed 's/^.*WBDBG *: /  /' | tee -a "$R"
   shot k01b_starter_words_from_history
   CH=$(echo "$HIST" | sed -n 's/.*chosen=\([0-9][0-9]*\).*/\1/p')
-  [ -n "$CH" ] && pass "starter strip sourced from typing history ($HIST)" || fail "starter strip not sourced from history ($HIST)"
-  [ -n "$CH" ] && [ "$S2" = "n=$CH" ] && pass "strip count matches the history pick, no fallback padding ($S2)" || fail "empty field with history shows '$S2' (wanted n=$CH)"
+  HN=$(echo "$HIST" | sed -n 's/.*history=\([0-9][0-9]*\).*/\1/p')
+  # Strict: a POSITIVE history pick is required (chosen>=1 and history>=1); chosen=0 or a
+  # missing sourcing line is a failure, never a pass. Word identity itself is proven by the
+  # executed instrumented wiring tests (WrenAbandonedCommitWiringTests); these count and
+  # sourcing checks are necessary but not sufficient on their own.
+  if [ -n "$CH" ] && [ "$CH" -ge 1 ] && [ -n "$HN" ] && [ "$HN" -ge 1 ]; then
+    pass "starter strip positively sourced from typing history ($HIST)"
+  else
+    fail "starter strip not positively sourced from history (HIST='$HIST')"
+  fi
+  if [ -n "$CH" ] && [ "$CH" -ge 1 ] && [ "$S2" = "n=$CH" ]; then
+    pass "strip count matches the history pick, no fallback padding ($S2)"
+  else
+    fail "empty field with history shows '$S2' (wanted n=$CH)"
+  fi
   dbg "dsbool:wren_starter_words=false" 1.0; adb logcat -c; focus_target; sleep 2; S3=$(sugg); note "starter words with the toggle off: [$S3]"
   shot k01c_starter_words_toggle_off
   [ "$S3" = "n=0" ] && pass "toggle off: no starter words in an empty field" || fail "starter words still shown with the toggle off ($S3)"
