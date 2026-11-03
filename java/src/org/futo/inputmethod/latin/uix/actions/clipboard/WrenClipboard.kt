@@ -2,8 +2,6 @@ package org.futo.inputmethod.latin.uix.actions.clipboard
 
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.gestures.awaitHorizontalTouchSlopOrCancellation
-import androidx.compose.foundation.gestures.horizontalDrag
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.changedToUp
@@ -421,20 +419,31 @@ private fun WrenClipCard(w: WrenClipboardWindow, entry: ClipboardEntry, view: Vi
                 // by movement >3dp in ANY direction; the swipe claims at touch slop; the hold
                 // only wins if the finger stays within 3dp for the full long-press timeout;
                 // and once the Pin menu is open, no later drag in that gesture can delete.
+                //
+                // One explicit event loop, no slop/drag helper handoff: with helper chaining a
+                // fast synthesized swipe (input swipe) could have its UP consumed inside the
+                // slop-await under emulator event latency, turning a 600px swipe into a "tap"
+                // (cl04 first-attempt failures on 92095f3b7/3fdc035e8 while manual streams
+                // passed). Here every event is accounted for in order, so a drag claims on
+                // accumulated distance no matter how the events are batched.
                 val holdCancelPx = 3.dp.toPx()
+                val slopPx = viewConfiguration.touchSlop
                 awaitEachGesture {
                     val down = awaitFirstDown()
-                    var slopCrossed = false
+                    var dx = 0f
+                    var dy = 0f
+                    var holdCancelledByMove = false
+                    var dragClaimed = false
                     var lifted = false
                     var cancelled = false
-                    var holdCancelledByMove = false
                     val timedOut = withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) {
                         while (true) {
                             val change = awaitPointerEvent().changes.firstOrNull { it.id == down.id } ?: break
+                            val delta = change.positionChange()
+                            dx += delta.x
+                            dy += delta.y
                             if (change.changedToUp()) { lifted = true; break }
                             if (!change.pressed) { cancelled = true; break }
-                            val dx = change.position.x - down.position.x
-                            val dy = change.position.y - down.position.y
                             if (abs(dx) > holdCancelPx || abs(dy) > holdCancelPx) {
                                 holdCancelledByMove = true
                                 break
@@ -452,23 +461,32 @@ private fun WrenClipCard(w: WrenClipboardWindow, entry: ClipboardEntry, view: Vi
                         }
                         lifted -> w.paste(entry, view)
                         else -> {
-                            // hold timer cancelled by >3dp movement: the horizontal drag can
-                            // still claim at touch slop (any speed); a lift before slop pastes.
-                            awaitHorizontalTouchSlopOrCancellation(down.id) { change, _ ->
-                                change.consume()
-                                slopCrossed = true
+                            // hold timer cancelled by >3dp movement: watch for the horizontal
+                            // drag claim at touch slop; a lift before slop pastes.
+                            while (!dragClaimed && !lifted && !cancelled) {
+                                if (abs(dx) > slopPx) {
+                                    dragClaimed = true
+                                    dragging.value = true
+                                    dragX.value = dx
+                                } else {
+                                    val change = awaitPointerEvent().changes.firstOrNull { it.id == down.id } ?: break
+                                    val delta = change.positionChange()
+                                    dx += delta.x
+                                    dy += delta.y
+                                    if (change.changedToUp()) lifted = true
+                                    else if (!change.pressed) cancelled = true
+                                }
                             }
-                            if (!slopCrossed) {
-                                lifted = currentEvent.changes.any { it.id == down.id && it.changedToUp() }
-                            }
-                            if (slopCrossed) {
-                                dragging.value = true
-                                dragX.value = offsetX.value
-                                val finished = horizontalDrag(down.id) { change ->
+                            if (dragClaimed) {
+                                // keep following the finger until lift/cancel
+                                while (true) {
+                                    val change = awaitPointerEvent().changes.firstOrNull { it.id == down.id } ?: break
                                     dragX.value += change.positionChange().x
                                     change.consume()
+                                    if (change.changedToUp()) { lifted = true; break }
+                                    if (!change.pressed) { cancelled = true; break }
                                 }
-                                finishSwipe(finished)
+                                finishSwipe(lifted)
                             } else if (lifted) {
                                 w.paste(entry, view)
                             }
