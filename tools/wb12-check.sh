@@ -1055,16 +1055,38 @@ if leg gifsearch; then
   if [ -n "$GT" ]; then adb shell input tap $GT; sleep 1.5; else fail "B2: no GIF tab"; fi
   adb logcat -d -s WBDBG:I | tr -d '\r' > shots/gb1.txt
   GA=$(pos shots/gb1.txt 'EMOJISEARCHGO'); note "gif arrow pos: '$GA'"
+  GF=$(pos shots/gb1.txt 'GIFSEARCHFIELD'); note "gif search field pos: '$GF'"
   shot gb1_gif_tab_open
-  # keyboard must be visible below the panel (FontTyper-pattern expand) or typing is impossible
+  # SwiftKey reference layout (owner screenshots, Nov 3): the GIF tab is a full-panel grid
+  # with NO letters keyboard below; tapping the search field raises it.
   geom gb1 keep >/dev/null
-  if grep -q 'KEY ' shots/geom_gb1.txt; then pass "B2: keyboard stays visible on the GIF tab"; else fail "B2: no keyboard geometry on the GIF tab - search field untypable"; fi
+  if grep -q 'KEY ' shots/geom_gb1.txt; then fail "B2: letters keyboard visible on the GIF tab (reference: grid fills the panel)"; else pass "B2: GIF tab opens as a full panel grid, no letters keyboard"; fi
+  if [ -n "$GF" ]; then
+    adb logcat -c; adb shell input tap $GF; sleep 1.2
+    geom gb1k keep >/dev/null
+    if grep -q 'KEY ' shots/geom_gb1k.txt; then pass "B2: tapping the GIF search field raises the letters keyboard"; else fail "B2: search field tap raised no keyboard - field untypable"; fi
+  else fail "B2: no GIFSEARCHFIELD marker"; fi
   # check 1+2: typing lands in the local GIF query; host field stays byte-unchanged
-  for ch in c a t; do XY=$(python3 tools/wb12_kv.py shots/geom_gb1.txt xy KEY label "$ch") && adb shell input tap $XY; sleep 0.3; done
+  for ch in c a t; do XY=$(python3 tools/wb12_kv.py shots/geom_gb1k.txt xy KEY label "$ch") && adb shell input tap $XY; sleep 0.3; done
   sleep 1.0
   F1=$(field_now); note "host field after GIF-search typing: '$F1'"
   [ "$F1" = "$F0" ] && pass "B2: typing in GIF search leaves host field byte-unchanged ('$F0')" || fail "B2: host field changed while typing in GIF search ('$F0' -> '$F1')"
   shot gb2_gif_query_typed
+  # keyed evidence (bounded owner-authorized test-key run): real results render; one tap must
+  # deliver image/gif into the CONTROLLED fixture via commitContent (CONTENT= marker), and the
+  # host TEXT stays byte-unchanged. Keyless builds: results/insert are not exercisable (INFO).
+  GC=""; for i in $(seq 1 8); do sleep 1.5; adb logcat -d -s WBDBG:I | tr -d '\r' > shots/gb2c.txt; GC=$(pos shots/gb2c.txt 'GIFCELL i=0 '); [ -n "$GC" ] && break; done
+  if [ -n "$GC" ]; then
+    shot gb2r_gif_results
+    adb logcat -c; adb shell input tap $GC; sleep 3.0
+    CM=$(adb logcat -d -s IMETARGET:I 2>/dev/null | tr -d '\r' | grep 'CONTENT= mime=' | tail -1)
+    F1b=$(field_now)
+    if echo "$CM" | grep -q 'mime=image/gif' && ! echo "$CM" | grep -q 'bytes=0'; then pass "B2 keyed: GIF insert delivered image/gif to the fixture via commitContent ($CM)"
+    elif [ "${WB_EXPECT_GIF:-0}" = "1" ]; then fail "B2 keyed: grid tap delivered no image/gif commitContent (marker: '${CM:-none}')"
+    else note "INFO: GIF results rendered but no commitContent marker"; fi
+    [ "$F1b" = "$F0" ] && pass "B2 keyed: GIF insert left host TEXT unchanged ('$F0')" || fail "B2 keyed: host text changed on GIF insert ('$F0' -> '$F1b')"
+  elif [ "${WB_EXPECT_GIF:-0}" = "1" ]; then fail "B2 keyed: no GIF results within 12s on a keyed build"
+  else note "INFO: no GIF results within 12s (keyless build) - results/insert not exercisable"; fi
   # check 2b: tab switch GIF->emoji releases the local capture - an emoji tap must reach the HOST
   ET=$(pos shots/gb1.txt 'EMOJITAB')
   if [ -n "$ET" ]; then
