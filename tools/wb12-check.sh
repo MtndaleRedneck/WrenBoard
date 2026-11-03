@@ -1046,6 +1046,12 @@ fi
 
 if leg gifsearch; then
   note "== B2 GIF search routing (keyless): local capture, no host ENTER, close restores =="
+  snapshot() {
+    local name=$1 req="${1}_$(date +%s)"
+    adb logcat -c; dbg "windows:$req" 0.5
+    adb logcat -d -s WBDBG:I | tr -d '\r' > "shots/$name.txt"
+    grep -q "SNAPEND request=$req" "shots/$name.txt" || { fail "B2 snapshot $name incomplete"; return 1; }
+  }
   focus_target; clear_field
   type_word hostok; sleep 0.5
   F0=$(field); note "host field baseline: '$F0'"
@@ -1053,18 +1059,18 @@ if leg gifsearch; then
   adb logcat -c; dbg "open:emoji" 2.0
   GT=""; for i in $(seq 1 10); do sleep 0.5; adb logcat -d -s WBDBG:I | tr -d '\r' > shots/gb0.txt; GT=$(pos shots/gb0.txt 'EMOJIGIFTAB'); [ -n "$GT" ] && break; done
   if [ -n "$GT" ]; then adb shell input tap $GT; sleep 1.5; else fail "B2: no GIF tab"; fi
-  adb logcat -d -s WBDBG:I | tr -d '\r' > shots/gb1.txt
+  snapshot gb1
   GA=$(pos shots/gb1.txt 'EMOJISEARCHGO'); note "gif arrow pos: '$GA'"
   GF=$(pos shots/gb1.txt 'GIFSEARCHFIELD'); note "gif search field pos: '$GF'"
   shot gb1_gif_tab_open
   # SwiftKey reference layout (owner screenshots, Nov 3): the GIF tab is a full-panel grid
   # with NO letters keyboard below; tapping the search field raises it.
-  geom gb1 keep >/dev/null
-  if grep -q 'KEY ' shots/geom_gb1.txt; then fail "B2: letters keyboard visible on the GIF tab (reference: grid fills the panel)"; else pass "B2: GIF tab opens as a full panel grid, no letters keyboard"; fi
+  if ! grep -q 'keyboardHidden=true' shots/gb1.txt; then fail "B2: letters keyboard visible on the GIF tab (reference: grid fills the panel)"; else pass "B2: GIF tab opens as a full panel grid, no letters keyboard"; fi
   if [ -n "$GF" ]; then
     adb logcat -c; adb shell input tap $GF; sleep 1.2
     geom gb1k keep >/dev/null
-    if grep -q 'KEY ' shots/geom_gb1k.txt; then pass "B2: tapping the GIF search field raises the letters keyboard"; else fail "B2: search field tap raised no keyboard - field untypable"; fi
+    snapshot gb1active
+    if grep -q 'keyboardHidden=false' shots/gb1active.txt; then pass "B2: tapping the GIF search field raises the letters keyboard"; else fail "B2: search field tap raised no keyboard - field untypable"; fi
   else fail "B2: no GIFSEARCHFIELD marker"; fi
   # check 1+2: typing lands in the local GIF query; host field stays byte-unchanged
   for ch in c a t; do XY=$(python3 tools/wb12_kv.py shots/geom_gb1k.txt xy KEY label "$ch") && adb shell input tap $XY; sleep 0.3; done
@@ -1075,22 +1081,22 @@ if leg gifsearch; then
   # active-arrow path: with the search keyboard raised, the round arrow must dismiss it and
   # deliver NO host editor action (the post-tab arrow below only exercises the idle arrow).
   # Re-acquire coords from a FRESH dump (post-expansion geometry); a missing marker is a leg failure, not a skip.
-  adb logcat -d -s WBDBG:I | tr -d '\r' > shots/gb2a.txt; GA=$(pos shots/gb2a.txt 'EMOJISEARCHGO')
+  snapshot gb2a; GA=$(pos shots/gb2a.txt 'EMOJISEARCHGO')
   if [ -n "$GA" ]; then
     adb logcat -c; adb shell input tap $GA; sleep 1.2
-    geom gb2d keep >/dev/null
-    if grep -q 'KEY ' shots/geom_gb2d.txt; then fail "B2: active arrow did not dismiss the search keyboard"; else pass "B2: active arrow dismisses the search keyboard"; fi
+    snapshot gb2d
+    shot gb2d_post_dismiss
+    if ! grep -q 'keyboardHidden=true' shots/gb2d.txt; then fail "B2: active arrow did not dismiss the search keyboard"; else pass "B2: active arrow dismisses the search keyboard"; fi
     F1a=$(field_now)
     [ "$F1a" = "$F0" ] && pass "B2: active arrow leaves host field unchanged ('$F0')" || fail "B2: active arrow changed host field ('$F0' -> '$F1a')"
     A1=$(adb logcat -d -s IMETARGET:I 2>/dev/null | tr -d '\r' | grep 'ACTION=' | tail -3)
     [ -z "$A1" ] && pass "B2: active arrow delivered NO host editor action (no ACTION= marker)" || fail "B2: active arrow delivered host editor action: $A1"
-    # re-open the search field so the results poll below sees the typed query state
-    GF2=$(pos shots/gb1.txt 'GIFSEARCHFIELD'); [ -n "$GF2" ] && { adb shell input tap $GF2; sleep 0.8; }
+    # Keep search dismissed for populated full-grid evidence and visible clipped-cell tap.
   else fail "B2: no EMOJISEARCHGO marker for the active arrow - leg not executed"; fi
   # keyed evidence (bounded owner-authorized test-key run): real results render; one tap must
   # deliver image/gif into the CONTROLLED fixture via commitContent (CONTENT= marker), and the
   # host TEXT stays byte-unchanged. Keyless builds: results/insert are not exercisable (INFO).
-  GC=""; for i in $(seq 1 8); do sleep 1.5; adb logcat -d -s WBDBG:I | tr -d '\r' > shots/gb2c.txt; GC=$(pos shots/gb2c.txt 'GIFCELL i=0 '); [ -n "$GC" ] && break; done
+  GC=""; for i in $(seq 1 8); do sleep 1.5; snapshot gb2c; GC=$(pos shots/gb2c.txt 'GIFCELL i=0 '); [ -n "$GC" ] && break; done
   if [ -n "$GC" ]; then
     shot gb2r_gif_results
     adb logcat -c; adb shell input tap $GC; sleep 3.0
@@ -1108,7 +1114,7 @@ if leg gifsearch; then
   ET=$(pos shots/gb1.txt 'EMOJITAB')
   if [ -n "$ET" ]; then
     adb shell input tap $ET; sleep 1.5
-    adb logcat -d -s WBDBG:I | tr -d '\r' > shots/gb2w.txt
+    snapshot gb2w
     G=$(grep 'WINDOW EMOJIGRID' shots/gb2w.txt | tail -1)
     GX=$(echo "$G" | sed -n 's/.*cx=\([0-9]*\).*/\1/p'); GY=$(echo "$G" | sed -n 's/.*cy=\([0-9]*\).*/\1/p')
     GW=$(echo "$G" | sed -n 's/.* w=\([0-9]*\).*/\1/p'); GH=$(echo "$G" | sed -n 's/.* h=\([0-9]*\).*/\1/p')
@@ -1119,7 +1125,7 @@ if leg gifsearch; then
       F0="$FT"   # re-baseline: the host field now holds the emoji-appended text
     else fail "B2: no EMOJIGRID after tab switch"; fi
     # back to the GIF tab for the arrow check; re-acquire coords after the layout round-trip
-    GT2=$(pos shots/gb2w.txt 'EMOJIGIFTAB'); [ -n "$GT2" ] && { adb shell input tap $GT2; sleep 1.2; adb logcat -d -s WBDBG:I | tr -d '\r' > shots/gb2x.txt; GA=$(pos shots/gb2x.txt 'EMOJISEARCHGO'); }
+    GT2=$(pos shots/gb2w.txt 'EMOJIGIFTAB'); [ -n "$GT2" ] && { adb shell input tap $GT2; sleep 1.2; snapshot gb2x; GA=$(pos shots/gb2x.txt 'EMOJISEARCHGO'); }
   else fail "B2: no EMOJITAB marker"; fi
   # check 3: the round arrow must not deliver ENTER to the host (dismisses the search keyboard only)
   if [ -n "$GA" ]; then
