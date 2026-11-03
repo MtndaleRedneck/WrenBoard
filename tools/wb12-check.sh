@@ -203,9 +203,9 @@ if leg keyboard; then
   # Deterministic readiness: wait until the app has LOGGED all three learn writes (wave2-480 read
   # an empty history for >10s on a slow runner; blind retries only measure weather).
   for i in $(seq 1 40); do
-    [ "$(adb logcat -d -s WBDBG:I 2>/dev/null | tr -d '\r' | grep -c "STARTER learn 'zebra'")" -ge 3 ] && break; sleep 1
+    [ "$(adb logcat -d -s WBDBG:I 2>/dev/null | tr -d '\r' | grep -c "STARTER writeQueued")" -ge 3 ] && break; sleep 1
   done
-  note "learn writes seen: $(adb logcat -d -s WBDBG:I 2>/dev/null | tr -d '\r' | grep -c "STARTER learn 'zebra'")"
+  note "learn writes seen: $(adb logcat -d -s WBDBG:I 2>/dev/null | tr -d '\r' | grep -c "STARTER writeQueued")"
   clear_field; adb logcat -c; focus_target; sleep 2; S2=$(sugg)
   for i in 1 2 3; do echo "$S2" | grep -qi zebra && break; sleep 2; S2=$(sugg); done
   note "starter words after typing 'zebra' 3x at the start of a field: [$S2]"

@@ -225,6 +225,7 @@ public final class InputLogic {
     }
 
     private int numCursorUpdatesSinceInputStarted = 0;
+    private int mLearnTraceOrdinal = 0;
     /**
      * Initializes the input logic for input in an editor.
      *
@@ -2017,19 +2018,19 @@ public final class InputLogic {
         // If correction is not enabled, we don't add words to the user history dictionary.
         // That's to avoid unintended additions in some sensitive fields, or fields that
         // expect to receive non-words.
-        if (BuildConfig.DEBUG) Log.i("WBDBG", "STARTER learnEnter '"
-                + org.futo.inputmethod.engine.general.WrenTraceRedact.word(suggestion)
-                + "' at " + SystemClock.uptimeMillis());
+        final int learnTraceOrdinal = BuildConfig.DEBUG ? ++mLearnTraceOrdinal : 0;
+        if (BuildConfig.DEBUG) Log.i("WBDBG", "STARTER learnEnter #" + learnTraceOrdinal
+                + " at " + SystemClock.uptimeMillis());
         if (!settingsValues.mAutoCorrectionEnabledPerTextFieldSettings) {
-            if (BuildConfig.DEBUG) Log.i("WBDBG", "STARTER learnSkip '" + org.futo.inputmethod.engine.general.WrenTraceRedact.word(suggestion) + "' reason=autocorrectOff");
+            if (BuildConfig.DEBUG) Log.i("WBDBG", "STARTER learnSkip #" + learnTraceOrdinal + " reason=autocorrectOff");
             return;
         }
         if (!settingsValues.isPersonalizationEnabled()) {
-            if (BuildConfig.DEBUG) Log.i("WBDBG", "STARTER learnSkip '" + org.futo.inputmethod.engine.general.WrenTraceRedact.word(suggestion) + "' reason=personalizationOff");
+            if (BuildConfig.DEBUG) Log.i("WBDBG", "STARTER learnSkip #" + learnTraceOrdinal + " reason=personalizationOff");
             return;
         }
         if (settingsValues.mInputAttributes.mNoLearning) {
-            if (BuildConfig.DEBUG) Log.i("WBDBG", "STARTER learnSkip '" + org.futo.inputmethod.engine.general.WrenTraceRedact.word(suggestion) + "' reason=noLearning");
+            if (BuildConfig.DEBUG) Log.i("WBDBG", "STARTER learnSkip #" + learnTraceOrdinal + " reason=noLearning");
             return;
         }
 
@@ -2037,7 +2038,7 @@ public final class InputLogic {
             // Since we don't unlearn when the user backspaces on a slow InputConnection,
             // turn off learning to guard against adding typos that the user later deletes.
             Log.w(TAG, "Skipping learning due to slow InputConnection.");
-            if (BuildConfig.DEBUG) Log.i("WBDBG", "STARTER learnSkip '" + org.futo.inputmethod.engine.general.WrenTraceRedact.word(suggestion) + "' reason=slowConn");
+            if (BuildConfig.DEBUG) Log.i("WBDBG", "STARTER learnSkip #" + learnTraceOrdinal + " reason=slowConn");
             return;
         }
 
@@ -2052,9 +2053,8 @@ public final class InputLogic {
 
         StatsUtils.onWordLearned(mImeHelper.getContext(), suggestion);
 
-        if (BuildConfig.DEBUG) Log.i("WBDBG", "STARTER learnRequest '"
-                + org.futo.inputmethod.engine.general.WrenTraceRedact.word(suggestion)
-                + "' at " + SystemClock.uptimeMillis());
+        if (BuildConfig.DEBUG) Log.i("WBDBG", "STARTER learnRequest #" + learnTraceOrdinal
+                + " at " + SystemClock.uptimeMillis());
         mIme.addToHistory(suggestion, wasAutoCapitalized,
                 ngramContext, timeStampInSeconds, settingsValues.mBlockPotentiallyOffensive,
                 importance);
@@ -2790,9 +2790,8 @@ public final class InputLogic {
     void learnAbandonedTypedWord(final SettingsValues settingsValues) {
         final String abandonedTypedWord =
                 WrenAbandonedCommitLearning.wordToLearn(mWordComposer.getTypedWord());
-        if (BuildConfig.DEBUG) Log.i("WBDBG", "STARTER abandonCommit word='"
-                + org.futo.inputmethod.engine.general.WrenTraceRedact.word(abandonedTypedWord)
-                + "' at " + SystemClock.uptimeMillis());
+        if (BuildConfig.DEBUG) Log.i("WBDBG", "STARTER abandonCommit hasWord="
+                + (abandonedTypedWord != null) + " at " + SystemClock.uptimeMillis());
         if (abandonedTypedWord != null) {
             final NgramContext ngramContext = mConnection.getNgramContextFromNthPreviousWord(
                     settingsValues.mSpacingAndPunctuations,
