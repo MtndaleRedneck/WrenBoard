@@ -65,6 +65,14 @@ public class TestInput extends Activity {
                                 : (android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES));
                         edit.setText("");
                         Log.i("IMETARGET", "PASSWORD=" + (on ? "ON" : "OFF"));
+                    } else if ("com.wrenboard.imetarget.VISIBLEPASSWORD".equals(a)) {
+                        boolean on = intent.getBooleanExtra("on", true);
+                        edit.setInputType(on
+                                ? (android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD)
+                                : android.text.InputType.TYPE_CLASS_TEXT);
+                        edit.setText("");
+                        ((android.view.inputmethod.InputMethodManager)getSystemService(INPUT_METHOD_SERVICE)).restartInput(edit);
+                        Log.i("IMETARGET", "VISIBLEPASSWORD=" + (on ? "ON" : "OFF") + " APPLIED");
                     } else if ("com.wrenboard.imetarget.SELECTALL".equals(a)) {
                         edit.requestFocus();
                         edit.selectAll();
@@ -134,6 +142,7 @@ public class TestInput extends Activity {
         f.addAction("com.wrenboard.imetarget.CLEAR");
         f.addAction("com.wrenboard.imetarget.CAPSENT");
         f.addAction("com.wrenboard.imetarget.PASSWORD");
+        f.addAction("com.wrenboard.imetarget.VISIBLEPASSWORD");
         f.addAction("com.wrenboard.imetarget.SELECTALL");
         f.addAction("com.wrenboard.imetarget.SELECT");
         f.addAction("com.wrenboard.imetarget.NOLEARN");
