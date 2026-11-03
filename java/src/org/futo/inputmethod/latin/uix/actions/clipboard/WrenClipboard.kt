@@ -478,13 +478,16 @@ private fun WrenClipCard(w: WrenClipboardWindow, entry: ClipboardEntry, view: Vi
                                 }
                             }
                             if (dragClaimed) {
-                                // keep following the finger until lift/cancel
+                                // keep following the finger until lift/cancel. The UP check must
+                                // come BEFORE consume(): changedToUp() returns false once the
+                                // change is consumed, so consuming first misread every lift as a
+                                // cancellation and the drag always snapped back (cl04/cl05v).
                                 while (true) {
                                     val change = awaitPointerEvent().changes.firstOrNull { it.id == down.id } ?: break
+                                    if (change.changedToUp()) { change.consume(); lifted = true; break }
+                                    if (!change.pressed) { cancelled = true; break }
                                     dragX.value += change.positionChange().x
                                     change.consume()
-                                    if (change.changedToUp()) { lifted = true; break }
-                                    if (!change.pressed) { cancelled = true; break }
                                 }
                                 finishSwipe(lifted)
                             } else if (lifted) {
