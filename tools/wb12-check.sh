@@ -1048,6 +1048,7 @@ if leg gifsearch; then
   note "== B2 GIF search routing (keyless): local capture, no host ENTER, close restores =="
   snapshot() {
     local name=$1 req="${1}_$(date +%s)"
+    : > "shots/$name.txt"
     adb logcat -c; dbg "windows:$req" 0.5
     adb logcat -d -s WBDBG:I | tr -d '\r' > "shots/${name}_raw.txt"
     grep -q "SNAPBEGIN request=$req " "shots/${name}_raw.txt" &&
@@ -1055,7 +1056,7 @@ if leg gifsearch; then
     sed -n "/SNAPBEGIN request=$req /,/SNAPEND request=$req/p" "shots/${name}_raw.txt" > "shots/$name.txt"
     # An attached duplicate tag is ambiguous. Do not choose the last provider silently.
     DUP=$(grep 'WINDOW ' "shots/$name.txt" | sed -E 's/.*WINDOW (.*) cx=.*/\1/' | sort | uniq -d)
-    [ -z "$DUP" ] || { fail "B2 snapshot $name duplicate layout tag: $DUP"; return 1; }
+    [ -z "$DUP" ] || { : > "shots/$name.txt"; fail "B2 snapshot $name duplicate layout tag: $DUP"; return 1; }
   }
   focus_target; clear_field
   type_word hostok; sleep 0.5
@@ -1086,7 +1087,7 @@ if leg gifsearch; then
   # active-arrow path: with the search keyboard raised, the round arrow must dismiss it and
   # deliver NO host editor action (the post-tab arrow below only exercises the idle arrow).
   # Re-acquire coords from a FRESH dump (post-expansion geometry); a missing marker is a leg failure, not a skip.
-  snapshot gb2a; GA=$(pos shots/gb2a.txt 'EMOJISEARCHGO')
+  GA=""; snapshot gb2a && GA=$(pos shots/gb2a.txt 'EMOJISEARCHGO')
   if [ -n "$GA" ]; then
     adb logcat -c; adb shell input tap $GA; sleep 1.2
     # Preserve host action evidence BEFORE snapshot() clears logcat.
@@ -1103,7 +1104,7 @@ if leg gifsearch; then
   # keyed evidence (bounded owner-authorized test-key run): real results render; one tap must
   # deliver image/gif into the CONTROLLED fixture via commitContent (CONTENT= marker), and the
   # host TEXT stays byte-unchanged. Keyless builds: results/insert are not exercisable (INFO).
-  GC=""; for i in $(seq 1 8); do sleep 1.5; snapshot gb2c; GC=$(pos shots/gb2c.txt 'GIFCELL i=0 '); [ -n "$GC" ] && break; done
+  GC=""; for i in $(seq 1 8); do sleep 1.5; GC=""; snapshot gb2c && GC=$(pos shots/gb2c.txt 'GIFCELL i=0 '); [ -n "$GC" ] && break; done
   if [ -n "$GC" ]; then
     shot gb2r_gif_results
     adb logcat -c; adb shell input tap $GC; sleep 3.0
@@ -1118,8 +1119,7 @@ if leg gifsearch; then
   elif [ "${WB_EXPECT_GIF:-0}" = "1" ]; then fail "B2 keyed: no GIF results within 12s on a keyed build"
   else note "INFO: no GIF results within 12s (keyless build) - results/insert not exercisable"; fi
   # check 2b: tab switch GIF->emoji releases the local capture - an emoji tap must reach the HOST
-  snapshot gb2tabs
-  ET=$(pos shots/gb2tabs.txt 'EMOJITAB')
+  ET=""; snapshot gb2tabs && ET=$(pos shots/gb2tabs.txt 'EMOJITAB')
   if [ -n "$ET" ]; then
     adb shell input tap $ET; sleep 1.5
     snapshot gb2w
@@ -1133,7 +1133,7 @@ if leg gifsearch; then
       F0="$FT"   # re-baseline: the host field now holds the emoji-appended text
     else fail "B2: no EMOJIGRID after tab switch"; fi
     # back to the GIF tab for the arrow check; re-acquire coords after the layout round-trip
-    GT2=$(pos shots/gb2w.txt 'EMOJIGIFTAB'); [ -n "$GT2" ] && { adb shell input tap $GT2; sleep 1.2; snapshot gb2x; GA=$(pos shots/gb2x.txt 'EMOJISEARCHGO'); }
+    GT2=$(pos shots/gb2w.txt 'EMOJIGIFTAB'); [ -n "$GT2" ] && { adb shell input tap $GT2; sleep 1.2; GA=""; snapshot gb2x && GA=$(pos shots/gb2x.txt 'EMOJISEARCHGO'); }
   else fail "B2: no EMOJITAB marker"; fi
   # check 3: the round arrow must not deliver ENTER to the host (dismisses the search keyboard only)
   if [ -n "$GA" ]; then
