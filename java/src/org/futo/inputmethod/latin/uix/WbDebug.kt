@@ -9,7 +9,11 @@ import android.view.View
 import androidx.core.content.ContextCompat
 import org.futo.inputmethod.keyboard.Keyboard
 import org.futo.inputmethod.latin.BuildConfig
+import org.futo.inputmethod.latin.ActiveSubtype
 import org.futo.inputmethod.latin.LatinIME
+import org.futo.inputmethod.latin.Subtypes
+import org.futo.inputmethod.latin.localeFromString
+import org.futo.inputmethod.latin.stripExtensionsIfNeeded
 import org.futo.inputmethod.latin.SuggestedWords
 import org.futo.inputmethod.latin.uix.actions.AllActionsMap
 
@@ -85,6 +89,22 @@ object WbDebug {
                         cmd == "expand" -> ime.uixManager.debugSetActionsExpanded(true)
                         cmd == "collapse" -> ime.uixManager.debugSetActionsExpanded(false)
                         cmd == "close" -> ime.uixManager.closeActionWindow()
+                        cmd.startsWith("addlang:") -> {
+                            // DEBUG/CI acceptance only: enable + activate a language through the
+                            // same settings path as the language picker (SubtypesSetting +
+                            // ActiveSubtype), with the picker's default layout resolution.
+                            val locale = localeFromString(cmd.removePrefix("addlang:"))
+                            val layout = Subtypes.findClosestLocaleLayouts(ime, locale).firstOrNull()
+                            if (layout == null) {
+                                Log.e(TAG, "ADDLANG no layout for $locale")
+                            } else {
+                                Subtypes.addLanguage(ime, locale, layout)
+                                ime.setSettingBlocking(ActiveSubtype.key,
+                                    Subtypes.subtypeToString(
+                                        Subtypes.makeSubtype(locale.stripExtensionsIfNeeded().toString(), layout)))
+                                Log.i(TAG, "ADDLANG ok locale=$locale")
+                            }
+                        }
                         cmd.startsWith("prefbool:") -> {
                             val kv = cmd.removePrefix("prefbool:").split("=")
                             PreferenceUtils.getDefaultSharedPreferences(ime).edit()
