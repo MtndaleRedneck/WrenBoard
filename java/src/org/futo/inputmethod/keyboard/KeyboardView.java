@@ -664,9 +664,9 @@ public class KeyboardView extends View {
                 iconHeightOverride = (int)(6.0f * iconDm);
             } else if (KeyboardIconsSet.NAME_EMOJI_NORMAL_KEY.equals(key.getIconId())
                     || KeyboardIconsSet.NAME_EMOJI_ACTION_KEY.equals(key.getIconId())) {
-                // WrenBoard 1.5 item 5f (Tab's cosmetic value, candidate): emoji key icon 17dp
-                // (45px at 420dpi, 51 at 480), centred - the centring below already does that.
-                iconWidth = (int)(17.0f * iconDm);
+                // Candidate: 50px icon bounds at the 420dpi reference surface. Actual vector
+                // ink can be smaller than its viewport; measure the render before acceptance.
+                iconWidth = (int)(19.05f * iconDm);
             } else if (KeyboardIconsSet.NAME_TAB_KEY.equals(key.getIconId())) {
                 // WrenBoard 1.5 (Tab's exact 20:45 spec, candidate): tab key icon is a bold
                 // arrow-into-bar 20dp wide x 11dp tall (2.5dp stroke lives in the vector),
