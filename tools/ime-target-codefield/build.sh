@@ -11,7 +11,7 @@ rm -rf out && mkdir -p out/classes out/dex
 javac -source 8 -target 8 -cp "$PJAR" -d out/classes src/com/wrenboard/imetarget/*.java
 "$BT/d8" --min-api 21 --lib "$PJAR" --output out/dex out/classes/com/wrenboard/imetarget/*.class
 "$BT/aapt2" link -o out/imetarget-codefield-unaligned.apk -I "$PJAR" --manifest AndroidManifest.xml ${ASSETS_DIR:+-A "$ASSETS_DIR"}
-(cd out/dex && zip -q -X ../imetarget-unaligned.apk classes.dex)
+(cd out/dex && zip -q -X ../imetarget-codefield-unaligned.apk classes.dex)
 "$BT/zipalign" -f 4 out/imetarget-codefield-unaligned.apk out/imetarget-codefield-aligned.apk
 keytool -genkeypair -keystore out/debug.keystore -alias androiddebugkey -keyalg RSA \
   -keysize 2048 -validity 10000 -storepass android -keypass android \
