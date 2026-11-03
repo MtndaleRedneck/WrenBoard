@@ -27,6 +27,7 @@ import org.futo.inputmethod.latin.NgramContext;
 import org.futo.inputmethod.latin.RichInputConnection;
 import org.futo.inputmethod.latin.SuggestedWords;
 import org.futo.inputmethod.latin.settings.Settings;
+import org.futo.inputmethod.latin.utils.ExecutorUtils;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
@@ -159,6 +160,13 @@ public class WrenWiringTestBase extends InputTestsBase {
         //    absent file is a genuinely empty history. The real-wire test additionally
         //    asserts dynamic absence of the fixture word before learning.
         mOriginalGeneralFacilitator.clearUserHistoryDictionary(getContext());
+        // Completion proof, not a sleep: the clear's deletion runs on the single-threaded
+        // KEYBOARD executor (ExecutorUtils.newSingleThreadScheduledExecutor), so a barrier
+        // submitted to the same executor completes only after the clear task has run.
+        ExecutorUtils.getBackgroundExecutor(ExecutorUtils.KEYBOARD)
+                .submit(new Runnable() { @Override public void run() { } })
+                .get(10, TimeUnit.SECONDS);
+        // Dynamic observable on top: the on-disk file must actually be gone.
         awaitUserHistoryFileAbsent(Locale.US, 10_000);
         mRecorder = new RecordingFacilitator();
         mGeneralFacilitatorField.set(mGeneralIme, mRecorder);
@@ -171,24 +179,36 @@ public class WrenWiringTestBase extends InputTestsBase {
 
     @Override
     protected void tearDown() throws Exception {
-        if (mGeneralFacilitatorField != null && mGeneralIme != null) {
-            mGeneralFacilitatorField.set(mGeneralIme, mOriginalGeneralFacilitator);
-        }
-        if (mLogicFacilitatorField != null && mInputLogic != null) {
-            mLogicFacilitatorField.set(mInputLogic, mOriginalLogicFacilitator);
-        }
-        super.tearDown();
-        // ServiceTestCase.tearDown never destroys the service here: startService/bindService
-        // are never called, so mServiceCreated stays false and shutdownService() is a no-op
-        // (AOSP frameworks/base ServiceTestCase source). Destroy it explicitly - on the main
-        // thread because onDestroy mutates the LifecycleRegistry - so the coroutine jobs and
-        // receivers registered in onCreate do not leak into the next test.
-        InstrumentationRegistry.getInstrumentation().runOnMainSync(new Runnable() {
-            @Override public void run() {
-                final LatinIME service = getService();
-                if (service != null) service.onDestroy();
+        // Capture the service BEFORE super.tearDown(): ServiceTestCase.tearDown nulls
+        // mService after shutdownService(), so getService() afterwards returns null.
+        final LatinIME service = getService();
+        try {
+            if (mGeneralFacilitatorField != null && mGeneralIme != null) {
+                mGeneralFacilitatorField.set(mGeneralIme, mOriginalGeneralFacilitator);
             }
-        });
+            if (mLogicFacilitatorField != null && mInputLogic != null) {
+                mLogicFacilitatorField.set(mInputLogic, mOriginalLogicFacilitator);
+            }
+            // Recorder ownership: the engine no longer references it and nothing else
+            // closes it, so close its dictionaries/queues explicitly.
+            if (mRecorder != null) {
+                mRecorder.closeDictionaries();
+            }
+            super.tearDown();
+        } finally {
+            // ServiceTestCase never destroys the service here: startService/bindService
+            // are never called, so mServiceCreated stays false and shutdownService() is a
+            // no-op (AOSP frameworks/base ServiceTestCase source). Destroy it explicitly -
+            // on the main thread because onDestroy mutates the LifecycleRegistry - so the
+            // coroutine jobs and receivers registered in onCreate do not leak across tests.
+            if (service != null) {
+                InstrumentationRegistry.getInstrumentation().runOnMainSync(new Runnable() {
+                    @Override public void run() {
+                        service.onDestroy();
+                    }
+                });
+            }
+        }
     }
 
     /** The exact call the abandon branch of commitCurrentAutoCorrection makes. */

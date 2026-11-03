@@ -30,6 +30,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class WrenAbandonedCommitWiringTests extends WrenWiringTestBase {
 
@@ -209,21 +210,33 @@ public class WrenAbandonedCommitWiringTests extends WrenWiringTestBase {
         getService().onCreateInputMethodInterface().startInput(ic, ei);
         getService().onStartInputView(ei, false);
 
+        // Fresh-delivery correlation, no stale-strip acceptance:
+        // 1) reset the delivered strip to a verified-empty state;
+        // 2) capture the engine's suggestion sequence BEFORE the trigger;
+        // 3) the production wait must report TRUE (the fresh pass completed);
+        // 4) accept only a delivery stamped with a NEWER sequence number.
+        mInputLogic.setSuggestedWords(SuggestedWords.getEmptyInstance());
+        assertTrue("strip verified empty before the fresh request",
+                mInputLogic.mSuggestedWords.isEmpty());
+        final Field seqF = getField(GeneralIME.class, "sequenceId");
+        final AtomicInteger sequenceId = (AtomicInteger) seqF.get(mGeneralIme);
+        final int before = sequenceId.get();
         // The actual production trigger for a fresh suggestion pass on the empty field.
         mGeneralIme.updateSuggestions(SuggestedWords.INPUT_STYLE_TYPING);
-        mGeneralIme.ensureSuggestionsCompleted();
+        assertTrue("production wait completed the fresh suggestion pass",
+                mGeneralIme.ensureSuggestionsCompleted());
 
         SuggestedWords delivered = null;
         final long deadline = SystemClock.uptimeMillis() + 5000;
         while (SystemClock.uptimeMillis() < deadline) {
             final SuggestedWords w = mInputLogic.mSuggestedWords;
-            if (w != null && w.size() > 0) {
+            if (w != null && w.mSequenceNumber > before && w.size() > 0) {
                 delivered = w;
                 break;
             }
             Thread.sleep(50);
         }
-        assertNotNull("engine delivered empty-field suggestions", delivered);
+        assertNotNull("engine delivered a fresh empty-field suggestion pass", delivered);
         assertEquals("delivered strip is exactly the learned word", 1, delivered.size());
         assertEquals("zebra", delivered.getWord(0));
         assertEquals("delivered word is sourced from the real user-history dictionary",
@@ -244,6 +257,10 @@ public class WrenAbandonedCommitWiringTests extends WrenWiringTestBase {
                 "UserHistoryDictionary." + Locale.FRANCE + ".dict");
         if (frFile.exists()) assertTrue("delete stale fr history file", frFile.delete());
         mRecorder.clearUserHistoryDictionary(getContext());
+        org.futo.inputmethod.latin.utils.ExecutorUtils.getBackgroundExecutor(
+                org.futo.inputmethod.latin.utils.ExecutorUtils.KEYBOARD)
+                .submit(new Runnable() { @Override public void run() { } })
+                .get(10, TimeUnit.SECONDS);
         awaitUserHistoryFileAbsent(Locale.US, 10_000);
         awaitUserHistoryFileAbsent(Locale.FRANCE, 10_000);
         resetFacilitatorLocales(Arrays.asList(Locale.US, Locale.FRANCE));
