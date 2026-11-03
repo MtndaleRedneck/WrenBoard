@@ -38,6 +38,7 @@ import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
@@ -51,6 +52,8 @@ import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
@@ -225,7 +228,24 @@ private val orange get() = WrenPanelColors.Orange
 fun Modifier.wbPos(tag: String): Modifier {
     if (!org.futo.inputmethod.latin.BuildConfig.DEBUG) return this
     val v = LocalView.current
+    val owner = remember(tag) { Any() }
+    val liveCoordinates = remember(owner) { arrayOfNulls<LayoutCoordinates>(1) }
+    DisposableEffect(owner) {
+        WbDebug.registerWindow(owner) {
+            val c = liveCoordinates[0]
+            if (c == null || !c.isAttached) null else {
+                val r = c.boundsInWindow() // ancestor-clipped visible bounds
+                if (r.width <= 0f || r.height <= 0f) null else {
+                    val screen = IntArray(2); val window = IntArray(2)
+                    v.getLocationOnScreen(screen); v.getLocationInWindow(window)
+                    "$tag cx=${(r.center.x + screen[0] - window[0]).toInt()} cy=${(r.center.y + screen[1] - window[1]).toInt()} w=${r.width.toInt()} h=${r.height.toInt()}"
+                }
+            }
+        }
+        onDispose { WbDebug.unregisterWindow(owner) }
+    }
     return this.onGloballyPositioned { c ->
+        liveCoordinates[0] = c
         val loc = IntArray(2); v.getLocationOnScreen(loc); val p = c.positionInRoot()
         WbDebug.logWindow("$tag cx=${(loc[0] + p.x + c.size.width / 2).toInt()} cy=${(loc[1] + p.y + c.size.height / 2).toInt()} w=${c.size.width} h=${c.size.height}")
     }
