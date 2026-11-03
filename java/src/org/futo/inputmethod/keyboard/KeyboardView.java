@@ -483,14 +483,23 @@ public class KeyboardView extends View {
             if (key.getCode() == Constants.CODE_SHIFT && "123".equals(label)) {
                 paint.setTextSize(kdc.getTextSize() * (30.0f / 22.0f));
             }
+            // WrenBoard 1.5 (item 10, candidate): the global 0.84 multiplier gives +14%;
+            // Tab's LIST has digits +20% (centred in the number row) - top digits up.
+            final boolean isSingleDigit = label.length() == 1 && Character.isDigit(label.charAt(0));
+            if (isSingleDigit) {
+                paint.setTextSize(paint.getTextSize() * (1.20f / 1.14f));
+            }
             final float labelCharHeight = TypefaceUtils.getReferenceCharHeight(paint);
             final float labelCharWidth = TypefaceUtils.getReferenceCharWidth(paint);
 
             // Vertical label text alignment.
             labelBaseline = centerY + labelCharHeight / 2.0f;
-            // WrenBoard 1.5 (item 10, candidate): SwiftKey's letters sit lower in the key
-            // (x-height top ~53% of key height vs our ~47%) - bias labels down ~6% of key height.
-            labelBaseline += keyHeight * 0.06f;
+            // WrenBoard 1.5 (item 10, candidate): SwiftKey's LETTERS sit lower in the key
+            // (x-height top ~53% of key height vs our ~47%) - bias alphabet letter keys down
+            // ~6% of key height. Digits/symbols stay centred (LIST item 10).
+            if (label.length() == 1 && Character.isLetter(label.charAt(0))) {
+                labelBaseline += keyHeight * 0.06f;
+            }
 
 
             if(kdc.getCenteredHint() && kdc.getHintLabel() != null && !key.getHasHintLabel() && !key.getHasShiftedLetterHint()) {
