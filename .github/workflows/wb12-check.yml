@@ -25,6 +25,10 @@ on:
         description: "emulator wm density (blank = 420)"
         required: false
         default: ""
+      load:
+        description: "1 = CPU load on the emulator during the swipe leg (input-backlog experiment)"
+        required: false
+        default: ""
 permissions:
   contents: read
 jobs:
@@ -71,6 +75,7 @@ jobs:
           WB_LEGS: ${{ inputs.legs }}
           WB_SIZE: ${{ inputs.size }}
           WB_DENSITY: ${{ inputs.density }}
+          WB_LOAD: ${{ inputs.load }}
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 34

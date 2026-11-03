@@ -400,6 +400,8 @@ private fun WrenClipCard(w: WrenClipboardWindow, entry: ClipboardEntry, view: Vi
     // the slide-out animation.
     val finishSwipe: (Boolean) -> Unit = { completed ->
         val x = dragX.value
+        if (org.futo.inputmethod.latin.BuildConfig.DEBUG) android.util.Log.i("WBDBG",
+            "CLIPTOUCH VERDICT rx=${android.os.SystemClock.uptimeMillis()} accDx=${x.toInt()} completed=$completed outcome=${WrenSwipeJudge.judge(x, completed)} thr=${WrenSwipeJudge.DELETE_THRESHOLD_PX.toInt()}")
         dragging.value = false
         if (WrenSwipeJudge.judge(x, completed) == WrenSwipeJudge.Outcome.Delete) {
             w.removeWithUndo(listOf(entry), resources.getString(R.string.wren_clip_deleted))
@@ -433,12 +435,18 @@ private fun WrenClipCard(w: WrenClipboardWindow, entry: ClipboardEntry, view: Vi
                 // accumulated distance no matter how the events are batched.
                 val holdCancelPx = 3.dp.toPx()
                 val slopPx = viewConfiguration.touchSlop
+                // App-boundary gesture trace (DEBUG only, wb12-check cl04 investigation): what the
+                // handler actually received, in order, with receipt vs event timestamps so emulator
+                // input-pipeline lag/coalescing is distinguishable from app event handling.
+                val traceOn = org.futo.inputmethod.latin.BuildConfig.DEBUG
+                fun tr(msg: String) { if (traceOn) android.util.Log.i("WBDBG", "CLIPTOUCH $msg") }
                 awaitEachGesture {
                     val down = awaitFirstDown()
                     // Travel counts every delivered sample (batched history included), so a fast
                     // swipe under event coalescing still measures its full distance (WrenDragAccum).
                     val accum = DragAccum()
                     accum.reset(down.position.x, down.position.y, down.uptimeMillis)
+                    tr("DOWN rx=${android.os.SystemClock.uptimeMillis()} ev=${down.uptimeMillis} x=${down.position.x.toInt()} y=${down.position.y.toInt()} slop=${slopPx.toInt()} holdCancel=${holdCancelPx.toInt()} thr=${WrenSwipeJudge.DELETE_THRESHOLD_PX.toInt()}")
                     var holdCancelledByMove = false
                     var dragClaimed = false
                     var lifted = false
@@ -447,6 +455,7 @@ private fun WrenClipCard(w: WrenClipboardWindow, entry: ClipboardEntry, view: Vi
                         while (true) {
                             val change = awaitPointerEvent().changes.firstOrNull { it.id == down.id } ?: break
                             accum.advance(change.allSamples())
+                            tr("EV rx=${android.os.SystemClock.uptimeMillis()} ev=${change.uptimeMillis} x=${change.position.x.toInt()} hist=${change.historical.size} accDx=${accum.dx.toInt()} up=${change.changedToUp()} pressed=${change.pressed} phase=hold")
                             if (change.changedToUp()) { lifted = true; break }
                             if (!change.pressed) { cancelled = true; break }
                             if (abs(accum.dx) > holdCancelPx || abs(accum.dy) > holdCancelPx) {
@@ -476,6 +485,7 @@ private fun WrenClipCard(w: WrenClipboardWindow, entry: ClipboardEntry, view: Vi
                                 } else {
                                     val change = awaitPointerEvent().changes.firstOrNull { it.id == down.id } ?: break
                                     accum.advance(change.allSamples())
+                                    tr("EV rx=${android.os.SystemClock.uptimeMillis()} ev=${change.uptimeMillis} x=${change.position.x.toInt()} hist=${change.historical.size} accDx=${accum.dx.toInt()} up=${change.changedToUp()} pressed=${change.pressed} phase=slopwatch")
                                     if (change.changedToUp()) lifted = true
                                     else if (!change.pressed) cancelled = true
                                 }
@@ -487,9 +497,10 @@ private fun WrenClipCard(w: WrenClipboardWindow, entry: ClipboardEntry, view: Vi
                                 // cancellation and the drag always snapped back (cl04/cl05v).
                                 while (true) {
                                     val change = awaitPointerEvent().changes.firstOrNull { it.id == down.id } ?: break
-                                    if (change.changedToUp()) { change.consume(); lifted = true; break }
-                                    if (!change.pressed) { cancelled = true; break }
+                                    if (change.changedToUp()) { tr("UP rx=${android.os.SystemClock.uptimeMillis()} ev=${change.uptimeMillis} x=${change.position.x.toInt()} hist=${change.historical.size} accDx=${accum.dx.toInt()} phase=drag"); change.consume(); lifted = true; break }
+                                    if (!change.pressed) { tr("CANCEL rx=${android.os.SystemClock.uptimeMillis()} accDx=${accum.dx.toInt()} phase=drag"); cancelled = true; break }
                                     accum.advance(change.allSamples())
+                                    tr("EV rx=${android.os.SystemClock.uptimeMillis()} ev=${change.uptimeMillis} x=${change.position.x.toInt()} hist=${change.historical.size} accDx=${accum.dx.toInt()} phase=drag")
                                     dragX.value = accum.dx
                                     change.consume()
                                 }
