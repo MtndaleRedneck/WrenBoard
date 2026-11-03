@@ -233,7 +233,7 @@ fun Modifier.wbPos(tag: String): Modifier {
     DisposableEffect(owner) {
         WbDebug.registerWindow(owner) {
             val c = liveCoordinates[0]
-            if (c == null || !c.isAttached) null else {
+            if (c == null || !c.isAttached || !v.isShown) null else {
                 val r = c.boundsInWindow() // ancestor-clipped visible bounds
                 if (r.width <= 0f || r.height <= 0f) null else {
                     val screen = IntArray(2); val window = IntArray(2)
