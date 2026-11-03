@@ -7,7 +7,7 @@ on:
         required: false
         default: ""
       focus:
-        description: "learn = learn-restore + real-data export legs; upgrade = published 1.1 -> branch APK install-over data preservation"
+        description: "learn = learn-restore + real-data export legs; upgrade = published 1.1 -> branch APK install-over data preservation; userdict = synthetic user-dictionary provider probe only (no other legs)"
         required: false
         default: ""
 permissions:
