@@ -116,6 +116,12 @@ adb shell am broadcast -a android.intent.action.CLOSE_SYSTEM_DIALOGS >/dev/null 
 WB_SIZE="${WB_SIZE:-1080x2316}"; WB_DENSITY="${WB_DENSITY:-420}"
 adb shell wm size "$WB_SIZE"; adb shell wm density "$WB_DENSITY"
 note "display: $(adb shell wm size | tr -d '\r' | tr '\n' ' ') $(adb shell wm density | tr -d '\r' | tr '\n' ' ')"
+if [ "${WB_LOAD:-0}" = 1 ]; then
+  # controlled CPU load for the WHOLE run (self-terminating): makes input-pipeline backlog and
+  # slow-write timing reproducible for experiment runs instead of weather-dependent.
+  adb shell 'for i in 1 2 3 4 5 6; do timeout 1500 sh -c "while :; do :; done" >/dev/null 2>&1 & done'
+  note "LOAD: 6 CPU spinners on the emulator for 1500 s (WB_LOAD=1)"
+fi
 note "== install =="
 adb install -r -t "$APK" >> "$R" 2>&1 || { fail "install WrenBoard"; exit 1; }
 adb install -r "$TAPK" >> "$R" 2>&1 || { fail "install ime-target"; exit 1; }
@@ -823,12 +829,6 @@ if leg clipboard; then
     # first-attempt verdict permanent, and on failure run a separate diagnostic manual-stream attempt
     # with mid-gesture frames. No green-by-retry: a first-attempt FAIL stands in the record.
     note "swipe attempt 1: input swipe ($X,$Y)->($((X-600)),$Y) 300ms; cards=$(grep -c 'CLIPCARD' shots/cl3.txt); target=$(grep 'CLIPCARD i=1 ' shots/cl3.txt | head -1 | cut -c1-140)"
-    if [ "${WB_LOAD:-0}" = 1 ]; then
-      # controlled CPU load on the emulator (self-terminating after 180s) to make input-pipeline
-      # backlog reproducible instead of weather-dependent; host-side injection times are logged.
-      adb shell 'for i in 1 2 3 4 5 6; do timeout 180 sh -c "while :; do :; done" >/dev/null 2>&1 & done'
-      note "LOAD: 6 CPU spinners on the emulator for 180 s (WB_LOAD=1)"
-    fi
     note "inject t0=$(date +%s.%N)"
     adb logcat -c; adb shell input swipe $X $Y $((X-600)) $Y 300; note "inject t1=$(date +%s.%N)"; sleep 1.5; wlog cl4
     grep -q 'CLIP removed=1' shots/cl4.txt || { sleep 1.5; wlog cl4; }
