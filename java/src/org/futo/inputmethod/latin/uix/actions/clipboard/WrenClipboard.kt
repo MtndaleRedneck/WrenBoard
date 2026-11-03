@@ -473,7 +473,7 @@ private fun WrenClipCard(w: WrenClipboardWindow, entry: ClipboardEntry, view: Vi
                             w.menuFor.value = entry
                             waitForUpOrCancellation()
                         }
-                        lifted && abs(accum.dx) > slopPx -> { dragX.value = accum.dx; finishSwipe(true) }
+                        lifted && WrenSwipeJudge.liftOutcome(accum.dx, slopPx) == WrenSwipeJudge.LiftOutcome.JudgeSwipe -> { dragX.value = accum.dx; finishSwipe(true) }
                         lifted -> w.paste(entry, view)
                         else -> {
                             // hold timer cancelled by >3dp movement: watch for the horizontal
@@ -520,7 +520,7 @@ private fun WrenClipCard(w: WrenClipboardWindow, entry: ClipboardEntry, view: Vi
                             } else if (lifted) {
                                 // A lift before slop is a tap (paste); a lift after slop is a
                                 // finished or abandoned swipe - judge it, never paste mid-drag.
-                                if (abs(accum.dx) > slopPx) { dragX.value = accum.dx; finishSwipe(true) } else w.paste(entry, view)
+                                if (WrenSwipeJudge.liftOutcome(accum.dx, slopPx) == WrenSwipeJudge.LiftOutcome.JudgeSwipe) { dragX.value = accum.dx; finishSwipe(true) } else w.paste(entry, view)
                             }
                         }
                     }

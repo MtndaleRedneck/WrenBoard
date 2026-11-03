@@ -21,4 +21,28 @@ class WrenSwipeJudgeTest {
         assertEquals(WrenSwipeJudge.Outcome.SnapBack, WrenSwipeJudge.judge(-50f, completed = true))
         assertEquals(WrenSwipeJudge.Outcome.SnapBack, WrenSwipeJudge.judge(0f, completed = true))
     }
+
+    @Test
+    fun thresholdBoundary_belowAtAbove() {
+        assertEquals(WrenSwipeJudge.Outcome.SnapBack, WrenSwipeJudge.judge(179.9f, completed = true))
+        assertEquals(WrenSwipeJudge.Outcome.SnapBack, WrenSwipeJudge.judge(180f, completed = true))
+        assertEquals(WrenSwipeJudge.Outcome.Delete, WrenSwipeJudge.judge(180.1f, completed = true))
+    }
+
+    @Test
+    fun interruptedDragNeverDeletes_evenPastThreshold() {
+        assertEquals(WrenSwipeJudge.Outcome.SnapBack, WrenSwipeJudge.judge(600f, completed = false))
+        assertEquals(WrenSwipeJudge.Outcome.SnapBack, WrenSwipeJudge.judge(-600f, completed = false))
+    }
+
+    @Test
+    fun liftOutcome_pasteOnlyWithinSlop() {
+        val slop = 21f
+        assertEquals(WrenSwipeJudge.LiftOutcome.Paste, WrenSwipeJudge.liftOutcome(0f, slop))
+        assertEquals(WrenSwipeJudge.LiftOutcome.Paste, WrenSwipeJudge.liftOutcome(20.9f, slop))
+        assertEquals(WrenSwipeJudge.LiftOutcome.Paste, WrenSwipeJudge.liftOutcome(-20.9f, slop))
+        assertEquals(WrenSwipeJudge.LiftOutcome.Paste, WrenSwipeJudge.liftOutcome(21f, slop))
+        assertEquals(WrenSwipeJudge.LiftOutcome.JudgeSwipe, WrenSwipeJudge.liftOutcome(21.1f, slop))
+        assertEquals(WrenSwipeJudge.LiftOutcome.JudgeSwipe, WrenSwipeJudge.liftOutcome(-600f, slop))
+    }
 }

@@ -72,4 +72,20 @@ class WrenDragAccumTest {
         a.advance(samples(Triple(250f, 400f, 2016)))
         assertEquals(-50f, a.dx, 0.001f)
     }
+
+    @Test
+    fun upEventTail_countsFinalTravelOnce() {
+        // The cl04 root cause (run 41585370039 trace): a 600px swipe whose tail was delivered
+        // ONLY in the UP event - last MOVE at x=44, UP at x=-336 with one batched sample.
+        // Judging must see the full -600, and the overlapping replay must not double count.
+        val a = DragAccum()
+        a.reset(264f, 68f, 150445)
+        a.advance(samples(Triple(252f, 68f, 150451), Triple(200f, 68f, 150477))) // -64
+        a.advance(samples(Triple(165f, 68f, 150494)))                            // -99
+        a.advance(samples(Triple(132f, 68f, 150511), Triple(44f, 68f, 150555)))  // -220
+        // UP event: history replays x=44 (same uptime as the last applied sample) then jumps to -336
+        a.advance(samples(Triple(44f, 68f, 150555), Triple(-336f, 68f, 150781)))
+        assertEquals(-600f, a.dx, 0.001f) // full travel visible at judgment -> Delete, not SnapBack
+        assertEquals(WrenSwipeJudge.Outcome.Delete, WrenSwipeJudge.judge(a.dx, completed = true))
+    }
 }
