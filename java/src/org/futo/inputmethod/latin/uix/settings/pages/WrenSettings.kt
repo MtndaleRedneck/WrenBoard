@@ -74,7 +74,13 @@ private val wrenLayoutNames = setOf(
     R.string.keyboard_settings_show_arrow_row,
     R.string.keyboard_settings_hide_when_hardware_keyboard_is_connected,
 )
-private val wrenLayoutRows get() = KeyboardSettingsMenu.settings.filter { it.name in wrenLayoutNames } +
+private val wrenLayoutRows get() = listOf(
+    userSettingNavigationItem(
+        title = org.futo.inputmethod.engine.IMESettingsMenu.title,
+        style = NavigationItemStyle.Misc,
+        navigateTo = org.futo.inputmethod.engine.IMESettingsMenu.navPath
+    ).copy(visibilityCheck = org.futo.inputmethod.engine.IMESettingsMenu.visibilityCheck)
+) + KeyboardSettingsMenu.settings.filter { it.name in wrenLayoutNames } +
         LongPressMenu.settings.filter { it.name == R.string.morekey_settings_layout }
 
 val WrenLayoutMenu = UserSettingsMenu(
@@ -117,7 +123,7 @@ private val wrenGestureNames = setOf(
     R.string.morekey_settings_show_hints,
     R.string.morekey_settings_duration,
 )
-private val wrenSwipeRows get() = SwipeMenu.settings +
+private val wrenSwipeRows get() = SwipeMenu.settings.filter { it.name != R.string.swipe_settings_configure_shortcuts } +
         LongPressMenu.settings.filter { it.name in wrenGestureNames }
 
 val WrenSwipeMenu = UserSettingsMenu(
@@ -173,7 +179,7 @@ private val wrenTransformerNames = setOf(
     R.string.prediction_settings_transformer_models,
     R.string.prediction_settings_transformer_advanced_params,
 )
-private val wrenAdvancedRows get() = PredictiveTextMenu.settings.filter { it.name in wrenTransformerNames } +
+private val wrenAdvancedRows get() = PredictiveTextMenu.settings.filter { it.name in wrenTransformerNames || it.name == 0 } +
         KeyboardSettingsMenu.settings.filter { it.name == R.string.keyboard_settings_inline_autofill } +
         HomeScreenLite.settings.filter { it.name == R.string.dev_settings_title } +
         listOf(
@@ -245,7 +251,11 @@ val WrenMenuSections: Map<String, List<Pair<Int, List<UserSetting>>>> by lazy {
         "wren_dict" to listOf(R.string.wren_set_dict to WrenDictionaryMenu.settings),
         "wren_soundfeel" to listOf(R.string.wren_set_soundfeel to WrenSoundMenu.settings),
         "wren_voice" to listOf(R.string.wren_set_voice to WrenVoiceMenu.settings),
-        "wren_clipemoji" to listOf(R.string.wren_set_clip_emoji to WrenClipEmojiMenu.settings),
+        "wren_clipemoji" to listOf(
+            R.string.wren_sec_panels to WrenClipEmojiMenu.settings.take(1),
+            R.string.wren_sec_clipboard to WrenClipEmojiMenu.settings.drop(1).take(1),
+            R.string.wren_sec_emoji to WrenClipEmojiMenu.settings.drop(2)
+        ),
         "wren_backup" to listOf(R.string.wren_sec_backup to WrenBackupMenu.settings),
         "wren_advanced" to listOf(R.string.wren_set_advanced to WrenAdvancedMenu.settings),
         "wren_futo" to listOf(R.string.wren_sec_futo to WrenFutoMenu.settings),

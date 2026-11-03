@@ -22,6 +22,7 @@ import org.futo.inputmethod.latin.uix.SettingsExporter.ExportingMenu
 import org.futo.inputmethod.latin.uix.actions.AllActions
 import org.futo.inputmethod.latin.uix.settings.pages.ActionEditorScreen
 import org.futo.inputmethod.latin.uix.settings.pages.ActionsScreen
+import org.futo.inputmethod.latin.uix.settings.pages.WrenLicenseMenu
 import org.futo.inputmethod.latin.uix.settings.pages.WrenAboutMenu
 import org.futo.inputmethod.latin.uix.settings.pages.WrenAppearanceMenu
 import org.futo.inputmethod.latin.uix.settings.pages.WrenLayoutMenu
@@ -124,6 +125,7 @@ val SettingsMenus = listOf(
     CreditsScreenLite,
     IMESettingsMenu,
     WrenAboutMenu,
+    WrenLicenseMenu,
     WrenAppearanceMenu,
     WrenLayoutMenu,
     WrenSwipeMenu,

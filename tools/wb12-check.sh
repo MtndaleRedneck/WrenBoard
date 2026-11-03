@@ -1550,6 +1550,9 @@ if leg settingspreview; then
   opensettings "" 2
   for i in 1 2 3; do adb shell input swipe 540 1800 540 500 400; sleep 0.5; done
   dumpui sp_unpaid_restored; shot sp_unpaid_restored
+  # Require current Home identity before absence can qualify.
+  grep -q 'text="FUTO license &amp; payment"' shots/sp_unpaid_restored.xml &&
+    grep -q 'text="Advanced"' shots/sp_unpaid_restored.xml || fail "restored unpaid capture lacks expected current Home nodes"
   uitext sp_unpaid_restored | grep -q "paid version" && fail "paid notice remains after disposable fixture reset" || pass "paid notice absent after disposable fixture reset"
 
 fi
