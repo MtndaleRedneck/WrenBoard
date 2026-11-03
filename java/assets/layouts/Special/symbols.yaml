@@ -1,4 +1,5 @@
 name: "Symbols"
+rowHeightMode: FillHeight
 attributes:
   shiftable: false
 rows:
