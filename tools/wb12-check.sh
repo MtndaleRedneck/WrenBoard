@@ -138,8 +138,13 @@ if leg setup; then
   adb shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1; sleep 6
   dumpui s01; sleep 2; shot s01_settings_not_enabled; dumpui s01; T=$(uitext s01); note "texts: ${T:0:400}"
   # fix1: the 1.x first-entry Personal dictionary step is gone; the first open is the Settings home
-  echo "$T" | grep -q "Personal dictionary" && fail "first Settings open still lands on the Personal dictionary page" || pass "first Settings open goes straight to the Settings home (no dictionary page)"
-  echo "$T" | grep -q "Typing" && echo "$T" | grep -q "Backup" && pass "first Settings open shows the Settings home list" || fail "first Settings open is not the Settings home"
+  # Match actual root nodes, not a subtitle containing "Personal dictionary" or an
+  # old six-group row that is now below the first viewport.
+  grep -q 'text="Personal dictionary"' shots/s01.xml && fail "first Settings open lands on dictionary title" || pass "first Settings open is not dictionary title"
+  grep -q 'text="WrenBoard Settings"' shots/s01.xml &&
+    grep -q 'text="Appearance"' shots/s01.xml &&
+    grep -q 'text="Languages &amp; layouts"' shots/s01.xml &&
+    pass "first Settings open shows actual 1.5 Home root nodes" || fail "first Settings open lacks actual 1.5 Home root nodes"
   echo "$T" | grep -q "WrenBoard is turned off" && pass "banner when not enabled" || fail "banner when not enabled"
   echo "$T" | grep -q "Step 1\|Step 2\|Open Input Method Settings" && fail "old setup wall still shown" || pass "no setup wall (not enabled)"
   echo "$T" | grep -q "Keyboard\|Typing" && pass "settings items reachable while not enabled" || fail "settings items not visible while not enabled"
@@ -1525,6 +1530,14 @@ if leg settingspreview; then
     P=$(uitext "sp_$d"); [ -n "$P" ] && pass "preview $d has visible UI text" || fail "preview $d empty UI"
     adb shell input swipe 540 1800 540 600 400; sleep 1; shot "sp_${d}_bottom"
   done
+  # Paid-notice preservation is exercised on this disposable emulator only, never a user's account.
+  dbg "dsbool:already_paid=true" 0.8
+  opensettings "" 3
+  for i in 1 2 3; do adb shell input swipe 540 1800 540 500 400; sleep 0.5; done
+  shot sp_paid_notice_home; dumpui sp_paid_notice_home
+  uitext sp_paid_notice_home | grep -q "paid version" && pass "paid notice visible on Home" || fail "paid notice absent from Home in paid fixture state"
+  dbg "dsbool:already_paid=false" 0.8
+
 fi
 
 if leg settings; then
