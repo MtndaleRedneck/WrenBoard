@@ -1184,10 +1184,10 @@ if leg clipboard; then
     elif grep -q 'WINDOW CLIPMENU' "$L"; then fail "$lbl: vertical scroll opened the Pin menu"
     else pass "$lbl: no paste, no delete, no menu"; fi
   }
-  vev() { grep 'phase=slopwatch' "shots/$1.txt" | grep -o 'accDy=-\?[0-9]*' | sed 's/accDy=//' | awk '{if($1<0)$1=-$1; if($1>m)m=$1} END{print m+0}'; }
+  vev() { grep 'phase=slopwatch\|phase=hold' "shots/$1.txt" | grep -o 'accDy=-\?[0-9]*' | sed 's/accDy=//' | awk '{if($1<0)$1=-$1; if($1>m)m=$1} END{print m+0}'; }
   # v1: device-paced slow vertical drag on a card
   adb logcat -c; dbg close 0.8; focus_target; clear_field; dbg "open:clipboard_history" 2.0; wlog clv0
-  N=$(grep 'CLIP shown=' shots/clv0.txt | tail -1 | sed 's/.*shown=//'); [ "${N:-0}" -ge 12 ] && pass "12 clips seeded for the scroll legs ($N)" || note "INFO: $N clips seeded"
+  N=$(grep 'CLIP shown=' shots/clv0.txt | tail -1 | sed 's/.*shown=//'); [ "${N:-0}" -ge 12 ] && pass "12 clips seeded for the scroll legs ($N)" || fail "fewer than 12 clips stored (N=${N:-0}): scroll legs underfed"
   C=$(pos shots/clv0.txt 'CLIPCARD i=1 ')
   if [ -n "$C" ]; then read -r X Y <<< "$C"
     adb logcat -c
@@ -1201,9 +1201,9 @@ if leg clipboard; then
   C=$(pos shots/clv2w.txt 'CLIPCARD i=1 ')
   if [ -n "$C" ]; then read -r X Y <<< "$C"
     adb logcat -c; adb shell input swipe $X $Y $X $((Y-700)) 80
-    sleep 1.2; wlog clv2; shot cl06w_coalesced_up_scroll
-    EV=$(vev clv2); note "  v2 max |accDy| at handler: ${EV}px"; F=$(field); note "  field after fling: '${F:0:40}'"
-    vchk shots/clv2.txt "coalesced-UP vertical fling"
+    sleep 1.2; wlog clv2; shot cl06w_fast_fling_scroll
+    EV=$(vev clv2); note "  v2 fast fling (80ms requested); max |accDy| at handler: ${EV}px"; F=$(field); note "  field after fling: '${F:0:40}'"
+    vchk shots/clv2.txt "fast vertical fling (80ms)"
   else fail "no card position for the coalesced-UP leg"; fi
   # v3: out-and-back scroll returning near the origin (net dy ~ 0, peak ~ 400px)
   adb logcat -c; dbg close 0.8; clear_field; dbg "open:clipboard_history" 2.0; wlog clv3w
@@ -1235,48 +1235,95 @@ fi
 
 
 if leg saveword; then
-  note "== SAVE WORD privacy boundary (1.5 B6): selection positive; password / NOLEARN-flag / code-field negatives against the actual UserDictionary provider =="
-  dictq() { adb shell content query --uri content://user_dictionary/words 2>/dev/null | tr -d '\r'; }
+  note "== SAVE WORD privacy boundary (1.5 B6): selection-priority positive; password / NOLEARN-flag / code-field negatives against the actual UserDictionary provider =="
+  # Fail-closed provider access: `content` can print an Error/SecurityException payload with
+  # exit code 0, so BOTH the exit code and the payload shape are validated. Token checks use an
+  # exact --where word='...' filter plus the row shape word=<token>, never a substring grep.
+  dict_has() { # <token> <label> -> 0 present, 1 absent, 2 query failed
+    local tok="$1" lbl="$2" rows rc
+    rows=$(adb shell content query --uri content://user_dictionary/words --where "word='$tok'" 2>&1); rc=$?
+    if [ $rc -ne 0 ] || echo "$rows" | head -3 | grep -qi 'error\|exception\|denied'; then
+      fail "$lbl: user_dictionary query FAILED: $(echo "$rows" | head -1 | cut -c1-120)"; return 2
+    fi
+    if echo "$rows" | grep -q "word=$tok,"; then return 0; fi
+    # a present row must match the exact row shape; anything else is an empty (no-result) set
+    return 1
+  }
   dictdel() { adb shell content delete --uri content://user_dictionary/words --where "word='$1'" >/dev/null 2>&1; }
   wait_mode() { local want=$1 i; for i in $(seq 1 12); do [ "$(adb logcat -d -s IMETARGET:I 2>/dev/null | tr -d '\r' | grep -oE 'MODE=[A-Z]+ APPLIED' | tail -1)" = "MODE=$want APPLIED" ] && return 0; sleep 1; done; return 1; }
-  SW1="zqxwjcta"; SW2="zqxwjctb"; SW3="zqxwjctc"; SW4="zqxwjctd"
-  for w in $SW1 $SW2 $SW3 $SW4; do dictdel "$w"; done
-  # positive control: an explicit selection in a normal field IS saved (selection-priority path,
-  # proves the action path itself executes end to end)
+  SWP="zqxwjpos"; SWT="zqxwjtail"; SW2="zqxwjctb"; SW3="zqxwjctc"; SW4="zqxwjctd"
+  for w in $SWP $SWT $SW2 $SW3 $SW4; do dictdel "$w"; done
+  for w in $SWP $SWT $SW2 $SW3 $SW4; do
+    dict_has "$w" "baseline"; b=$?
+    [ $b -eq 0 ] && { dictdel "$w"; dict_has "$w" "baseline"; b=$?; }
+    [ $b -eq 0 ] && fail "baseline: canary $w could not be cleared from the user dictionary"
+  done
+  POS_OK=0
+  # positive + priority: two different words; the SELECTED one (first) must be saved, the word
+  # before the cursor (last typed, nonempty) must NOT. Proves the selected-over-lastTyped branch
+  # with both candidates present; says nothing about composing-vs-selected ordering.
   adb shell am broadcast -a com.wrenboard.imetarget.NOLEARN --ez on false -p "$TPKG" >/dev/null 2>&1; wait_mode NORMAL
   focus_target; clear_field
-  adb shell input text "$SW1"; sleep 0.8
-  adb shell am broadcast -a com.wrenboard.imetarget.SELECTALL -p "$TPKG" >/dev/null 2>&1; sleep 0.8
+  adb shell input text "$SWP $SWT"; sleep 0.8
+  adb shell am broadcast -a com.wrenboard.imetarget.SELECT --ei start 0 --ei end ${#SWP} -p "$TPKG" >/dev/null 2>&1; sleep 0.8
   adb logcat -c; dbg "open:save_word" 1.5; shot sw01_selection_saved
-  dictq | grep -q "$SW1" && pass "save word saves the explicit selection (positive control)" || fail "positive control: the selection was NOT saved to the user dictionary"
-  dictdel "$SW1"
+  dict_has "$SWP" "positive"; rp=$?
+  dict_has "$SWT" "positive"; rt=$?
+  if [ $rp -eq 0 ] && [ $rt -eq 1 ]; then
+    POS_OK=1; pass "save word saves the SELECTED word over the nonempty last-typed word (priority + liveness)"
+  elif [ $rt -eq 0 ]; then fail "priority: the LAST-TYPED word was saved over the explicit selection"
+  elif [ $rp -eq 1 ]; then fail "positive control: nothing was saved to the user dictionary (action path dead; negatives unqualified)"; fi
+  dictdel "$SWP"; dictdel "$SWT"
+  negcheck() { # <token> <label> <precondition 0/1>
+    local tok="$1" lbl="$2" pre="$3"
+    [ "$pre" = 1 ] || { note "INFO: $lbl negative not executed (honest-execution precondition failed above)"; return 1; }
+    dict_has "$tok" "$lbl"; local r=$?
+    if [ $r -eq 0 ]; then fail "$lbl: save word WROTE the token to the user dictionary"; return 1
+    elif [ $r -eq 2 ]; then return 1
+    elif [ "$POS_OK" = 1 ]; then pass "$lbl: save word refuses, no dictionary write"
+    else note "INFO: $lbl refused, but UNQUALIFIED - positive liveness failed above"; return 1; fi
+  }
   # negative 1: password field (broadcast-set inputType, field tap renegotiates the session)
+  PRE1=0
   adb shell am broadcast -a com.wrenboard.imetarget.PASSWORD --ez on true -p "$TPKG" >/dev/null 2>&1; sleep 1.2; tap_field
+  clear_field
   adb shell input text "$SW2"; sleep 0.8
+  F=$(field); if [ "$F" = "$SW2" ]; then PRE1=1; else fail "password negative precondition: canary not observed in the fixture field ('${F:0:40}')"; fi
   adb logcat -c; dbg "open:save_word" 1.5; shot sw02_password_blocked
-  dictq | grep -q "$SW2" && fail "PASSWORD field: save word wrote to the user dictionary" || pass "password field: save word refuses, no dictionary write"
+  negcheck "$SW2" "password field" $PRE1
   clear_field
   adb shell am broadcast -a com.wrenboard.imetarget.PASSWORD --ez on false -p "$TPKG" >/dev/null 2>&1; sleep 1.0
   # negative 2: IME_FLAG_NO_PERSONALIZED_LEARNING field (persisted+recreated fixture mode: the
   # flag is fresh in the EditorInfo at onStartInput, MODE=NOLEARN APPLIED is the readiness marker)
+  PRE2=0
   adb shell am broadcast -a com.wrenboard.imetarget.NOLEARN --ez on true -p "$TPKG" >/dev/null 2>&1
-  wait_mode NOLEARN || fail "NOLEARN mode was not applied by the fixture"
-  focus_target; adb shell input text "$SW3"; sleep 0.8
+  if wait_mode NOLEARN; then
+    focus_target; adb shell input text "$SW3"; sleep 0.8
+    F=$(field); if [ "$F" = "$SW3" ]; then PRE2=1; else fail "NOLEARN negative precondition: canary not observed in the fixture field ('${F:0:40}')"; fi
+  else fail "NOLEARN mode was not applied by the fixture"; fi
   adb logcat -c; dbg "open:save_word" 1.5; shot sw03_nolearn_blocked
-  dictq | grep -q "$SW3" && fail "NOLEARN field: save word wrote to the user dictionary" || pass "no-learning flag field: save word refuses, no dictionary write"
+  negcheck "$SW3" "no-learning flag field" $PRE2
   adb shell am broadcast -a com.wrenboard.imetarget.NOLEARN --ez on false -p "$TPKG" >/dev/null 2>&1; wait_mode NORMAL
-  # negative 3: code-field package classification (com.replit.* fixture variant, plain text field
-  # has no AUTO_CORRECT flag -> the app's own getCodeFieldType classification says code field)
+  # negative 3: code-field package classification (com.replit.wbcodefield fixture variant; a plain
+  # text field has no AUTO_CORRECT flag -> the app's own getCodeFieldType says code field). The
+  # focused window and the typed canary are verified before invoking; install/start failure fails.
+  PRE3=0
   if [ -f tools/ime-target-codefield/out/imetarget-codefield.apk ]; then
-    adb install -r tools/ime-target-codefield/out/imetarget-codefield.apk >> "$R" 2>&1 || fail "install code-field fixture"
-    adb shell am start -S -n "com.replit.wbcodefield/com.wrenboard.imetarget.TestInput" >/dev/null 2>&1; sleep 3
-    tap_field
-    adb shell input text "$SW4"; sleep 0.8
-    adb logcat -c; dbg "open:save_word" 1.5; shot sw04_codefield_blocked
-    dictq | grep -q "$SW4" && fail "CODE field (com.replit.*): save word wrote to the user dictionary" || pass "code field (com.replit.*): save word refuses, no dictionary write"
-    adb shell am broadcast -a com.wrenboard.imetarget.CLEAR -p com.replit.wbcodefield >/dev/null 2>&1
+    if adb install -r tools/ime-target-codefield/out/imetarget-codefield.apk >> "$R" 2>&1; then
+      if adb shell am start -S -n "com.replit.wbcodefield/com.wrenboard.imetarget.TestInput" >> "$R" 2>&1; then
+        sleep 3; tap_field
+        FOCUS=$(adb shell dumpsys window 2>/dev/null | grep -m1 'mCurrentFocus')
+        if echo "$FOCUS" | grep -q 'com.replit.wbcodefield'; then
+          adb shell input text "$SW4"; sleep 0.8
+          F=$(field); if [ "$F" = "$SW4" ]; then PRE3=1; else fail "code-field negative precondition: canary not observed in the fixture field ('${F:0:40}')"; fi
+        else fail "code-field fixture is NOT the focused window: ${FOCUS:0:140}"; fi
+      else fail "code-field fixture failed to start"; fi
+    else fail "install of the code-field fixture failed"; fi
   else fail "code-field fixture apk missing from the checkout"; fi
-  for w in $SW1 $SW2 $SW3 $SW4; do dictdel "$w"; done
+  adb logcat -c; dbg "open:save_word" 1.5; shot sw04_codefield_blocked
+  negcheck "$SW4" "code field (com.replit.*)" $PRE3
+  adb shell am broadcast -a com.wrenboard.imetarget.CLEAR -p com.replit.wbcodefield >/dev/null 2>&1
+  for w in $SWP $SWT $SW2 $SW3 $SW4; do dictdel "$w"; done
   focus_target
 fi
 if leg update; then

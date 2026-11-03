@@ -482,7 +482,7 @@ private fun WrenClipCard(w: WrenClipboardWindow, entry: ClipboardEntry, view: Vi
                         while (true) {
                             val change = awaitPointerEvent().changes.firstOrNull { it.id == down.id } ?: break
                             advancePeaks(change.allSamples())
-                            tr("EV rx=${android.os.SystemClock.uptimeMillis()} ev=${change.uptimeMillis} x=${change.position.x.toInt()} hist=${change.historical.size} accDx=${accum.dx.toInt()} up=${change.changedToUp()} pressed=${change.pressed} phase=hold")
+                            tr("EV rx=${android.os.SystemClock.uptimeMillis()} ev=${change.uptimeMillis} x=${change.position.x.toInt()} hist=${change.historical.size} accDx=${accum.dx.toInt()} accDy=${accum.dy.toInt()} up=${change.changedToUp()} pressed=${change.pressed} phase=hold")
                             if (change.isConsumed) scrollConsumed = true
                             // changedToUp() is false on an already-consumed UP: record gesture
                             // over from UP-in-any-state or !pressed, BEFORE any wait decision.
