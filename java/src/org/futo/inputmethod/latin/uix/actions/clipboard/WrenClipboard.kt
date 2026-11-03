@@ -85,6 +85,11 @@ import org.futo.inputmethod.latin.uix.settings.useDataStoreValue
 import java.io.File
 import kotlin.math.roundToInt
 
+/** History first, then the event's own point, for DragAccum. */
+private fun androidx.compose.ui.input.pointer.PointerInputChange.allSamples(): List<DragSample> =
+    historical.map { DragSample(it.position.x, it.position.y, it.uptimeMillis) } +
+        DragSample(position.x, position.y, uptimeMillis)
+
 /** WrenBoard 1.2: the SwiftKey-style emoji and clipboard panels. Off = FUTO's own panels (kept, not removed). */
 val WrenSwiftKeyPanels = SettingsKey(booleanPreferencesKey("wren_swiftkey_panels"), true)
 
@@ -430,8 +435,10 @@ private fun WrenClipCard(w: WrenClipboardWindow, entry: ClipboardEntry, view: Vi
                 val slopPx = viewConfiguration.touchSlop
                 awaitEachGesture {
                     val down = awaitFirstDown()
-                    var dx = 0f
-                    var dy = 0f
+                    // Travel counts every delivered sample (batched history included), so a fast
+                    // swipe under event coalescing still measures its full distance (WrenDragAccum).
+                    val accum = DragAccum()
+                    accum.reset(down.position.x, down.position.y, down.uptimeMillis)
                     var holdCancelledByMove = false
                     var dragClaimed = false
                     var lifted = false
@@ -439,12 +446,10 @@ private fun WrenClipCard(w: WrenClipboardWindow, entry: ClipboardEntry, view: Vi
                     val timedOut = withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) {
                         while (true) {
                             val change = awaitPointerEvent().changes.firstOrNull { it.id == down.id } ?: break
-                            val delta = change.positionChange()
-                            dx += delta.x
-                            dy += delta.y
+                            accum.advance(change.allSamples())
                             if (change.changedToUp()) { lifted = true; break }
                             if (!change.pressed) { cancelled = true; break }
-                            if (abs(dx) > holdCancelPx || abs(dy) > holdCancelPx) {
+                            if (abs(accum.dx) > holdCancelPx || abs(accum.dy) > holdCancelPx) {
                                 holdCancelledByMove = true
                                 break
                             }
@@ -464,15 +469,13 @@ private fun WrenClipCard(w: WrenClipboardWindow, entry: ClipboardEntry, view: Vi
                             // hold timer cancelled by >3dp movement: watch for the horizontal
                             // drag claim at touch slop; a lift before slop pastes.
                             while (!dragClaimed && !lifted && !cancelled) {
-                                if (abs(dx) > slopPx) {
+                                if (abs(accum.dx) > slopPx) {
                                     dragClaimed = true
                                     dragging.value = true
-                                    dragX.value = dx
+                                    dragX.value = accum.dx
                                 } else {
                                     val change = awaitPointerEvent().changes.firstOrNull { it.id == down.id } ?: break
-                                    val delta = change.positionChange()
-                                    dx += delta.x
-                                    dy += delta.y
+                                    accum.advance(change.allSamples())
                                     if (change.changedToUp()) lifted = true
                                     else if (!change.pressed) cancelled = true
                                 }
@@ -486,7 +489,8 @@ private fun WrenClipCard(w: WrenClipboardWindow, entry: ClipboardEntry, view: Vi
                                     val change = awaitPointerEvent().changes.firstOrNull { it.id == down.id } ?: break
                                     if (change.changedToUp()) { change.consume(); lifted = true; break }
                                     if (!change.pressed) { cancelled = true; break }
-                                    dragX.value += change.positionChange().x
+                                    accum.advance(change.allSamples())
+                                    dragX.value = accum.dx
                                     change.consume()
                                 }
                                 finishSwipe(lifted)
