@@ -5,6 +5,8 @@ import android.content.Intent
 import android.util.Log
 import android.provider.UserDictionary
 import android.view.inputmethod.ExtractedTextRequest
+import android.view.inputmethod.EditorInfo
+import org.futo.inputmethod.latin.utils.InputTypeUtils
 import kotlinx.coroutines.flow.MutableStateFlow
 import org.futo.inputmethod.compat.UserDictionaryCompatUtils
 import org.futo.inputmethod.latin.R
@@ -86,6 +88,24 @@ val SaveWordAction = Action(
     name = R.string.wren_action_save_word,
     simplePressImpl = { manager, _ ->
         val context = manager.getContext()
+        // Eligibility BEFORE any text retrieval, failing closed on a missing/stale editor.
+        // Mirrors the app's trusted no-learning classification (InputAttributes.mNoLearning):
+        // explicit IME_FLAG_NO_PERSONALIZED_LEARNING, every password input type, code fields.
+        val ei = manager.getLatinIMEForDebug().currentInputEditorInfo
+        val noLearningFlag = ei != null &&
+                (ei.imeOptions and EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING) != 0
+        val codeField = ei != null && ei.packageName != null && (
+                (ei.packageName.startsWith("com.replit") &&
+                        (ei.inputType and android.text.InputType.TYPE_TEXT_FLAG_AUTO_CORRECT) == 0) ||
+                (ei.packageName.startsWith("com.termux") && ei.inputType == 0) ||
+                (ei.packageName.startsWith("sh.haven.app") && ei.inputType == 0) ||
+                (ei.packageName.startsWith("com.android.virtualization.terminal") &&
+                        (ei.inputType and android.text.InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS) != 0))
+        val blockedField = ei == null || noLearningFlag ||
+                InputTypeUtils.isPasswordInputType(ei.inputType) || codeField
+        if (blockedField) {
+            WrenSaveWordNotice.show(context.getString(R.string.wren_word_save_blocked_field))
+        } else {
         val ic = manager.getLatinIMEForDebug().currentInputConnection
         fun String?.cleanWord(): String? =
             this?.trim()?.takeIf { it.isNotEmpty() && it.none(Char::isWhitespace) }
@@ -96,7 +116,8 @@ val SaveWordAction = Action(
         val lastTyped = ic?.getTextBeforeCursor(200, 0)?.toString()
             ?.trimEnd()?.takeLastWhile { it.isLetterOrDigit() || it == '\'' || it == '-' }.cleanWord()
         val selected = ic?.getSelectedText(0)?.toString().cleanWord()
-        val word = composing ?: lastTyped ?: selected
+        // Explicit selection first, then the composing word, then the word before the cursor.
+        val word = selected ?: composing ?: lastTyped
         when {
             word == null -> WrenSaveWordNotice.show(context.getString(R.string.wren_word_type_first))
             alreadyInUserDictionary(context, word) ->
@@ -105,6 +126,7 @@ val SaveWordAction = Action(
                 UserDictionaryCompatUtils.addWord(context, word, 250, null, null)
                 WrenSaveWordNotice.show(context.getString(R.string.wren_word_saved_chip, word))
             }
+        }
         }
     },
     windowImpl = null,

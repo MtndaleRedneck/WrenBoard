@@ -448,16 +448,48 @@ private fun WrenClipCard(w: WrenClipboardWindow, entry: ClipboardEntry, view: Vi
                     accum.reset(down.position.x, down.position.y, down.uptimeMillis)
                     tr("DOWN rx=${android.os.SystemClock.uptimeMillis()} ev=${down.uptimeMillis} x=${down.position.x.toInt()} y=${down.position.y.toInt()} slop=${slopPx.toInt()} holdCancel=${holdCancelPx.toInt()} thr=${WrenSwipeJudge.DELETE_THRESHOLD_PX.toInt()}")
                     var holdCancelledByMove = false
+            // Peak travel across the whole gesture, advanced from EVERY sample including a
+            // coalesced UP event's samples, and consulted BEFORE any paste/swipe decision. Net
+            // dy is insufficient: a scroll out and back near the origin nets ~0.
+            var maxAbsDx = 0f
+            var maxAbsDy = 0f
+            fun notePeaks() {
+                val ax = kotlin.math.abs(accum.dx); if (ax > maxAbsDx) maxAbsDx = ax
+                val ay = kotlin.math.abs(accum.dy); if (ay > maxAbsDy) maxAbsDy = ay
+            }
+            // Vertical/scroll ownership LATCHES once crossed: a later horizontal turn never
+            // revokes it, and an already-consumed change (the scrollable took the pointer)
+            // latches it too. gestureOver records an already-delivered UP so no branch waits
+            // for a second UP and steals the next gesture.
+            var verticalOwned = false
+            var scrollConsumed = false
+            var gestureOver = false
+            fun verticalClaimed() = maxAbsDy > slopPx && maxAbsDy > maxAbsDx
+            // Per-sample advance, latching vertical ownership AT the sample where the threshold
+            // is crossed: a larger horizontal move later in the SAME batch cannot take the
+            // gesture back, and an out-and-back excursion still registers its excursion peak
+            // BEFORE any lift decision.
+            fun advancePeaks(samples: List<DragSample>) {
+                for (smp in samples) {
+                    accum.advance(listOf(smp)); notePeaks()
+                    if (!verticalOwned && verticalClaimed()) verticalOwned = true
+                }
+            }
                     var dragClaimed = false
                     var lifted = false
                     var cancelled = false
                     val timedOut = withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) {
                         while (true) {
                             val change = awaitPointerEvent().changes.firstOrNull { it.id == down.id } ?: break
-                            accum.advance(change.allSamples())
+                            advancePeaks(change.allSamples())
                             tr("EV rx=${android.os.SystemClock.uptimeMillis()} ev=${change.uptimeMillis} x=${change.position.x.toInt()} hist=${change.historical.size} accDx=${accum.dx.toInt()} up=${change.changedToUp()} pressed=${change.pressed} phase=hold")
-                            if (change.changedToUp()) { lifted = true; break }
+                            if (change.isConsumed) scrollConsumed = true
+                            // changedToUp() is false on an already-consumed UP: record gesture
+                            // over from UP-in-any-state or !pressed, BEFORE any wait decision.
+                            if (change.changedToUp() || !change.pressed) gestureOver = true
+                            if (change.changedToUp()) { if (!verticalOwned && !scrollConsumed) lifted = true; break }
                             if (!change.pressed) { cancelled = true; break }
+                            if (verticalOwned || scrollConsumed) break
                             if (abs(accum.dx) > holdCancelPx || abs(accum.dy) > holdCancelPx) {
                                 holdCancelledByMove = true
                                 break
@@ -465,7 +497,7 @@ private fun WrenClipCard(w: WrenClipboardWindow, entry: ClipboardEntry, view: Vi
                         }
                     } == null
                     when {
-                        cancelled -> waitForUpOrCancellation()
+                        cancelled -> { if (!gestureOver) waitForUpOrCancellation() }
                         timedOut && !lifted && !holdCancelledByMove -> {
                             // stationary hold (within 3dp for the whole timeout): the same Pin
                             // menu the 3-dot button opens. From here this gesture can only end -
@@ -473,25 +505,34 @@ private fun WrenClipCard(w: WrenClipboardWindow, entry: ClipboardEntry, view: Vi
                             w.menuFor.value = entry
                             waitForUpOrCancellation()
                         }
+                        verticalOwned || scrollConsumed -> { if (!gestureOver) waitForUpOrCancellation() }
                         lifted && WrenSwipeJudge.liftOutcome(accum.dx, slopPx) == WrenSwipeJudge.LiftOutcome.JudgeSwipe -> { dragX.value = accum.dx; finishSwipe(true) }
                         lifted -> w.paste(entry, view)
                         else -> {
                             // hold timer cancelled by >3dp movement: watch for the horizontal
                             // drag claim at touch slop; a lift before slop pastes.
-                            while (!dragClaimed && !lifted && !cancelled) {
+                            // A vertical-dominant move beyond slop means the list owns the
+                            // gesture as a scroll: its lift must neither paste nor start a
+                            // delete swipe (1.4 behaviour; the dx-only lift judgment pasted
+                            // the clip under the finger after a scroll).
+                            while (!verticalOwned && !scrollConsumed && !dragClaimed && !lifted && !cancelled) {
                                 if (abs(accum.dx) > slopPx) {
                                     dragClaimed = true
                                     dragging.value = true
                                     dragX.value = accum.dx
                                 } else {
                                     val change = awaitPointerEvent().changes.firstOrNull { it.id == down.id } ?: break
-                                    accum.advance(change.allSamples())
-                                    tr("EV rx=${android.os.SystemClock.uptimeMillis()} ev=${change.uptimeMillis} x=${change.position.x.toInt()} hist=${change.historical.size} accDx=${accum.dx.toInt()} up=${change.changedToUp()} pressed=${change.pressed} phase=slopwatch")
-                                    if (change.changedToUp()) lifted = true
+                                    advancePeaks(change.allSamples())
+                                    tr("EV rx=${android.os.SystemClock.uptimeMillis()} ev=${change.uptimeMillis} x=${change.position.x.toInt()} hist=${change.historical.size} accDx=${accum.dx.toInt()} accDy=${accum.dy.toInt()} up=${change.changedToUp()} pressed=${change.pressed} phase=slopwatch")
+                                    if (change.isConsumed) scrollConsumed = true
+                                    if (change.changedToUp() || !change.pressed) gestureOver = true
+                                    if (change.changedToUp()) { if (!verticalOwned && !scrollConsumed) lifted = true }
                                     else if (!change.pressed) cancelled = true
                                 }
                             }
-                            if (dragClaimed) {
+                            if (verticalOwned || scrollConsumed) {
+                                if (!gestureOver) waitForUpOrCancellation()
+                            } else if (dragClaimed) {
                                 // keep following the finger until lift/cancel. The UP check must
                                 // come BEFORE consume(): changedToUp() returns false once the
                                 // change is consumed, so consuming first misread every lift as a
