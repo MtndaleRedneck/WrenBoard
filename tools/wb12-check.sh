@@ -1121,7 +1121,16 @@ if leg gifsearch; then
     [ -z "$DUP" ] || { : > "shots/$name.txt"; fail "B2 snapshot $name duplicate layout tag: $DUP"; return 1; }
   }
   focus_target; clear_field
-  type_word hostok; sleep 0.5
+  : > shots/geom_gb_host_before.txt
+  geom gb_host_before >/dev/null
+  B2READY=0
+  if [ "$(python3 tools/wb12_kv.py shots/geom_gb_host_before.txt kbd elementId)" = 0 ]; then
+    type_word hostok; sleep 0.5
+    [ "$(field_now)" = hostok ] && B2READY=1
+  fi
+  if [ "$B2READY" != 1 ]; then
+    fail "B2 setup: current letters/hostok baseline not established; affected routing leg skipped"
+  else
   F0=$(field); note "host field baseline: '$F0'"
   [ "$F0" = "hostok" ] && pass "B2 setup: host field typed" || fail "B2 setup: host field '$F0'"
   adb logcat -c; dbg "open:emoji" 2.0
@@ -1209,10 +1218,15 @@ if leg gifsearch; then
   else fail "B2: no EMOJISEARCHGO marker for the round arrow"; fi
   # check 4: after the panel is closed, host typing works again (no stuck local capture)
   dbg "close" 1.0
-  type_word zz; sleep 0.5
-  F3=$(field); note "host field after close+typing: '$F3'"
-  [ "$F3" = "${F0}zz" ] && pass "B2: close restores host typing, no stuck capture ('$F3')" || fail "B2: host typing after close is '$F3' (wanted '${F0}zz')"
+  : > shots/geom_gb_host_after.txt
+  geom gb_host_after >/dev/null
+  if [ "$(python3 tools/wb12_kv.py shots/geom_gb_host_after.txt kbd elementId)" = 0 ]; then
+    type_word zz; sleep 0.5
+    F3=$(field_now); note "host field after close+typing: '$F3'"
+    [ "$F3" = "${F0}zz" ] && pass "B2: close restores host typing, no stuck capture ('$F3')" || fail "B2: host typing after close is '$F3' (wanted '${F0}zz')"
+  else fail "B2 close: current letters geometry not established; typing control unqualified"; fi
   shot gb4_after_close
+  fi # live letters and nonempty baseline established
 fi
 
 if leg gifprivacy; then
