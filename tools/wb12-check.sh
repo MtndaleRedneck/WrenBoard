@@ -32,6 +32,12 @@ adb() {
 opensettings() { # opensettings [navDest] [sleep]: open WrenBoard Settings (optionally at a page) straight from the shell
   adb shell am start -n "$PKG/org.futo.inputmethod.latin.uix.settings.SettingsActivity" -f 0x34000000 ${1:+--es navDest "$1"} >/dev/null 2>&1; sleep "${2:-3}"
 }
+# Reject misspelled dispatch selectors before a preamble-only green can hide a missing leg.
+for requested in $(printf '%s' "${WB_LEGS:-}" | tr ',' ' '); do
+  case "$requested" in setup|keyboard|period|leftedge|caps|shift|clip|update|toolbar|textedit|skin|symbols|states|emoji|extras|gifsearch|gifprivacy|clipboard|saveword|settings|panelexit) ;;
+    *) echo "Unknown WB_LEGS selector: $requested" >&2; exit 2 ;;
+  esac
+done
 FAILS=0
 note() { echo "$*" | tee -a "$R"; }
 pass() { note "PASS: $*"; }
@@ -1101,7 +1107,7 @@ if leg gifsearch; then
     [ -z "$A1" ] && pass "B2: active arrow delivered NO host editor action (no ACTION= marker)" || fail "B2: active arrow delivered host editor action: $A1"
     # Keep search dismissed for populated full-grid evidence and visible clipped-cell tap.
   else fail "B2: no EMOJISEARCHGO marker for the active arrow - leg not executed"; fi
-  # keyed evidence (bounded owner-authorized test-key run): real results render; one tap must
+  # Keyed evidence against the configured test API: real results render; one tap must
   # deliver image/gif into the CONTROLLED fixture via commitContent (CONTENT= marker), and the
   # host TEXT stays byte-unchanged. Keyless builds: results/insert are not exercisable (INFO).
   GC=""; for i in $(seq 1 8); do sleep 1.5; GC=""; snapshot gb2c && GC=$(pos shots/gb2c.txt 'GIFCELL i=0 '); [ -n "$GC" ] && break; done
@@ -1151,6 +1157,42 @@ if leg gifsearch; then
   F3=$(field); note "host field after close+typing: '$F3'"
   [ "$F3" = "${F0}zz" ] && pass "B2: close restores host typing, no stuck capture ('$F3')" || fail "B2: host typing after close is '$F3' (wanted '${F0}zz')"
   shot gb4_after_close
+fi
+
+if leg gifprivacy; then
+  note "== GIF query learning boundary: executed noLearning skips, zero queue, host live control =="
+  dbg "prefbool:pref_key_use_personalized_dicts=true" 0.8
+  dbg "prefbool:pref_key_auto_correction=true" 0.8
+  focus_target; clear_field
+  dbg "open:gif" 1.5
+  adb logcat -c; dbg "windows:gifprivacy_open" 0.5
+  adb logcat -d -s WBDBG:I | tr -d '\r' > shots/gp_open_raw.txt
+  GP=$(pos shots/gp_open_raw.txt GIFSEARCHFIELD)
+  if [ -n "$GP" ]; then
+    adb shell input tap $GP; sleep 1
+    geom gp_active keep >/dev/null
+    cp shots/geom_gp_active.txt shots/geom.txt
+    adb logcat -c
+    for i in 1 2 3; do type_word zebra; tapcode 32; sleep 0.7; done
+    sleep 2
+    adb logcat -d -s WBDBG:I | tr -d '\r' > shots/gp_query_learning_raw.txt
+    GP_EN=$(grep -c 'STARTER learnEnter' shots/gp_query_learning_raw.txt)
+    GP_SK=$(grep -c 'STARTER learnSkip id=[0-9]* reason=noLearning' shots/gp_query_learning_raw.txt)
+    GP_WQ=$(grep -c 'STARTER writeQueued' shots/gp_query_learning_raw.txt)
+    note "GIF query learning window: entered=$GP_EN noLearning=$GP_SK queued=$GP_WQ"
+    [ "$GP_EN" -ge 3 ] && [ "$GP_SK" -ge 3 ] && [ "$GP_WQ" -eq 0 ] && pass "GIF query commits execute noLearning skip and queue zero writes" || fail "GIF query privacy control not established: enter=$GP_EN skip=$GP_SK queued=$GP_WQ"
+    shot gp_query_suggestions
+    dbg close 1
+    focus_target; clear_field; geom gp_host keep >/dev/null; cp shots/geom_gp_host.txt shots/geom.txt
+    adb logcat -c
+    for i in 1 2 3; do type_word zebra; tapcode 32; sleep 0.7; done
+    sleep 2
+    adb logcat -d -s WBDBG:I | tr -d '\r' > shots/gp_host_learning_raw.txt
+    GP_WQ=$(grep -c 'STARTER writeQueued' shots/gp_host_learning_raw.txt)
+    GP_DROP=$(grep -c 'STARTER drop id=' shots/gp_host_learning_raw.txt)
+    [ "$GP_WQ" -ge 3 ] && [ "$GP_DROP" -eq 0 ] && pass "GIF privacy live host control queues three writes with zero drops" || fail "GIF privacy live host control failed: queued=$GP_WQ drops=$GP_DROP"
+    shot gp_host_control
+  else fail "GIF privacy local search field not observed; no privacy credit"; fi
 fi
 
 if leg clipboard; then
