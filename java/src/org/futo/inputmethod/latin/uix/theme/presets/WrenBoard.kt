@@ -149,6 +149,7 @@ private class TopLineGradientDrawable(
     // WrenBoard 1.5 (item 10, candidate): 1px #0C0C0C on top and sides only (was a full stroke);
     // bottom edge fades into the gap over 3-4px instead.
     private val borderPaint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+        style = android.graphics.Paint.Style.STROKE
         color = 0xFF0C0C0C.toInt()
         strokeWidth = 1.0f
     }
