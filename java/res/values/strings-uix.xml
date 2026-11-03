@@ -680,10 +680,12 @@
     <string name="wren_action_info">Info</string>
     <string name="wren_action_save_word">Save word</string>
     <string name="wren_word_saved_chip">Saved: %1$s</string>
+    <string name="wren_word_save_failed">Couldn\u2019t confirm word was saved</string>
     <string name="wren_word_save_blocked_field">Save word is not available in this field</string>
     <string name="wren_stickers_toggle">Stickers</string>
     <string name="wren_word_already_saved">Already saved</string>
     <string name="wren_word_type_first">Type a word first</string>
+    <string name="wren_word_select_one">Select a single word</string>
     <string name="wren_about_title">About WrenBoard</string>
     <string name="wren_set_keyboard">Keyboard</string>
     <string name="wren_set_keyboard_sub">Theme, toolbar buttons, rows, height, sound</string>

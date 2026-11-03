@@ -4,10 +4,12 @@ import android.content.Context
 import android.content.Intent
 import android.util.Log
 import android.provider.UserDictionary
-import android.view.inputmethod.ExtractedTextRequest
 import android.view.inputmethod.EditorInfo
 import org.futo.inputmethod.latin.utils.InputTypeUtils
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.futo.inputmethod.compat.UserDictionaryCompatUtils
 import org.futo.inputmethod.latin.R
 import org.futo.inputmethod.latin.uix.Action
@@ -92,7 +94,10 @@ val SaveWordAction = Action(
         // Eligibility BEFORE any text retrieval, failing closed on a missing/stale editor.
         // Mirrors the app's trusted no-learning classification (InputAttributes.mNoLearning):
         // explicit IME_FLAG_NO_PERSONALIZED_LEARNING, every password input type, code fields.
-        val ei = manager.getLatinIMEForDebug().currentInputEditorInfo
+        val ime = manager.getLatinIMEForDebug()
+        val editorGeneration = ime.actionEditorGeneration
+        val requestGeneration = WrenSaveWordNotice.beginRequest()
+        val ei = ime.currentInputEditorInfo
         val noLearningFlag = ei != null &&
                 (ei.imeOptions and EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING) != 0
         val codeField = ei != null && ei.packageName != null && (
@@ -102,30 +107,61 @@ val SaveWordAction = Action(
                 (ei.packageName.startsWith("sh.haven.app") && ei.inputType == 0) ||
                 (ei.packageName.startsWith("com.android.virtualization.terminal") &&
                         (ei.inputType and android.text.InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS) != 0))
+        // AOSP keeps visible-password separate from isPasswordInputType; block it too.
         val blockedField = ei == null || noLearningFlag ||
-                InputTypeUtils.isPasswordInputType(ei.inputType) || codeField
+                InputTypeUtils.isPasswordInputType(ei.inputType) ||
+                InputTypeUtils.isVisiblePasswordInputType(ei.inputType) || codeField
         if (blockedField) {
             WrenSaveWordNotice.show(context.getString(R.string.wren_word_save_blocked_field))
         } else {
         val ic = manager.getLatinIMEForDebug().currentInputConnection
+        fun isWordChar(c: Char) = c.isLetterOrDigit() || c == '\'' || c == '-'
         fun String?.cleanWord(): String? =
             this?.trim()?.takeIf { it.isNotEmpty() && it.none(Char::isWhitespace) }
-        val composing = ic?.getExtractedText(ExtractedTextRequest(), 0)?.let { et ->
-            if (et.partialStartOffset >= 0 && et.partialEndOffset > et.partialStartOffset)
-                et.text?.subSequence(et.partialStartOffset, et.partialEndOffset)?.toString() else null
-        }.cleanWord()
+        // A multi-word selection is ambiguous: ask for one word instead of silently
+        // falling back to the last typed word.
+        val selectedRaw = ic?.getSelectedText(0)?.toString()?.trim()
+        val multiWord = selectedRaw != null && selectedRaw.any(Char::isWhitespace)
+        val selected = if (multiWord) null else selectedRaw.cleanWord()
+        // The word under the cursor: before-cursor tail joined to the after-cursor head,
+        // so a mid-word save gets the whole word. (ExtractedText.partialStartOffset/EndOffset
+        // are change-range fields of a partial extract, not the composing span - not usable here.)
+        val beforeTail = ic?.getTextBeforeCursor(200, 0)?.toString()?.takeLastWhile(::isWordChar)
+        val afterHead = ic?.getTextAfterCursor(200, 0)?.toString()?.takeWhile(::isWordChar)
+        val atCursor = (beforeTail.orEmpty() + afterHead.orEmpty()).cleanWord()
         val lastTyped = ic?.getTextBeforeCursor(200, 0)?.toString()
-            ?.trimEnd()?.takeLastWhile { it.isLetterOrDigit() || it == '\'' || it == '-' }.cleanWord()
-        val selected = ic?.getSelectedText(0)?.toString().cleanWord()
-        // Explicit selection first, then the composing word, then the word before the cursor.
-        val word = selected ?: composing ?: lastTyped
+            ?.trimEnd()?.takeLastWhile(::isWordChar).cleanWord()
+        // Explicit selection first, then the word at the cursor, then the word before the cursor.
+        val word = selected ?: atCursor ?: lastTyped
         when {
+            multiWord -> WrenSaveWordNotice.show(context.getString(R.string.wren_word_select_one))
             word == null -> WrenSaveWordNotice.show(context.getString(R.string.wren_word_type_first))
-            alreadyInUserDictionary(context, word) ->
-                WrenSaveWordNotice.show(context.getString(R.string.wren_word_already_saved))
             else -> {
-                UserDictionaryCompatUtils.addWord(context, word, 250, null, null)
-                WrenSaveWordNotice.show(context.getString(R.string.wren_word_saved_chip, word))
+                // Everything the chip needs is snapshotted here on the UI thread; the provider
+                // IPCs (addWord + re-queries) run off the UI thread and touch no editor state.
+                // The framework addWord call is void: it returns no success result. Verify the
+                // write before claiming success, so a failed save never shows a false "Saved" chip.
+                val appContext = context.applicationContext
+                manager.getLifecycleScope().launch {
+                    if (ime.actionEditorGeneration != editorGeneration ||
+                        !WrenSaveWordNotice.isCurrentRequest(requestGeneration)) return@launch
+                    var preExisting = false
+                    val persisted = withContext(Dispatchers.IO) { try {
+                        preExisting = alreadyInUserDictionary(appContext, word)
+                        preExisting || run {
+                            UserDictionaryCompatUtils.addWord(appContext, word, 250, null, null)
+                            alreadyInUserDictionary(appContext, word)
+                        }
+                    } catch (_: Exception) { false } }
+                    // Never apply a delayed chip to a new/closed editor or a newer save request.
+                    if (ime.actionEditorGeneration != editorGeneration ||
+                        !WrenSaveWordNotice.isCurrentRequest(requestGeneration)) return@launch
+                    WrenSaveWordNotice.show(
+                        if (persisted) appContext.getString(
+                            if (preExisting) R.string.wren_word_already_saved
+                            else R.string.wren_word_saved_chip, word)
+                        else appContext.getString(R.string.wren_word_save_failed))
+                }
             }
         }
         }
@@ -143,6 +179,9 @@ private fun alreadyInUserDictionary(context: Context, word: String): Boolean = t
 /** Transient centre-chip text (save-word confirmation). New instance per show so StateFlow re-emits. */
 object WrenSaveWordNotice {
     data class Notice(val text: String, val at: Long = android.os.SystemClock.uptimeMillis())
+    private var requestGeneration = 0L
+    fun beginRequest(): Long = ++requestGeneration
+    fun isCurrentRequest(value: Long): Boolean = value == requestGeneration
     val notice = MutableStateFlow<Notice?>(null)
     fun show(text: String) { notice.value = Notice(text) }
     fun clear() { notice.value = null }
