@@ -163,6 +163,7 @@ private class VoiceInputActionWindow(
                 barStopped.value = false
                 wasFinished = false
                 cancelPlayed = false
+                startPlayed = false
                 rv.reset()
                 rv.start()
             }
@@ -301,6 +302,7 @@ private class VoiceInputActionWindow(
 
     private var wasFinished = false
     private var cancelPlayed = false
+    private var startPlayed = false
     override fun cancelled() {
         android.util.Log.i("WBDBG", "WINDOW VOICE capture cancelled wasFinished=$wasFinished")
         if (!wasFinished) {
@@ -314,7 +316,10 @@ private class VoiceInputActionWindow(
 
     override fun recordingStarted(device: MicrophoneDeviceState) {
         android.util.Log.i("WBDBG", "WINDOW VOICE capture started")
-        if (shouldPlaySounds) {
+        // recordingStarted also reports hardware route updates for this capture.
+        // Do not replay ON for those notifications; reset only for a new utterance.
+        if (shouldPlaySounds && !startPlayed) {
+            startPlayed = true
             state.soundPlayer?.playStartSound()
         }
 
