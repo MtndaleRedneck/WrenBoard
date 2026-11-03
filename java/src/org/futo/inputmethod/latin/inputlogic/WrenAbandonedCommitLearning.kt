@@ -7,9 +7,11 @@ package org.futo.inputmethod.latin.inputlogic
  * commit would learn it, or a slow device silently stops building typing history.
  *
  * rev11 target trace: under CPU starvation only 1 of 3 identical 'zebra'+space commits
- * reached the learning path; the other two spaces were processed while the word's
- * suggestion job was still in flight and the 450ms bounded wait elapsed, taking the
- * abandon branch which finalized the text but skipped learning entirely.
+ * reached the learning path. The leading hypothesis (unproven until the rev13
+ * ensureCompleted/abandonCommit trace lands) is that the other two spaces were processed
+ * while the word's suggestion job was still in flight and the 450ms bounded wait elapsed,
+ * taking the abandon branch which finalized the text but skipped learning entirely.
+ * This helper's behavior is correct for the abandon branch whenever it is taken.
  */
 object WrenAbandonedCommitLearning {
     /** Word to learn from an abandoned auto-correct commit, or null when there is none. */
