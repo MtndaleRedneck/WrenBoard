@@ -1,7 +1,15 @@
 package org.futo.inputmethod.latin.uix.actions.clipboard
 
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.awaitHorizontalTouchSlopOrCancellation
+import androidx.compose.foundation.gestures.horizontalDrag
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.changedToUp
+import androidx.compose.ui.input.pointer.positionChange
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.semantics
 import android.view.View
 import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.BorderStroke
@@ -63,6 +71,7 @@ import androidx.compose.ui.window.PopupProperties
 import androidx.core.net.toUri
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.launch
 import org.futo.inputmethod.latin.R
 import org.futo.inputmethod.latin.common.Constants
@@ -399,14 +408,49 @@ private fun WrenClipCard(w: WrenClipboardWindow, entry: ClipboardEntry, view: Vi
 
     Box(
         Modifier
+            // Swipe-delete determinism (wb12-check cl04 failures, reproduced on 1.4 too): the old
+            // stack of detectHorizontalDragGestures + combinedClickable raced the long-press timeout
+            // against touch slop - a slow or emulator-batched touch opened the Pin menu mid-drag and
+            // cancelled the swipe. Explicit arbitration instead: within the long-press window, the
+            // first thing to happen wins - horizontal slop claims the drag (any speed), a stationary
+            // hold reaches the timeout and opens the same menu as the 3-dot button, and a lift before
+            // either is a tap (paste). Interaction set unchanged; the winner is deterministic.
             .pointerInput(entry) {
-                detectHorizontalDragGestures(
-                    onDragStart = { dragging.value = true; dragX.value = offsetX.value },
-                    onDragEnd = { finishSwipe(true) },
-                    onDragCancel = { finishSwipe(false) },
-                    onHorizontalDrag = { change, delta -> change.consume(); dragX.value += delta }
-                )
+                awaitEachGesture {
+                    val down = awaitFirstDown()
+                    var slopCrossed = false
+                    var lifted = false
+                    val timedOut = withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) {
+                        awaitHorizontalTouchSlopOrCancellation(down.id) { change, _ ->
+                            change.consume()
+                            slopCrossed = true
+                        }
+                        if (!slopCrossed) {
+                            lifted = currentEvent.changes.any { it.id == down.id && it.changedToUp() }
+                        }
+                        true
+                    } == null
+                    when {
+                        slopCrossed -> {
+                            dragging.value = true
+                            dragX.value = offsetX.value
+                            val finished = horizontalDrag(down.id) { change ->
+                                dragX.value += change.positionChange().x
+                                change.consume()
+                            }
+                            finishSwipe(finished)
+                        }
+                        timedOut -> {
+                            // stationary hold: the same Pin menu the 3-dot button opens
+                            w.menuFor.value = entry
+                            waitForUpOrCancellation()
+                        }
+                        lifted -> w.paste(entry, view)
+                    }
+                }
             }
+            // a11y click action for the card (the gesture arbitration above owns actual touches)
+            .semantics { onClick(label = null) { w.paste(entry, view); true } }
             .offset { IntOffset((if (dragging.value) dragX.value else offsetX.value).roundToInt(), 0) }
             .fillMaxWidth()
             .heightIn(min = 52.dp)
@@ -414,12 +458,7 @@ private fun WrenClipCard(w: WrenClipboardWindow, entry: ClipboardEntry, view: Vi
             .clip(shape)
             .background(WrenPanelColors.Card, shape)
             .border(1.dp, WrenPanelColors.CardBorder, shape)
-            // Swipe-delete determinism (wb12-check cl04 failures, reproduced on 1.4 too): the card
-            // long-press menu raced the horizontal drag - a slow or emulator-batched touch sequence
-            // hit the long-press timeout before touch slop, opening the Pin menu and cancelling the
-            // swipe. The 3-dot button opens the same menu, so the card long-press is removed: the
-            // drag now has no competitor and deletes deterministically at any drag speed.
-            .clickable { w.paste(entry, view) }
+
     ) {
         val bitmap = remember(entry) {
             if (entry.text == null && entry.backingFile != null) {
