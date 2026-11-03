@@ -173,11 +173,10 @@ class WrenEmojiWindow(val manager: KeyboardManagerForAction) : ActionWindow() {
     override val showTitleBar: Boolean get() = false
     override val positionIsUserManagable: Boolean get() = false
     override val showCloseButton: Boolean get() = false
-    // Active GIF search keeps the window compact (tab row + search row + one grid row) so the
-    // raised letters keyboard plus window never covers the host app (owner: "not full screen").
-    // Dismissing the search keyboard restores full panel height with the host visible above.
+    // Typing state contains only tab/search rows; suggestions and full letters are below.
+    // Results replace letters after the arrow. Runtime pixels determine host visibility.
     override val fixedWindowHeight: Dp
-        get() = if (searching.value) 104.dp else if (gifSearching.value) 240.dp else WrenEmojiPanelHeight
+        get() = if (searching.value) 104.dp else if (gifSearching.value) 93.dp else WrenEmojiPanelHeight
 
     @Composable
     override fun windowName(): String = stringResource(R.string.action_emoji_title)
@@ -293,7 +292,7 @@ fun WrenEmojiPanel(w: WrenEmojiWindow) {
                     // search). Shown while the search row has focus; the letters keyboard is
                     // raised for it and dismissed by the round arrow.
                     Box(Modifier.weight(1f).wbPos("GIFSEARCHFIELD")) {
-                        ActionTextEditor(text = w.gifQuery, autofocus = true, textSize = 16.sp, placeholder = stringResource(R.string.wren_search_gifs))
+                        ActionTextEditor(text = w.gifQuery, autofocus = true, autocorrect = true, textSize = 16.sp, placeholder = stringResource(R.string.wren_search_gifs))
                     }
                 } else {
                     Box(Modifier.weight(1f).wbPos("GIFSEARCHFIELD")) {
@@ -313,6 +312,10 @@ fun WrenEmojiPanel(w: WrenEmojiWindow) {
             }, contentAlignment = Alignment.Center) { Ic(R.drawable.wren_ic_arrow_forward, Color(0xFF333333), 21.dp, desc = stringResource(if (w.tab.value == 0) R.string.wren_search_emojis else R.string.wren_cd_back)) }
         }
         Box(Modifier.fillMaxWidth().height(2.7.dp).background(EmojiColors.Sep))
+
+        // Typing reference: tab/search rows directly above suggestions + full keyboard.
+        // Results/status/categories only belong to the post-search panel, not this state.
+        if (w.tab.value == 1 && w.gifSearching.value) return@Column
 
         if (w.tab.value == 1) {
             WrenGifPlaceholder(w, view, Modifier.weight(1f))
