@@ -100,6 +100,21 @@ public class WrenAbandonedCommitWiringTests extends WrenWiringTestBase {
         runMessages();
     }
 
+    /** Auto-correction gate: with auto-correction off the real path writes nothing. */
+    public void testAutoCorrectionOffBlocksAbandonedLearn() {
+        setBooleanPreference(Settings.PREF_AUTO_CORRECTION, false, true);
+        runMessages();
+        assertFalse("precondition: auto-correction is off for this field",
+                mSettings.getCurrent().mAutoCorrectionEnabledPerTextFieldSettings);
+        mRecorder.clearRecords();
+        type("zebra");
+        callAbandonedLearn();
+        assertTrue("no user-history write when auto-correction is off",
+                mRecorder.learnsFor("zebra").isEmpty());
+        setBooleanPreference(Settings.PREF_AUTO_CORRECTION, true, true);
+        runMessages();
+    }
+
     /** Slow InputConnection gate: learning is skipped on the real path. */
     public void testSlowInputConnectionBlocksAbandonedLearn() throws Exception {
         forceSlowInputConnection();
@@ -128,7 +143,16 @@ public class WrenAbandonedCommitWiringTests extends WrenWiringTestBase {
         callAbandonedLearn();
         assertEquals("abandoned learn still happens after the locale switch",
                 1, mRecorder.learnsFor("bonjour").size());
-        assertTrue("fr word stored in the current-locale history",
+        final List<String> frEvents = mRecorder.eventsSnapshot();
+        final int frCommitIdx = frEvents.indexOf("commit:bonjour");
+        final int frLearnIdx = frEvents.indexOf("learn:bonjour");
+        assertTrue("confidence update (onWordCommitted) precedes the write on the second "
+                + "locale too (order: " + frEvents + ")",
+                frCommitIdx >= 0 && frLearnIdx > frCommitIdx);
+        // Observable effect of the confidence mechanism: addToUserHistory's confidence-based
+        // group selection refuses a zero-confidence write, so the word landing in the fr
+        // history proves the onWordCommitted-first order made the write acceptable.
+        assertTrue("fr word stored: confidence-based group selection accepted the write",
                 waitForHistoryWord("bonjour", HISTORY_WRITE_TIMEOUT_MS));
     }
 }
