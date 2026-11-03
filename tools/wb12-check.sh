@@ -1074,6 +1074,8 @@ if leg gifsearch; then
   shot gb2_gif_query_typed
   # active-arrow path: with the search keyboard raised, the round arrow must dismiss it and
   # deliver NO host editor action (the post-tab arrow below only exercises the idle arrow).
+  # Re-acquire coords from a FRESH dump (post-expansion geometry); a missing marker is a leg failure, not a skip.
+  adb logcat -d -s WBDBG:I | tr -d '\r' > shots/gb2a.txt; GA=$(pos shots/gb2a.txt 'EMOJISEARCHGO')
   if [ -n "$GA" ]; then
     adb logcat -c; adb shell input tap $GA; sleep 1.2
     geom gb2d keep >/dev/null
@@ -1084,7 +1086,7 @@ if leg gifsearch; then
     [ -z "$A1" ] && pass "B2: active arrow delivered NO host editor action (no ACTION= marker)" || fail "B2: active arrow delivered host editor action: $A1"
     # re-open the search field so the results poll below sees the typed query state
     GF2=$(pos shots/gb1.txt 'GIFSEARCHFIELD'); [ -n "$GF2" ] && { adb shell input tap $GF2; sleep 0.8; }
-  fi
+  else fail "B2: no EMOJISEARCHGO marker for the active arrow - leg not executed"; fi
   # keyed evidence (bounded owner-authorized test-key run): real results render; one tap must
   # deliver image/gif into the CONTROLLED fixture via commitContent (CONTENT= marker), and the
   # host TEXT stays byte-unchanged. Keyless builds: results/insert are not exercisable (INFO).
