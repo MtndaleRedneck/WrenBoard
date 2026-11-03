@@ -148,8 +148,13 @@ if leg setup; then
   adb shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1; sleep 6
   dumpui s01; sleep 2; shot s01_settings_not_enabled; dumpui s01; T=$(uitext s01); note "texts: ${T:0:400}"
   # fix1: the 1.x first-entry Personal dictionary step is gone; the first open is the Settings home
-  echo "$T" | grep -q "Personal dictionary" && fail "first Settings open still lands on the Personal dictionary page" || pass "first Settings open goes straight to the Settings home (no dictionary page)"
-  echo "$T" | grep -q "Typing" && echo "$T" | grep -q "Backup" && pass "first Settings open shows the Settings home list" || fail "first Settings open is not the Settings home"
+  # Match actual root nodes, not a subtitle containing "Personal dictionary" or an
+  # old six-group row that is now below the first viewport.
+  grep -q 'text="Personal dictionary"' shots/s01.xml && fail "first Settings open lands on dictionary title" || pass "first Settings open is not dictionary title"
+  grep -q 'text="WrenBoard Settings"' shots/s01.xml &&
+    grep -q 'text="Appearance"' shots/s01.xml &&
+    grep -q 'text="Languages &amp; layouts"' shots/s01.xml &&
+    pass "first Settings open shows actual 1.5 Home root nodes" || fail "first Settings open lacks actual 1.5 Home root nodes"
   echo "$T" | grep -q "WrenBoard is turned off" && pass "banner when not enabled" || fail "banner when not enabled"
   echo "$T" | grep -q "Step 1\|Step 2\|Open Input Method Settings" && fail "old setup wall still shown" || pass "no setup wall (not enabled)"
   echo "$T" | grep -q "Keyboard\|Typing" && pass "settings items reachable while not enabled" || fail "settings items not visible while not enabled"
@@ -1797,6 +1802,71 @@ if leg update; then
     else fail "no Update button for the success case"; fi
   else note "INFO: no local APK served; success path covered by unit tests only"; fi
   adb shell input keyevent KEYCODE_HOME; sleep 1
+fi
+
+if leg settingspreview; then
+  note "== 1.5 settings candidate pixel preview; not full acceptance =="
+  ensure_ime
+  adb shell input keyevent KEYCODE_HOME; sleep 1
+  opensettings "" 5
+  shot sp01_home_top
+  adb shell input swipe 540 1800 540 600 400; sleep 1.2; shot sp02_home_bottom
+  for d in languages wren_appearance wren_layout wren_typing wren_swipe wren_dict wren_soundfeel wren_voice wren_clipemoji wren_backup about wren_license wren_advanced payment; do
+    opensettings "$d" 3
+    shot "sp_${d}_top"; dumpui "sp_$d"
+    P=$(uitext "sp_$d"); [ -n "$P" ] && pass "preview $d has visible UI text" || fail "preview $d empty UI"
+    adb shell input swipe 540 1800 540 600 400; sleep 1; shot "sp_${d}_bottom"
+  done
+  # Exercise the actual About row, not only a debug navigation destination.
+  opensettings about 2
+  dumpui sp_about_license_route
+  XY=$(node_center sp_about_license_route "FUTO Source First License")
+  if [ -n "$XY" ]; then
+    adb shell input tap $XY; sleep 1
+    dumpui sp_license_opened; shot sp_license_via_about_top
+    python3 - shots/sp_license_opened.xml <<'LICENSEXML' && pass "About license row opens exact bundled license title/text" || fail "About license row did not open exact license"
+import sys, xml.etree.ElementTree as E
+text='\n'.join(n.get('text','') for n in E.parse(sys.argv[1]).iter('node'))
+assert 'FUTO Source First License 1.1-kb' in text
+LICENSEXML
+    # Accessibility exposes the complete Text node even when it extends below viewport.
+    # Never infer scroll position from a body substring. Capture the bounded scroll end
+    # for actual-pixel inspection of the final clause, and keep XML as document identity only.
+    for i in $(seq 1 16); do adb shell input swipe 540 1800 540 450 400; sleep 0.3; done
+    dumpui sp_license_scrolled
+    shot sp_license_via_about_bottom
+    note "INFO: license scroll-end pixels require visual inspection of final Definitions/Trademark clause; XML body is not viewport proof"
+
+  else fail "About license row missing from actual UI"; fi
+  # Paid-notice preservation is exercised on this disposable emulator only, never a user's account.
+  dbg "dsbool:already_paid=true" 0.8
+  # Empty navDest only resumes the current page. Explicit Home is required after
+  # the inventory loop's Advanced/payment pages, before notice assertions.
+  opensettings home 3
+  dumpui sp_paid_transition
+  if grep -q 'text="Thank you"' shots/sp_paid_transition.xml; then
+    XY=$(node_center sp_paid_transition "Continue")
+    [ -n "$XY" ] && { adb shell input tap $XY; sleep 1.5; }
+    opensettings home 2
+  fi
+  dumpui sp_paid_root
+  grep -q 'text="WrenBoard Settings"' shots/sp_paid_root.xml || fail "paid fixture did not return to actual Home root"
+  for i in 1 2 3; do adb shell input swipe 540 1800 540 500 400; sleep 0.5; done
+  shot sp_paid_notice_home; dumpui sp_paid_notice_home
+  uitext sp_paid_notice_home | grep -q "paid version" && pass "paid notice visible on Home" || fail "paid notice absent from Home in paid fixture state"
+  dbg "dsbool:already_paid=false" 0.8
+  adb logcat -d -s WBDBG:I > shots/sp_paid_reset_raw.txt
+  grep -q 'DSBOOL already_paid=false' shots/sp_paid_reset_raw.txt || fail "disposable paid fixture reset not acknowledged"
+  opensettings home 2
+  for i in 1 2 3; do adb shell input swipe 540 1800 540 500 400; sleep 0.5; done
+  dumpui sp_unpaid_restored; shot sp_unpaid_restored
+  # Require current Home identity before absence can qualify.
+  grep -q 'text="FUTO license &amp; payment"' shots/sp_unpaid_restored.xml &&
+    grep -q 'text="Advanced"' shots/sp_unpaid_restored.xml || fail "restored unpaid capture lacks expected current Home nodes"
+  if grep -q 'text="FUTO license &amp; payment"' shots/sp_unpaid_restored.xml && grep -q 'text="Advanced"' shots/sp_unpaid_restored.xml; then
+    uitext sp_unpaid_restored | grep -q "paid version" && fail "paid notice remains after disposable fixture reset" || pass "paid notice absent after disposable fixture reset on confirmed Home"
+  else note "INFO: unpaid notice absence unqualified - Home precondition failed"; fi
+
 fi
 
 if leg settings; then
