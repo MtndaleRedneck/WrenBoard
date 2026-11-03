@@ -35,7 +35,7 @@ public class TestInput extends Activity {
             outAttrs.contentMimeTypes = new String[] {"image/gif"};
             return new android.view.inputmethod.InputConnectionWrapper(base, true) {
                 @Override public boolean commitContent(android.view.inputmethod.InputContentInfo info, int flags, android.os.Bundle opts) {
-                    String mime = "-"; long n = -1; String sig = "";
+                    String mime = "-"; long n = 0; String sig = "";
                     try {
                         mime = info.getDescription().getMimeType(0);
                         info.requestPermission();

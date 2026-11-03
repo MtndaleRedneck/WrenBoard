@@ -1072,6 +1072,19 @@ if leg gifsearch; then
   F1=$(field_now); note "host field after GIF-search typing: '$F1'"
   [ "$F1" = "$F0" ] && pass "B2: typing in GIF search leaves host field byte-unchanged ('$F0')" || fail "B2: host field changed while typing in GIF search ('$F0' -> '$F1')"
   shot gb2_gif_query_typed
+  # active-arrow path: with the search keyboard raised, the round arrow must dismiss it and
+  # deliver NO host editor action (the post-tab arrow below only exercises the idle arrow).
+  if [ -n "$GA" ]; then
+    adb logcat -c; adb shell input tap $GA; sleep 1.2
+    geom gb2d keep >/dev/null
+    if grep -q 'KEY ' shots/geom_gb2d.txt; then fail "B2: active arrow did not dismiss the search keyboard"; else pass "B2: active arrow dismisses the search keyboard"; fi
+    F1a=$(field_now)
+    [ "$F1a" = "$F0" ] && pass "B2: active arrow leaves host field unchanged ('$F0')" || fail "B2: active arrow changed host field ('$F0' -> '$F1a')"
+    A1=$(adb logcat -d -s IMETARGET:I 2>/dev/null | tr -d '\r' | grep 'ACTION=' | tail -3)
+    [ -z "$A1" ] && pass "B2: active arrow delivered NO host editor action (no ACTION= marker)" || fail "B2: active arrow delivered host editor action: $A1"
+    # re-open the search field so the results poll below sees the typed query state
+    GF2=$(pos shots/gb1.txt 'GIFSEARCHFIELD'); [ -n "$GF2" ] && { adb shell input tap $GF2; sleep 0.8; }
+  fi
   # keyed evidence (bounded owner-authorized test-key run): real results render; one tap must
   # deliver image/gif into the CONTROLLED fixture via commitContent (CONTENT= marker), and the
   # host TEXT stays byte-unchanged. Keyless builds: results/insert are not exercisable (INFO).
