@@ -19,6 +19,7 @@ package org.futo.inputmethod.latin;
 import android.Manifest;
 import android.content.Context;
 import android.text.TextUtils;
+import android.os.SystemClock;
 import android.util.Log;
 import android.util.LruCache;
 
@@ -732,10 +733,12 @@ public class DictionaryFacilitatorImpl implements DictionaryFacilitator {
         final ExpandableBinaryDictionary userHistoryDictionary =
                 dictionaryGroup.getSubDict(Dictionary.TYPE_USER_HISTORY);
         if (userHistoryDictionary == null || !isForLocale(userHistoryDictionary.mLocale)) {
+            if (BuildConfig.DEBUG) Log.i("WBDBG", "STARTER drop '" + word + "' reason=noHistoryDict");
             return;
         }
         final int maxFreq = getFrequency(word);
         if (maxFreq == 0 && blockPotentiallyOffensive) {
+            if (BuildConfig.DEBUG) Log.i("WBDBG", "STARTER drop '" + word + "' reason=blocked");
             return;
         }
         final String lowerCasedWord = word.toLowerCase(dictionaryGroup.mLocale);
@@ -775,6 +778,8 @@ public class DictionaryFacilitatorImpl implements DictionaryFacilitator {
         final boolean isValid = maxFreq > 0;
         UserHistoryDictionary.addToDictionary(userHistoryDictionary, ngramContext, secondWord,
                 isValid, timeStampInSeconds);
+        if (BuildConfig.DEBUG) Log.i("WBDBG", "STARTER writeQueued '" + secondWord
+                + "' at " + SystemClock.uptimeMillis());
     }
 
     private void removeWord(final String dictName, final String word) {

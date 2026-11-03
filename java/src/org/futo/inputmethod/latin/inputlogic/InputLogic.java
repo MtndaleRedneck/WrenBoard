@@ -17,6 +17,8 @@
 package org.futo.inputmethod.latin.inputlogic;
 
 import android.os.SystemClock;
+
+import org.futo.inputmethod.latin.BuildConfig;
 import android.text.SpannableString;
 import android.text.TextUtils;
 import android.text.style.SuggestionSpan;
@@ -2034,6 +2036,8 @@ public final class InputLogic {
 
         StatsUtils.onWordLearned(mImeHelper.getContext(), suggestion);
 
+        if (BuildConfig.DEBUG) Log.i("WBDBG", "STARTER learnRequest '" + suggestion
+                + "' at " + SystemClock.uptimeMillis());
         mIme.addToHistory(suggestion, wasAutoCapitalized,
                 ngramContext, timeStampInSeconds, settingsValues.mBlockPotentiallyOffensive,
                 importance);
