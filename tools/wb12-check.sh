@@ -77,6 +77,14 @@ focus_target() {
   [ -n "$b" ] && adb shell input tap $b
   sleep 3
 }
+# Same field tap without restarting the activity: keeps a broadcast-set inputType (e.g.
+# password) while renegotiating the input connection.
+tap_field() {
+  dumpui target
+  local b; b=$(sed 's/>/>\n/g' shots/target.xml | grep 'class="android.widget.EditText"' | head -1 | grep -o 'bounds="\[[0-9]*,[0-9]*\]\[[0-9]*,[0-9]*\]"' | grep -o '[0-9]*' | tr '\n' ' ' | awk '{print int(($1+$3)/2), int(($2+$4)/2)}')
+  [ -n "$b" ] && adb shell input tap $b
+  sleep 3
+}
 longpress_slide() { # longpress_slide <x> <y> <hold s> <x2> <y2>  (down, hold, slide in 3 steps, up)
   adb shell input motionevent DOWN "$1" "$2"; sleep "$3"
   local mx=$(( ($1+$4)/2 )) my=$(( ($2+$5)/2 ))
@@ -195,6 +203,52 @@ if leg keyboard; then
   # Content-free assertion: suggestion logging is counts-only (no typed/learned text in
   # diagnostics). The fallback set is exactly 3 words; word identity is covered by unit tests.
   [ "$S" = "n=3" ] && pass "fresh empty field, toggle on: 3 fallback starter words ($S)" || fail "fresh empty field shows '$S' (wanted n=3 fallback)"
+  shot k01a_starter_words_fallback
+
+  # --- Acceptance: fresh-token privacy negatives with a live positive control. Each gated
+  # commit (personalization off, autocorrect off, password field) must queue ZERO history
+  # writes; learnSkip/learnEnter counts are noted as executed-gate identity evidence. The
+  # positive control after the windows proves the marker path and write queue are live and
+  # drained in order; the starter strip staying at the 3-word fallback is the production
+  # retrieval negative (a leaked write would surface there, exactly like zebra does). ---
+  wqcount() { adb logcat -d -s WBDBG:I 2>/dev/null | tr -d '\r' | grep -c "STARTER writeQueued"; }
+  wait_wq() { local want=$1 i; for i in $(seq 1 25); do [ "$(wqcount)" -ge "$want" ] && return 0; sleep 1; done; return 1; }
+  privnote() { adb logcat -d -s WBDBG:I 2>/dev/null | tr -d '\r' | grep -oE 'STARTER (learnEnter|learnSkip|writeQueued)( reason=[a-zA-Z]+)?' | sort | uniq -c | sed 's/^ *//' | tr '\n' ' '; }
+
+  # negative 1: personalization off
+  dbg "prefbool:pref_key_use_personalized_dicts=false" 1.0; adb shell input keyevent 4; sleep 0.6; focus_target
+  adb logcat -c; type_word wqzxkv; tapcode 32; sleep 2
+  WQ=$(wqcount); PN=$(privnote); note "personalization-off commit: queued=$WQ markers: $PN"
+  [ "$WQ" -eq 0 ] && pass "privacy: personalization-off commit queued zero history writes ($PN)" || fail "privacy personalization-off: $WQ history write(s) queued (wanted 0) [$PN]"
+  clear_field; focus_target; sleep 2; SN=$(sugg)
+  [ "$SN" = "n=3" ] && pass "retrieval negative: strip still 3-word fallback after personalization-off commit ($SN)" || fail "retrieval negative: strip '$SN' after personalization-off commit (wanted n=3)"
+  dbg "prefbool:pref_key_use_personalized_dicts=true" 1.0
+
+  # negative 2: autocorrect off
+  dbg "prefbool:pref_key_auto_correction=false" 1.0; adb shell input keyevent 4; sleep 0.6; focus_target
+  adb logcat -c; type_word jkqzxv; tapcode 32; sleep 2
+  WQ=$(wqcount); PN=$(privnote); note "autocorrect-off commit: queued=$WQ markers: $PN"
+  [ "$WQ" -eq 0 ] && pass "privacy: autocorrect-off commit queued zero history writes ($PN)" || fail "privacy autocorrect-off: $WQ history write(s) queued (wanted 0) [$PN]"
+  clear_field; focus_target; sleep 2; SN=$(sugg)
+  [ "$SN" = "n=3" ] && pass "retrieval negative: strip still 3-word fallback after autocorrect-off commit ($SN)" || fail "retrieval negative: strip '$SN' after autocorrect-off commit (wanted n=3)"
+  dbg "prefbool:pref_key_auto_correction=true" 1.0
+
+  # negative 3: password field (noLearning gate via mIsPasswordField; fixture broadcast sets inputType)
+  adb shell am broadcast -a com.wrenboard.imetarget.PASSWORD --ez on true -p "$TPKG" >/dev/null 2>&1; sleep 0.8
+  adb shell input keyevent 4; sleep 0.8; tap_field
+  adb logcat -c; type_word vkzjqw; tapcode 32; sleep 2
+  WQ=$(wqcount); PN=$(privnote); note "password-field commit: queued=$WQ markers: $PN"
+  [ "$WQ" -eq 0 ] && pass "privacy: password-field commit queued zero history writes ($PN)" || fail "privacy password-field: $WQ history write(s) queued (wanted 0) [$PN]"
+  adb shell am broadcast -a com.wrenboard.imetarget.PASSWORD --ez on false -p "$TPKG" >/dev/null 2>&1; sleep 0.8
+  adb shell input keyevent 4; sleep 0.8; tap_field; sleep 2; SN=$(sugg)
+  [ "$SN" = "n=3" ] && pass "retrieval negative: strip still 3-word fallback after password-field commit ($SN)" || fail "retrieval negative: strip '$SN' after password-field commit (wanted n=3)"
+  shot k01e_privacy_negatives_clean_strip
+
+  # positive control: one gated-on zebra commit must enqueue (observer live + in-order drain
+  # barrier after three zero-write windows). zebra is also the acceptance selection word below.
+  adb logcat -c; type_word zebra; tapcode 32
+  if wait_wq 1; then pass "positive control: zebra learn writeQueued after three zero-write negative windows"; else fail "positive control: no writeQueued within 25s of a gated-on commit"; fi
+  clear_field
   XY=$(kxy code -3 2>/dev/null || true); note "123 key at: $XY"
   clear_field
   type_word hello; F=$(field); case "$F" in hello|Hello) pass "typing hello ($F)";; *) fail "typing hello (got '$F')";; esac
@@ -235,6 +289,25 @@ if leg keyboard; then
   else
     fail "empty field with history shows '$S2' (wanted n=$CH)"
   fi
+  # Acceptance: select the learned word on the strip -> the field becomes exactly that word.
+  # Strip band sits directly above the keyboard top (KBD y from the geom dump); the single
+  # history word occupies the center slot (measured on rev13-J k01b pixels: word cluster
+  # x~420-594, strip band ~1165-1283 with keyboard top 1283). Both tap points stay inside
+  # the strip band, never on keys; a miss is a deterministic fail with pixels attached.
+  clear_field; focus_target; sleep 2
+  for i in $(seq 1 10); do S2T=$(sugg); grep -q 'STARTER history chosen=' shots/_s.txt && break; sleep 2; done
+  geom ktap >/dev/null 2>&1 || true
+  KY=$(awk '/^KBD /{for(i=1;i<=NF;i++) if($i ~ /^y=/){sub("y=","",$i); print $i}}' shots/geom_ktap.txt | head -1)
+  if [ -z "$KY" ]; then
+    fail "strip select: no KBD geometry line for the tap position"
+  else
+    clear_field
+    adb shell input tap 510 $((KY - 76)); sleep 1.2; F=$(field | sed 's/[[:space:]]*$//')
+    case "$F" in zebra|Zebra) : ;; *) adb shell input tap 540 $((KY - 38)); sleep 1.2; F=$(field | sed 's/[[:space:]]*$//');; esac
+    shot k01f_strip_select_zebra
+    case "$F" in zebra|Zebra) pass "strip select: tapping the learned word inserts exactly '$F'";; *) fail "strip select: field='$F' after strip taps (wanted the learned word)";; esac
+  fi
+  clear_field
   dbg "dsbool:wren_starter_words=false" 1.0; adb logcat -c; focus_target; sleep 2; S3=$(sugg); note "starter words with the toggle off: [$S3]"
   shot k01c_starter_words_toggle_off
   [ "$S3" = "n=0" ] && pass "toggle off: no starter words in an empty field" || fail "starter words still shown with the toggle off ($S3)"
