@@ -33,7 +33,15 @@ val WrenAboutMenu = UserSettingsMenu(
         userSettingDecorationOnly {
             LocalNavController.current?.let { UpdatesCard(it) }
         },
-        // (FUTO's "Check for updates manually" row stays on the FUTO page; the card above has "Check now".)
+        userSettingDecorationOnly {
+            Text("Modified version of FUTO Keyboard", style = Typography.Body.RegularMl,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp))
+        },
+        userSettingNavigationItem(
+            title = R.string.help_menu_title,
+            style = NavigationItemStyle.MiscNoArrow,
+            navigateTo = "help",
+        ),
         userSettingNavigationItem(
             title = R.string.credits_menu_title,
             style = NavigationItemStyle.MiscNoArrow,
