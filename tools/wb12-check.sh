@@ -1524,7 +1524,7 @@ if leg settingspreview; then
   opensettings "" 5
   shot sp01_home_top
   adb shell input swipe 540 1800 540 600 400; sleep 1.2; shot sp02_home_bottom
-  for d in languages wren_appearance wren_layout wren_typing wren_swipe wren_dict wren_soundfeel wren_voice wren_clipemoji wren_backup about wren_advanced payment; do
+  for d in languages wren_appearance wren_layout wren_typing wren_swipe wren_dict wren_soundfeel wren_voice wren_clipemoji wren_backup about wren_license wren_advanced payment; do
     opensettings "$d" 3
     shot "sp_${d}_top"; dumpui "sp_$d"
     P=$(uitext "sp_$d"); [ -n "$P" ] && pass "preview $d has visible UI text" || fail "preview $d empty UI"
