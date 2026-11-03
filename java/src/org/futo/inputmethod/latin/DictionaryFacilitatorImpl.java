@@ -780,6 +780,7 @@ public class DictionaryFacilitatorImpl implements DictionaryFacilitator {
                 isValid, timeStampInSeconds);
         if (BuildConfig.DEBUG) Log.i("WBDBG", "STARTER writeQueued id="
                 + org.futo.inputmethod.engine.general.WrenLearnTrace.id()
+                + " locale=" + userHistoryDictionary.mLocale
                 + " at " + SystemClock.uptimeMillis());
     }
 
