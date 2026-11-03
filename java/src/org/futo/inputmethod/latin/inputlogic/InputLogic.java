@@ -2017,18 +2017,33 @@ public final class InputLogic {
         // If correction is not enabled, we don't add words to the user history dictionary.
         // That's to avoid unintended additions in some sensitive fields, or fields that
         // expect to receive non-words.
-        if (!settingsValues.mAutoCorrectionEnabledPerTextFieldSettings) return;
-        if (!settingsValues.isPersonalizationEnabled()) return;
-        if (settingsValues.mInputAttributes.mNoLearning) return;
+        if (BuildConfig.DEBUG) Log.i("WBDBG", "STARTER learnEnter '" + suggestion
+                + "' at " + SystemClock.uptimeMillis());
+        if (!settingsValues.mAutoCorrectionEnabledPerTextFieldSettings) {
+            if (BuildConfig.DEBUG) Log.i("WBDBG", "STARTER learnSkip '" + suggestion + "' reason=autocorrectOff");
+            return;
+        }
+        if (!settingsValues.isPersonalizationEnabled()) {
+            if (BuildConfig.DEBUG) Log.i("WBDBG", "STARTER learnSkip '" + suggestion + "' reason=personalizationOff");
+            return;
+        }
+        if (settingsValues.mInputAttributes.mNoLearning) {
+            if (BuildConfig.DEBUG) Log.i("WBDBG", "STARTER learnSkip '" + suggestion + "' reason=noLearning");
+            return;
+        }
 
         if (mConnection.hasSlowInputConnection()) {
             // Since we don't unlearn when the user backspaces on a slow InputConnection,
             // turn off learning to guard against adding typos that the user later deletes.
             Log.w(TAG, "Skipping learning due to slow InputConnection.");
+            if (BuildConfig.DEBUG) Log.i("WBDBG", "STARTER learnSkip '" + suggestion + "' reason=slowConn");
             return;
         }
 
-        if (TextUtils.isEmpty(suggestion)) return;
+        if (TextUtils.isEmpty(suggestion)) {
+            if (BuildConfig.DEBUG) Log.i("WBDBG", "STARTER learnSkip '(empty)' reason=empty");
+            return;
+        }
         final boolean wasAutoCapitalized =
                 mWordComposer.wasAutoCapitalized() && !mWordComposer.isMostlyCaps();
         final long timeStampInSeconds = TimeUnit.MILLISECONDS.toSeconds(
