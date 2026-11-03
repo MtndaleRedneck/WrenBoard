@@ -77,9 +77,7 @@ import coil.request.ImageRequest
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.debounce
 import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.text.TextStyle
 import org.futo.inputmethod.latin.uix.gif.KlipyClient
 import org.futo.inputmethod.latin.uix.gif.KlipyClient.KlipyGif
 import org.futo.inputmethod.latin.uix.gif.klipyCustomerId
@@ -156,8 +154,18 @@ class WrenEmojiWindow(val manager: KeyboardManagerForAction) : ActionWindow() {
     val tab = mutableStateOf(if (EmojiPanelRequest.openOnGifTab) 1 else 0)
     val searching = mutableStateOf(false)
     val searchText = mutableStateOf("")
+    // B2: GIF search state lives here so the top search row and the GIF panel share it,
+    // and close() clears it (no stale local capture across editors).
+    val gifQuery = mutableStateOf("")
+    // "trending" (default), "recents", or "search" (query drives results)
+    val gifMode = mutableStateOf("trending")
 
-    init { EmojiPanelRequest.openOnGifTab = false }
+    init {
+        EmojiPanelRequest.openOnGifTab = false
+        // GIF tab keeps the keyboard visible below the panel (FontTyper pattern) so the
+        // search field can actually be typed into; reset on close().
+        if (tab.value == 1) manager.forceActionWindowAboveKeyboard(true)
+    }
 
     override val showTitleBar: Boolean get() = false
     override val positionIsUserManagable: Boolean get() = false
@@ -175,6 +183,9 @@ class WrenEmojiWindow(val manager: KeyboardManagerForAction) : ActionWindow() {
     override fun close(): CloseResult {
         searching.value = false
         searchText.value = ""
+        gifQuery.value = ""
+        gifMode.value = "trending"
+        manager.forceActionWindowAboveKeyboard(false)
         return CloseResult.Default
     }
 
@@ -248,9 +259,9 @@ fun WrenEmojiPanel(w: WrenEmojiWindow) {
                 w.manager.performHapticAndAudioFeedback(Constants.CODE_SWITCH_ALPHA_SYMBOL, view)
             }, contentAlignment = Alignment.Center) { Ic(R.drawable.wren_ic_arrow_back_ios_new, EmojiColors.Orange, 18.dp, desc = stringResource(R.string.wren_cd_back)) }
             WrenTopTab(w.tab.value == 0, R.drawable.wren_ic_sentiment_satisfied_fill, R.drawable.wren_ic_sentiment_satisfied,
-                stringResource(R.string.wren_emoji_tab), Modifier) { w.tab.value = 0 }
+                stringResource(R.string.wren_emoji_tab), Modifier.wbPos("EMOJITAB")) { w.tab.value = 0; w.manager.forceActionWindowAboveKeyboard(false) }
             WrenTopTab(w.tab.value == 1, R.drawable.wren_ic_gif_box_fill, R.drawable.wren_ic_gif_box,
-                stringResource(R.string.wren_gif_tab), Modifier.wbPos("EMOJIGIFTAB")) { w.tab.value = 1 }
+                stringResource(R.string.wren_gif_tab), Modifier.wbPos("EMOJIGIFTAB")) { w.tab.value = 1; w.manager.forceActionWindowAboveKeyboard(true) }
         }
 
         // Search row: field 945 x 98 px, round arrow 96 px.
@@ -264,12 +275,26 @@ fun WrenEmojiPanel(w: WrenEmojiWindow) {
             ) {
                 Ic(R.drawable.wren_ic_search, EmojiColors.OrangeMuted, 19.dp)
                 Spacer(Modifier.width(8.dp))
-                Text(stringResource(if (w.tab.value == 0) R.string.wren_search_emojis else R.string.wren_search_gifs), color = EmojiColors.OrangeText, fontSize = 16.sp)
+                if (w.tab.value == 0) {
+                    Text(stringResource(R.string.wren_search_emojis), color = EmojiColors.OrangeText, fontSize = 16.sp)
+                } else {
+                    // B2: a real, typable GIF search field reusing the existing action-editor
+                    // mechanism (same path as emoji search and clipboard search). The old
+                    // BasicTextField below the chips was untypable in practice (Tab's B2
+                    // finding; mechanism unproven) and this row was a dead decoration on
+                    // the GIF tab.
+                    Box(Modifier.weight(1f)) {
+                        ActionTextEditor(text = w.gifQuery, autofocus = false, textSize = 16.sp, placeholder = stringResource(R.string.wren_search_gifs))
+                    }
+                }
             }
             Spacer(Modifier.width(5.dp))
-            Box(Modifier.size(36.dp).clip(CircleShape).background(EmojiColors.Arrow).clickable {
-                w.manager.sendCodePointEvent(Constants.CODE_ENTER)
-            }, contentAlignment = Alignment.Center) { Ic(R.drawable.wren_ic_arrow_forward, Color(0xFF333333), 21.dp, desc = stringResource(R.string.wren_cd_enter)) }
+            // B2: this button used to send a raw ENTER to the host app - in any messaging
+            // field with enter=send that sent the user's drafted message. It now only drives
+            // local behavior: emoji tab opens the emoji search UI, GIF tab closes the panel.
+            Box(Modifier.size(36.dp).clip(CircleShape).background(EmojiColors.Arrow).wbPos("EMOJISEARCHGO").clickable {
+                if (w.tab.value == 0) w.searching.value = true else w.manager.closeActionWindow()
+            }, contentAlignment = Alignment.Center) { Ic(R.drawable.wren_ic_arrow_forward, Color(0xFF333333), 21.dp, desc = stringResource(if (w.tab.value == 0) R.string.wren_search_emojis else R.string.wren_cd_back)) }
         }
         Box(Modifier.fillMaxWidth().height(2.7.dp).background(EmojiColors.Sep))
 
@@ -538,10 +563,7 @@ private fun WrenEmojiSearch(w: WrenEmojiWindow, emojis: List<EmojiItem>, view: V
     }
 }
 
-/**
- * GIF tab. No free GIF source is wired in (every GIF service needs an account key), so the tab shows its
- * search field and mood chips with an empty grid. Flagged as open in the 1.2 report.
- */
+/** GIF tab: KLIPY-backed grid. Search field lives in the shared top row (B2). */
 @OptIn(FlowPreview::class)
 @Composable
 private fun WrenGifPlaceholder(w: WrenEmojiWindow, view: View, modifier: Modifier) {
@@ -550,12 +572,13 @@ private fun WrenGifPlaceholder(w: WrenEmojiWindow, view: View, modifier: Modifie
     val appKey = org.futo.inputmethod.latin.BuildConfig.KLIPY_APP_KEY
     val hasKey = appKey.isNotBlank()
     val customerId = remember { if (hasKey) klipyCustomerId(context) else "" }
-    val query = remember { mutableStateOf("") }
+    val query = w.gifQuery
+    val mode = w.gifMode
     val gifs = remember { mutableStateOf<List<KlipyGif>>(emptyList()) }
     val loading = remember { mutableStateOf(false) }
     val failed = remember { mutableStateOf(false) }
-    // "trending" (default), "recents", or "search" (query drives results)
-    val mode = remember { mutableStateOf("trending") }
+    // Typing a query switches to search results (the old field did this in onValueChange).
+    LaunchedEffect(query.value) { if (query.value.isNotEmpty()) mode.value = "search" }
 
     val canInsert = remember { KlipyInsert.canOffer(w.manager) }
 
@@ -604,13 +627,6 @@ private fun WrenGifPlaceholder(w: WrenEmojiWindow, view: View, modifier: Modifie
                     Text(label, color = EmojiColors.OrangeMuted, fontSize = 13.sp)
                 }
             }
-        }
-        Box(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp).clip(RoundedCornerShape(8.dp)).background(EmojiColors.Chip).padding(horizontal = 12.dp, vertical = 9.dp)) {
-            if (query.value.isEmpty()) Text("Search KLIPY", color = EmojiColors.OrangeMuted, fontSize = 14.sp)
-            BasicTextField(value = query.value,
-                onValueChange = { query.value = it; if (it.isNotEmpty()) mode.value = "search" },
-                textStyle = TextStyle(color = EmojiColors.Orange, fontSize = 14.sp),
-                singleLine = true, modifier = Modifier.fillMaxWidth())
         }
         LazyVerticalGrid(columns = GridCells.Fixed(3), modifier = Modifier.weight(1f),
             contentPadding = PaddingValues(6.dp),

@@ -6,7 +6,7 @@
 set -u
 APK="$1"; TAPK="$2"
 PKG=com.wrenboard.keyboard; TPKG=com.wrenboard.imetarget
-LEGS=",${WB_LEGS:-setup,keyboard,period,leftedge,caps,shift,clip,update,toolbar,textedit,skin,symbols,states,emoji,clipboard,saveword,settings,panelexit},"
+LEGS=",${WB_LEGS:-setup,keyboard,period,leftedge,caps,shift,clip,update,toolbar,textedit,skin,symbols,states,emoji,gifsearch,clipboard,saveword,settings,panelexit},"
 mkdir -p shots; R=shots/results.txt; : > "$R"
 ADB_BIN=$(type -P adb)
 # a dead emulator must not hang the run: each call is bounded, and once the link is confirmed gone
@@ -1039,6 +1039,42 @@ if leg extras; then
   clear_field; type_word zqxwv; sleep 1.0; shot x05_strip_no_suggestion
   S2=$(sugg); note "strip with 'zqxwv': $S2"
   clear_field
+fi
+
+if leg gifsearch; then
+  note "== B2 GIF search routing (keyless): local capture, no host ENTER, close restores =="
+  focus_target; clear_field
+  type_word hostok; sleep 0.5
+  F0=$(field); note "host field baseline: '$F0'"
+  [ "$F0" = "hostok" ] && pass "B2 setup: host field typed" || fail "B2 setup: host field '$F0'"
+  adb logcat -c; dbg "open:emoji" 2.0
+  GT=""; for i in $(seq 1 10); do sleep 0.5; adb logcat -d -s WBDBG:I | tr -d '\r' > shots/gb0.txt; GT=$(pos shots/gb0.txt 'EMOJIGIFTAB'); [ -n "$GT" ] && break; done
+  if [ -n "$GT" ]; then adb shell input tap $GT; sleep 1.5; else fail "B2: no GIF tab"; fi
+  adb logcat -d -s WBDBG:I | tr -d '\r' > shots/gb1.txt
+  GA=$(pos shots/gb1.txt 'EMOJISEARCHGO'); note "gif arrow pos: '$GA'"
+  shot gb1_gif_tab_open
+  # keyboard must be visible below the panel (FontTyper-pattern expand) or typing is impossible
+  geom gb1 keep >/dev/null
+  if grep -q 'KEY ' shots/geom_gb1.txt; then pass "B2: keyboard stays visible on the GIF tab"; else fail "B2: no keyboard geometry on the GIF tab - search field untypable"; fi
+  # check 1+2: typing lands in the local GIF query; host field stays byte-unchanged
+  for ch in c a t; do XY=$(python3 tools/wb12_kv.py shots/geom_gb1.txt xy KEY label "$ch") && adb shell input tap $XY; sleep 0.3; done
+  sleep 1.0
+  F1=$(field); note "host field after GIF-search typing: '$F1'"
+  [ "$F1" = "$F0" ] && pass "B2: typing in GIF search leaves host field byte-unchanged ('$F0')" || fail "B2: host field changed while typing in GIF search ('$F0' -> '$F1')"
+  shot gb2_gif_query_typed
+  # check 3: the round arrow must not deliver ENTER to the host (keyless GIF tab: innocuous close)
+  if [ -n "$GA" ]; then
+    adb shell input tap $GA; sleep 1.2
+    F2=$(field); note "host field after arrow: '$F2'"
+    [ "$F2" = "$F0" ] && pass "B2: round arrow delivers no host ENTER ('$F0')" || fail "B2: round arrow changed host field ('$F0' -> '$F2')"
+    shot gb3_after_arrow
+  else fail "B2: no EMOJISEARCHGO marker for the round arrow"; fi
+  # check 4: after the panel is closed, host typing works again (no stuck local capture)
+  dbg "close" 1.0
+  type_word zz; sleep 0.5
+  F3=$(field); note "host field after close+typing: '$F3'"
+  [ "$F3" = "${F0}zz" ] && pass "B2: close restores host typing, no stuck capture ('$F3')" || fail "B2: host typing after close is '$F3' (wanted '${F0}zz')"
+  shot gb4_after_close
 fi
 
 if leg clipboard; then
