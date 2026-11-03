@@ -71,16 +71,6 @@ public class KeyPreviewView extends androidx.appcompat.widget.AppCompatTextView 
         mDrawableProvider = DynamicThemeProvider.obtainFromContext(context);
     }
 
-    @Override
-    protected void onSizeChanged(final int w, final int h, final int oldw, final int oldh) {
-        super.onSizeChanged(w, h, oldw, oldh);
-        // padTop so the single-line glyph block centres at 26% of the box height (item 5b).
-        final android.graphics.Paint.FontMetrics fm = getPaint().getFontMetrics();
-        final float textH = fm.descent - fm.ascent;
-        final int padTop = (int)(h * 0.26f - textH / 2f);
-        setPadding(getPaddingLeft(), Math.max(0, padTop), getPaddingRight(), 0);
-    }
-
     @Nullable
     private Drawable mIcon;
 
@@ -90,6 +80,8 @@ public class KeyPreviewView extends androidx.appcompat.widget.AppCompatTextView 
         // What we show as preview should match what we show on a key top in onDraw().
         final String iconId = key.getIconId();
         if (!Objects.equals(iconId, KeyboardIconsSet.ICON_UNDEFINED) && key.getFlickDirection() == null) {
+            setGravity(android.view.Gravity.CENTER);
+            setPadding(getPaddingLeft(), 0, getPaddingRight(), 0);
             setCompoundDrawables(null, null, null, key.getPreviewIcon(iconsSet));
             mIcon = key.getPreviewIcon(iconsSet);
             currKey = key;
@@ -108,12 +100,20 @@ public class KeyPreviewView extends androidx.appcompat.widget.AppCompatTextView 
 
         currKey = key;
 
-        // item 5b: text size just changed; re-place the glyph block if the box is already laid out
+        // Item 5b: centre the RENDERED glyph bounds (not the ascent/descent block) at 26% of the
+        // box height. With includeFontPadding=false the first line's baseline sits at
+        // padTop - fm.top, so visible centre = padTop - fm.top + (b.top + b.bottom)/2; solve for
+        // padTop. Font-block centring landed the rendered glyph at 35% on the 420dpi emulator shot.
         if (getHeight() > 0) {
-            final android.graphics.Paint.FontMetrics fm = getPaint().getFontMetrics();
-            final float textH = fm.descent - fm.ascent;
-            final int padTop = (int)(getHeight() * 0.26f - textH / 2f);
-            setPadding(getPaddingLeft(), Math.max(0, padTop), getPaddingRight(), 0);
+            final android.graphics.Paint gp = getPaint();
+            final android.graphics.Paint.FontMetrics gfm = gp.getFontMetrics();
+            final android.graphics.Rect gb = new android.graphics.Rect();
+            final String gt = key.getPreviewLabel();
+            if (gt != null && !gt.isEmpty()) {
+                gp.getTextBounds(gt, 0, gt.length(), gb);
+                final int padTop = (int)(getHeight() * 0.26f + gfm.top - (gb.top + gb.bottom) / 2f);
+                setPadding(getPaddingLeft(), Math.max(0, padTop), getPaddingRight(), 0);
+            }
         }
     }
 
