@@ -861,6 +861,33 @@ if leg clipboard; then
     F=$(field); note "field after card tap: ${F:0:80}"
     [ -n "$F" ] && pass "tap on a card pastes it into the field (retained interaction)" || fail "tap on a card pasted nothing"
   else fail "no card position for the tap leg"; fi
+  # 3dp-hold-cancel leg (Tab's exact arbitration spec, 20:45): a >3dp movement in any direction
+  # cancels the hold timer - so move 24px (9dp, sub-slop horizontally), hold past the timeout,
+  # lift: must PASTE, must NOT open the menu. This leg fails on the pre-3dp-cancel handler.
+  adb logcat -c; dbg close 0.8; focus_target; clear_field; dbg "open:clipboard_history" 2.0; wlog cl5l
+  C=$(pos shots/cl5l.txt 'CLIPCARD i=1 ')
+  if [ -n "$C" ]; then read -r X Y <<< "$C"
+    adb logcat -c
+    adb shell "input motionevent DOWN $X $Y"; sleep 0.1
+    adb shell "input motionevent MOVE $X $((Y-24))"; sleep 0.9; shot cl05n_moved_hold
+    adb shell "input motionevent UP $X $((Y-24))"; sleep 1.2; wlog cl5n
+    if grep -q 'WINDOW CLIPMENU' shots/cl5n.txt; then fail "3dp-cancel: Pin menu opened after a >3dp move (hold timer was not cancelled)"
+    else F=$(field); note "field after move-hold-lift: ${F:0:80}"
+      [ -n "$F" ] && pass "movement >3dp cancels the hold timer; the lift still pastes" || fail "3dp-cancel: the lift after the cancelled hold pasted nothing"; fi
+  else fail "no card position for the 3dp-cancel leg"; fi
+  # Menu-then-drag leg (Tab's exact arbitration spec, 20:45): once the stationary hold has opened
+  # the Pin menu, a later drag in the same gesture must never delete the clip.
+  adb logcat -c; dbg close 0.8; dbg "open:clipboard_history" 2.0; wlog cl5k
+  C=$(pos shots/cl5k.txt 'CLIPCARD i=1 ')
+  if [ -n "$C" ]; then read -r X Y <<< "$C"
+    adb logcat -c
+    adb shell "input motionevent DOWN $X $Y"; sleep 0.8
+    adb shell "input motionevent MOVE $((X-300)) $Y"; sleep 0.3
+    adb shell "input motionevent UP $((X-300)) $Y"; sleep 1.2; wlog cl5m; shot cl05m_menu_then_drag
+    if grep -q 'CLIP removed=' shots/cl5m.txt; then fail "menu-then-drag: the clip was deleted after the Pin menu had opened"
+    else pass "a drag after the Pin menu opened never deletes"; fi
+    adb shell input keyevent KEYCODE_BACK; sleep 0.8
+  else fail "no card position for the menu-then-drag leg"; fi
   # Slow-drag leg (Tab review): a manual stream with dwells must still delete - the drag claims on
   # first slop-crossing motion, dwells after that cannot open the long-press menu.
   adb logcat -c; dbg close 0.8; dbg "open:clipboard_history" 2.0; wlog cl5u

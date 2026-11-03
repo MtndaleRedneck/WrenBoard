@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- WrenBoard 1.5 (Tab's exact 20:45 spec, candidate): tab key icon - bold arrow-into-bar,
+     20dp wide x 11dp tall, 2.5dp stroke, tinted to the key label colour at draw time.
+     Replaces the thin U+21E5 text glyph on symbols_shift.yaml row 2 (function unchanged:
+     still types a real tab character via !code/key_tab). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="20dp"
+    android:height="11dp"
+    android:viewportWidth="20"
+    android:viewportHeight="11">
+  <path
+      android:pathData="M18.75,0 L18.75,11"
+      android:strokeWidth="2.5"
+      android:strokeColor="#FFFFFF"
+      android:strokeLineCap="butt"
+      android:fillColor="#00000000"/>
+  <path
+      android:pathData="M0,5.5 L16.9,5.5"
+      android:strokeWidth="2.5"
+      android:strokeColor="#FFFFFF"
+      android:strokeLineCap="butt"
+      android:fillColor="#00000000"/>
+  <path
+      android:pathData="M12,1.25 L16.9,5.5 L12,9.75"
+      android:strokeWidth="2.5"
+      android:strokeColor="#FFFFFF"
+      android:strokeLineCap="butt"
+      android:fillColor="#00000000"/>
+</vector>

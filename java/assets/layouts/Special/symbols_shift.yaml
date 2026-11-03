@@ -15,9 +15,9 @@ rows:
       - "~"
       - "¿"
   - letters:
-      # Tab (arrow-into-bar glyph), then [ ] { } < > ^ ¡
+      # Tab key: drawn arrow-into-bar icon (WrenBoard 1.5, Tab's 20:45 spec), then [ ] { } < > ^ ¡
       - type: base
-        spec: "⇥|!code/key_tab"
+        spec: "!icon/tab_key|!code/key_tab"
       - "["
       - "]"
       - "{"

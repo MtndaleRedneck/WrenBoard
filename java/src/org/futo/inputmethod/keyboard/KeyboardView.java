@@ -474,6 +474,15 @@ public class KeyboardView extends View {
         if (label != null && icon == null) {
             paint.setTypeface(kdc.getTextTypeface());
             paint.setTextSize(kdc.getTextSize());
+            // WrenBoard 1.5 (Tab's exact 20:45 spec, candidate, targeted): only the symbols
+            // page-2 shift key labelled "123" (CODE_SHIFT; the letters-page "123" key is
+            // CODE_SWITCH_ALPHA_SYMBOL, the page-1 shift is "{&=", and "abc" is the alphabet
+            // key - all explicitly left alone). Same style ratio renders it 39px tall on the
+            // 4-row symbols keyboard vs 29px on the 5-row letters keyboard (measured at
+            // 420dpi); Tab's target is 62x29px, so pin this one label down by 29/39.
+            if (key.getCode() == Constants.CODE_SHIFT && "123".equals(label)) {
+                paint.setTextSize(kdc.getTextSize() * (29.0f / 39.0f));
+            }
             final float labelCharHeight = TypefaceUtils.getReferenceCharHeight(paint);
             final float labelCharWidth = TypefaceUtils.getReferenceCharWidth(paint);
 
@@ -646,6 +655,12 @@ public class KeyboardView extends View {
                 // WrenBoard 1.5 item 5f (Tab's cosmetic value, candidate): emoji key icon 17dp
                 // (45px at 420dpi, 51 at 480), centred - the centring below already does that.
                 iconWidth = (int)(17.0f * iconDm);
+            } else if (KeyboardIconsSet.NAME_TAB_KEY.equals(key.getIconId())) {
+                // WrenBoard 1.5 (Tab's exact 20:45 spec, candidate): tab key icon is a bold
+                // arrow-into-bar 20dp wide x 11dp tall (2.5dp stroke lives in the vector),
+                // tinted to the key label colour below. Function unchanged (types a tab).
+                iconWidth = (int)(20.0f * iconDm);
+                iconHeightOverride = (int)(11.0f * iconDm);
             } else if (FULL_SIZE_ICON_IDS.contains(key.getIconId())) {
                 // WrenBoard 1.4 SwiftKey parity (items 9/11): the 32dp key artwork (shift states, delete,
                 // enter, arrow row) renders at its full designed box; every other icon keeps the cap below.
