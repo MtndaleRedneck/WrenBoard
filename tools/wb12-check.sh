@@ -869,13 +869,13 @@ if leg states; then
       for i in $(seq 1 30); do
         sleep 3
         adb logcat -d -s WBDBG:I | tr -d '\r' > shots/voicestop_log.txt
-        if grep -q 'VOICEBAR state=Stopped' shots/voicestop_log.txt || grep -q 'VOICE capture finished' shots/voicestop_log.txt; then
+        if grep -q 'VOICEBAR state=Stopped' shots/voicestop_log.txt; then
           break
         fi
       done
       shot states_voice_stopped
-      # Capture-finished precedes the Compose Stopped marker; assert from the current
-      # post-screenshot log, not the earlier polling snapshot that only saw completion.
+      # Capture-finished can precede the Compose transition. The evidence screenshot
+      # must wait for the actual Stopped marker, not just decode completion.
       adb logcat -d -s WBDBG:I | tr -d '\r' > shots/voicestop_log.txt
       grep -q 'VOICEBARPILLTAP' shots/voicestop_log.txt || note "v9 bar: pill-tap marker missing - the tap did not reach the bar (targeting, not behavior)"
       grep -q 'VOICEBAR state=Stopped' shots/voicestop_log.txt && pass "v9 bar: pill tap stops capture, bar stays open in Stopped state" || fail "v9 bar: no Stopped state after pill tap"
