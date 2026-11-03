@@ -936,6 +936,10 @@ class ChineseIME(val helper: IMEHelper) : IMEInterface, SuggestionStripViewAcces
         }
     }
 
+    // clearUserHistoryDictionaries already restarts rime with a fresh user dir, so the IME
+    // keeps learning (into the empty store) after personalization is re-enabled.
+    override fun recreateUserHistoryDictionaries() { }
+
     override fun onStartBatchInput() {}
     override fun onUpdateBatchInput(batchPointers: InputPointers?) {}
     override fun onEndBatchInput(batchPointers: InputPointers?) {}

@@ -206,6 +206,13 @@ public class LatinIMELegacy implements KeyboardActionListener,
             // Remove user history dictionaries.
             PersonalizationHelper.removeAllUserHistoryDictionaries(mInputMethodService);
             mImeManager.clearUserHistoryDictionaries();
+        } else if (currentSettingsValues.mUsePersonalizedDicts && !mLastPersonalizedDicts) {
+            // Personalization re-enabled: rebuild the active IME's dictionary facilitator
+            // so its dictionary group includes the user history subdictionary again.
+            // Without this, the group built while personalization was off has no history
+            // dictionary and every learning submission is dropped (noHistoryDict) until a
+            // subtype change or IME restart forces a rebuild.
+            mImeManager.recreateUserHistoryDictionaries();
         }
 
         mLastPersonalizedDicts = currentSettingsValues.mUsePersonalizedDicts;

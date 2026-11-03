@@ -775,6 +775,12 @@ class GeneralIME(val helper: IMEHelper) : IMEInterface, WordLearner, SuggestionS
         resetDictionaryFacilitator(force = true)
     }
 
+    override fun recreateUserHistoryDictionaries() {
+        // Force-reset re-reads settings (mUsePersonalizedDicts now true) and rebuilds the
+        // dictionary group WITH the user history subdictionary.
+        resetDictionaryFacilitator(force = true)
+    }
+
     override fun requestSuggestionRefresh() {
         inputLogic.mSuggestedWords?.let {
             onGetSuggestedWordsInternal(
