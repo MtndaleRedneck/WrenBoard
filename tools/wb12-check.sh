@@ -247,6 +247,7 @@ if leg keyboard; then
   shot k01h_neg2_strip_fallback_pixels
 
   # negative 3: password field, personalization+autocorrect ON -> expected skip reason noLearning
+  focus_target
   adb shell am broadcast -a com.wrenboard.imetarget.PASSWORD --ez on true -p "$TPKG" >/dev/null 2>&1; sleep 0.8
   adb shell input keyevent 4; sleep 0.8; tap_field
   adb logcat -c; PREF3=$(prefnote)
@@ -255,12 +256,13 @@ if leg keyboard; then
   note "neg3 password-field (3 commits, $PREF3): queued=$WQ enter=$EN skip[noLearning]=$SK markers: $PN"
   [ "$EN" -ge 1 ] && [ "$SK" -ge 1 ] && [ "$WQ" -eq 0 ] && pass "privacy neg3: gate executed (reason=noLearning via mIsPasswordField), zero writes queued in-window" || fail "privacy neg3: enter=$EN skip=$SK queued=$WQ (wanted >=1,>=1,0) [$PN]"
   adb shell am broadcast -a com.wrenboard.imetarget.PASSWORD --ez on false -p "$TPKG" >/dev/null 2>&1; sleep 0.8
-  adb shell input keyevent 4; sleep 0.8; tap_field; sleep 2; SN=$(sugg)
+  adb shell input keyevent 4; sleep 0.8; focus_target; sleep 2; SN=$(sugg)
   [ "$SN" = "n=3" ] && pass "neg3 post-restoration readback: strip is 3-word fallback, token not retrievable ($SN)" || fail "neg3 post-restoration readback: strip '$SN' (wanted n=3)"
   shot k01e_privacy_negatives_clean_strip
 
   # negative 4: explicit IME_FLAG_NO_PERSONALIZED_LEARNING, otherwise normal field, gates ON
   # -> expected skip reason noLearning via the flag (fresh EditorInfo, distinct from neg3's password path)
+  focus_target
   adb shell am broadcast -a com.wrenboard.imetarget.NOLEARN --ez on true -p "$TPKG" >/dev/null 2>&1; sleep 0.8
   adb shell input keyevent 4; sleep 0.8; tap_field
   adb logcat -c; PREF4=$(prefnote)
@@ -269,7 +271,7 @@ if leg keyboard; then
   note "neg4 nolearn-flag (3 commits, $PREF4): queued=$WQ enter=$EN skip[noLearning]=$SK markers: $PN"
   [ "$EN" -ge 1 ] && [ "$SK" -ge 1 ] && [ "$WQ" -eq 0 ] && pass "privacy neg4: gate executed (reason=noLearning via explicit flag), zero writes queued in-window" || fail "privacy neg4: enter=$EN skip=$SK queued=$WQ (wanted >=1,>=1,0) [$PN]"
   adb shell am broadcast -a com.wrenboard.imetarget.NOLEARN --ez on false -p "$TPKG" >/dev/null 2>&1; sleep 0.8
-  adb shell input keyevent 4; sleep 0.8; tap_field; sleep 2; SN=$(sugg)
+  adb shell input keyevent 4; sleep 0.8; focus_target; sleep 2; SN=$(sugg)
   [ "$SN" = "n=3" ] && pass "neg4 post-restoration readback: strip is 3-word fallback, token not retrievable ($SN)" || fail "neg4 post-restoration readback: strip '$SN' (wanted n=3)"
   shot k01i_neg4_strip_fallback_pixels
 
@@ -278,7 +280,8 @@ if leg keyboard; then
   # same commit count the negatives used, so visibility-at-3 is proven for this build).
   adb logcat -c
   for i in 1 2 3; do clear_field; type_word zebra; tapcode 32; sleep 0.8; done
-  if wait_wq 3; then pass "positive control: 3 gated-on commits each writeQueued after four zero-write windows (marker path live, in-order)"; else fail "positive control: fewer than 3 writeQueued within 25s ($(wqcount))"; fi
+  PN=$(privnote); note "positive control markers: $PN"
+  if wait_wq 3; then pass "positive control: 3 gated-on commits each writeQueued after four zero-write windows (marker path live, in-order) [$PN]"; else fail "positive control: fewer than 3 writeQueued within 25s ($(wqcount)) [$PN]"; fi
   clear_field; focus_target; sleep 2
   for i in $(seq 1 10); do SC=$(sugg); grep -q 'STARTER history chosen=' shots/_s.txt && break; sleep 2; done
   [ "$SC" = "n=1" ] && pass "positive control stored completion: production readback surfaces the control word ($SC)" || fail "positive control stored completion: strip '$SC' (wanted n=1)"
@@ -331,7 +334,7 @@ if leg keyboard; then
   clear_field; focus_target; sleep 2
   for i in $(seq 1 10); do S2T=$(sugg); grep -q 'STARTER history chosen=' shots/_s.txt && break; sleep 2; done
   geom ktap >/dev/null 2>&1 || true
-  KY=$(awk '/^KBD /{for(i=1;i<=NF;i++) if($i ~ /^y=/){sub("y=","",$i); print $i}}' shots/geom_ktap.txt | head -1)
+  KY=$(awk '/KBD x=/{for(i=1;i<=NF;i++) if($i ~ /^y=/){sub("y=","",$i); print $i}}' shots/geom_ktap.txt | head -1)
   if [ -z "$KY" ]; then
     fail "strip select: no KBD geometry line for the tap position"
   else
@@ -357,7 +360,7 @@ if leg keyboard; then
   # tap_strip_center <geomtag> : tap the single-word strip using THIS run's geometry; echoes nothing.
   tap_strip_center() {
     geom "$1" >/dev/null 2>&1 || true
-    local ky; ky=$(awk '/^KBD /{for(i=1;i<=NF;i++) if($i ~ /^y=/){sub("y=","",$i); print $i}}' "shots/geom_$1.txt" | head -1)
+    local ky; ky=$(awk '/KBD x=/{for(i=1;i<=NF;i++) if($i ~ /^y=/){sub("y=","",$i); print $i}}' "shots/geom_$1.txt" | head -1)
     [ -z "$ky" ] && return 1
     adb shell input tap 510 $((ky - 76)); sleep 1.2
   }
