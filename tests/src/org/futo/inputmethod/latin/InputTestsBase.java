@@ -16,6 +16,7 @@
 
 package org.futo.inputmethod.latin;
 
+import androidx.test.InstrumentationRegistry;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.graphics.Point;
@@ -216,7 +217,15 @@ public class InputTestsBase extends ServiceTestCase<LatinIME> {
                 true, true /* defaultValue */);
         mPreviousAutoCorrectSetting = setBooleanPreference(Settings.PREF_AUTO_CORRECTION,
                 DEFAULT_AUTO_CORRECTION, DEFAULT_AUTO_CORRECTION);
-        getService().onCreate();
+        // The compose-backed LatinIME.onCreate() mutates a LifecycleRegistry, which
+        // enforces that lifecycle calls happen on the main thread, while this base
+        // class drives the service from the instrumentation thread. Run just this
+        // call on the main thread.
+        InstrumentationRegistry.getInstrumentation().runOnMainSync(new Runnable() {
+            @Override public void run() {
+                getService().onCreate();
+            }
+        });
         EditorInfo ei = new EditorInfo();
         final InputConnection ic = mEditText.onCreateInputConnection(ei);
         final LayoutInflater inflater =
