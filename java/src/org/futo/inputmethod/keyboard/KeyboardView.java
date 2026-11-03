@@ -663,10 +663,14 @@ public class KeyboardView extends View {
                 iconWidth = (int)(24.0f * iconDm);
                 iconHeightOverride = (int)(6.0f * iconDm);
             } else if (KeyboardIconsSet.NAME_EMOJI_NORMAL_KEY.equals(key.getIconId())
-                    || KeyboardIconsSet.NAME_EMOJI_ACTION_KEY.equals(key.getIconId())) {
+                    || KeyboardIconsSet.NAME_EMOJI_ACTION_KEY.equals(key.getIconId())
+                    || "action_emoji".equals(key.getIconId())
+                    || "action_0".equals(key.getIconId())) {
                 // Candidate: 50px icon bounds at the 420dpi reference surface. Actual vector
                 // ink can be smaller than its viewport; measure the render before acceptance.
-                iconWidth = (int)(19.84f * iconDm);
+                // smile.xml uses 22/24 of its viewport for visible stroke. A 55px
+                // drawing box at420 is the candidate for50px ink, verified by render.
+                iconWidth = Math.round(20.95f * iconDm);
                 // Keep this explicit measured size out of the generic text-size cap below.
                 iconHeightOverride = iconWidth;
             } else if (KeyboardIconsSet.NAME_TAB_KEY.equals(key.getIconId())) {
