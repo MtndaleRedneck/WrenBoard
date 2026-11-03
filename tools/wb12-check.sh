@@ -116,12 +116,6 @@ adb shell am broadcast -a android.intent.action.CLOSE_SYSTEM_DIALOGS >/dev/null 
 WB_SIZE="${WB_SIZE:-1080x2316}"; WB_DENSITY="${WB_DENSITY:-420}"
 adb shell wm size "$WB_SIZE"; adb shell wm density "$WB_DENSITY"
 note "display: $(adb shell wm size | tr -d '\r' | tr '\n' ' ') $(adb shell wm density | tr -d '\r' | tr '\n' ' ')"
-if [ "${WB_LOAD:-0}" = 1 ]; then
-  # controlled CPU load for the WHOLE run (self-terminating): makes input-pipeline backlog and
-  # slow-write timing reproducible for experiment runs instead of weather-dependent.
-  adb shell 'for i in 1 2 3 4 5 6; do timeout 1500 sh -c "while :; do :; done" >/dev/null 2>&1 & done'
-  note "LOAD: 6 CPU spinners on the emulator for 1500 s (WB_LOAD=1)"
-fi
 note "== install =="
 adb install -r -t "$APK" >> "$R" 2>&1 || { fail "install WrenBoard"; exit 1; }
 adb install -r "$TAPK" >> "$R" 2>&1 || { fail "install ime-target"; exit 1; }
@@ -184,6 +178,15 @@ geom letters
 KBDY=$(python3 tools/wb12_kv.py shots/geom.txt kbd y); KBDH=$(python3 tools/wb12_kv.py shots/geom.txt kbd h)
 note "keyboard view y=$KBDY h=$KBDH; keys: $(python3 tools/wb12_kv.py shots/geom.txt list KEY | wc -l)"
 python3 tools/wb12_kv.py shots/geom.txt list KEY > shots/keys_letters.txt
+
+if [ "${WB_LOAD:-0}" != 0 ] && [ -n "${WB_LOAD:-}" ]; then
+  # controlled CPU load from here on (self-terminating; WB_LOAD = spinner count). Run-wide 6
+  # spinners starved setup itself (E5: default IME fell back to stock, 19 fails) - 2-4 spinners
+  # approximate a busy CI runner while keeping the app functional. Experiment runs only; the
+  # gate never uses load. Starts after the display setup so the emulator can boot/install first.
+  adb shell "for i in \$(seq 1 ${WB_LOAD}); do timeout 1500 sh -c 'while :; do :; done' >/dev/null 2>&1 & done"
+  note "LOAD: ${WB_LOAD} CPU spinners on the emulator for 1500 s"
+fi
 
 if leg keyboard; then
   note "== KEYBOARD: starter words, 123 hint =="
