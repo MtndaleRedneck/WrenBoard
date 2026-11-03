@@ -417,11 +417,14 @@ if leg keyboard; then
   # locale tag on the write marker (DEBUG-only). fr is bundled (res-large/raw/main_fr.dict). ---
   dbg "addlang:fr" 1.5; adb shell input keyevent 4; sleep 0.8; focus_target
   wait_layout azerty || fail "fr leg: keyboard did not reach azerty after addlang:fr"
-  adb logcat -c; sleep 1; SFR0=$(sugg)
-  # Bounded marker retry: the suggestion broadcast can land after a 1s single read (rev30-32
-  # showed '' while pixels visibly rendered the 3-word fallback). An unparseable read after
-  # the retries still fails - no fallback substitution.
-  for i in 1 2 3 4 5; do [ -n "$SFR0" ] && break; sleep 1.5; SFR0=$(sugg); done
+  # Query the CURRENT strip state after locale readiness. Event-only SUGG logs can be
+  # cleared/read before the update arrives; a previous event is not the current state.
+  # Unique request binds the readback. Missing/unparseable report still fails closed.
+  FR_REQUEST="fr_absent_$(date +%s)"
+  adb logcat -c
+  dbg "suggreport:$FR_REQUEST" 0.5
+  adb logcat -d -s WBDBG:I | tr -d '\r' > shots/fr_absent_report_raw.txt
+  SFR0=$(sed -n "s/.*SUGGREPORT request=$FR_REQUEST n=\([0-9][0-9]*\).*/n=\1/p" shots/fr_absent_report_raw.txt | tail -1)
   shot k02a_fr_absent_before
   [ "$SFR0" = "n=3" ] && pass "fr absent-before: fresh fr field shows 3-word fallback ($SFR0)" || fail "fr absent-before: '$SFR0' (wanted n=3)"
   # actual fr commits: bonjour is in the bundled fr main dict, so fr confidence can rise
