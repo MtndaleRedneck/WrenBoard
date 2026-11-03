@@ -32,11 +32,8 @@ import org.futo.inputmethod.latin.uix.settings.userSettingDecorationOnly
 import org.futo.inputmethod.latin.uix.settings.userSettingNavigationItem
 import org.futo.inputmethod.latin.uix.settings.userSettingToggleDataStore
 
-/*
- * WrenBoard 1.2 Settings tree (FULL_LIST P3 and Ezzy's 11:44 PM decision): six groups, then one FUTO entry that
- * holds FUTO's whole original Settings home, so nothing FUTO had is cut. The rows below are FUTO's own setting
- * items, regrouped; their keys and behaviour are unchanged, so backups and the 1.1 repairs read them as before.
- */
+/* Original setting objects keep their keys and behavior. Wren menus redistribute the rows;
+ * the payment screen and notices remain accessible from Home. Candidate pending pixel review. */
 
 private val keyPressNames = setOf(
     R.string.popup_on_keypress,
@@ -94,15 +91,16 @@ private val wrenTypingNames = setOf(
     R.string.typing_settings_delete_pasted_text_on_backspace,
     R.string.typing_settings_revert_correction_on_backspace,
 )
-private val wrenTypingRows get() = listOf(
-    userSettingNavigationItem(
-        title = R.string.wren_set_suggestions,
-        subtitle = R.string.wren_set_suggestions_sub,
-        style = NavigationItemStyle.Misc,
-        navigateTo = PredictiveTextMenu.navPath,
-        icon = R.drawable.text_prediction
-    ),
-) + TypingSettingsMenu.settings.filter { it.name in wrenTypingNames } +
+private val wrenPredictionMovedNames = setOf(
+    R.string.prediction_settings_transformer,
+    R.string.prediction_settings_transformer_models,
+    R.string.prediction_settings_transformer_advanced_params,
+    R.string.edit_personal_dictionary,
+    R.string.prediction_settings_word_blacklist,
+)
+private val wrenTypingRows get() =
+    PredictiveTextMenu.settings.filter { it.name !in wrenPredictionMovedNames && it.name != 0 } +
+        TypingSettingsMenu.settings.filter { it.name in wrenTypingNames } +
         LongPressMenu.settings.filter { it.name == R.string.keyboard_settings_shift_lock }
 
 val WrenTypingMenu = UserSettingsMenu(
@@ -177,6 +175,7 @@ private val wrenTransformerNames = setOf(
 )
 private val wrenAdvancedRows get() = PredictiveTextMenu.settings.filter { it.name in wrenTransformerNames } +
         KeyboardSettingsMenu.settings.filter { it.name == R.string.keyboard_settings_inline_autofill } +
+        HomeScreenLite.settings.filter { it.name == R.string.dev_settings_title } +
         listOf(
             userSettingToggleDataStore(
                 title = R.string.wren_set_style,
@@ -233,7 +232,6 @@ val WrenBackupMenu = UserSettingsMenu(
     settings = MiscMenu.settings
 )
 
-/** FUTO's original Settings home, whole: swipe typing, languages, actions, theme, payment, help, developer, credits. */
 /**
  * WrenBoard style: the group pages render their rows in labelled cards.
  * The rows are the same objects as in each menu's `settings` list, so search and the plain FUTO style see them unchanged.
@@ -257,10 +255,8 @@ val WrenMenuSections: Map<String, List<Pair<Int, List<UserSetting>>>> by lazy {
 val WrenFutoMenu = UserSettingsMenu(
     title = R.string.wren_set_futo,
     navPath = "wren_futo", registerNavPath = true,
-    // WrenBoard 1.3 (teardown item 41): the paid-version notice moved here from the WrenBoard home; the
-    // Payment row, payment screen and already-paid flow stay exactly where they were, one tap from home.
-    // 1.5 (item 9): the settings-style toggle moved to Advanced; the rest of the FUTO home is unchanged.
-    settings = HomeScreenLite.settings + listOf(
+    // Payment remains reachable from Home on its unchanged screen; notices are preserved.
+    settings = HomeScreenLite.settings.filter { it.name == R.string.payment_screen_short_title } + listOf(
         userSettingDecorationOnly {
             val isPaid = useDataStoreValue(IS_ALREADY_PAID)
             if(isPaid || androidx.compose.ui.platform.LocalInspectionMode.current) {
@@ -282,6 +278,7 @@ fun WrenHomeList() {
         Spacer(Modifier.height(6.dp))
         WrenCard {
             WrenNavRow(stringResource(R.string.wren_set_appearance), stringResource(R.string.wren_set_appearance_sub), R.drawable.themes) { nav?.navigate(WrenAppearanceMenu.navPath) }
+            WrenNavRow(stringResource(R.string.wren_set_languages), stringResource(R.string.wren_set_languages_sub), R.drawable.globe) { nav?.navigate("languages") }
             WrenNavRow(stringResource(R.string.wren_set_layout), stringResource(R.string.wren_set_layout_sub), R.drawable.maximize) { nav?.navigate(WrenLayoutMenu.navPath) }
             WrenNavRow(stringResource(R.string.wren_set_typing), stringResource(R.string.wren_set_typing_sub), R.drawable.wren_ic_spellcheck) { nav?.navigate(WrenTypingMenu.navPath) }
             WrenNavRow(stringResource(R.string.wren_set_swipe), stringResource(R.string.wren_set_swipe_sub), R.drawable.direction_arrows) { nav?.navigate(WrenSwipeMenu.navPath) }
@@ -295,8 +292,15 @@ fun WrenHomeList() {
         }
         WrenSectionLabel(stringResource(R.string.wren_set_futo))
         WrenCard {
-            WrenNavRow(stringResource(R.string.wren_set_futo), stringResource(R.string.wren_set_futo_sub), R.drawable.wren_ic_more_horiz, dark = true, divider = false) { nav?.navigate(WrenFutoMenu.navPath) }
+            WrenNavRow(stringResource(R.string.wren_set_futo), stringResource(R.string.wren_set_futo_sub), R.drawable.wren_ic_more_horiz, dark = true, divider = false) { nav?.navigate("payment") }
         }
+        val isPaid = useDataStoreValue(IS_ALREADY_PAID)
+        if (isPaid) androidx.compose.material3.Text(
+            stringResource(R.string.payment_paid_version_indicator),
+            style = org.futo.inputmethod.latin.uix.theme.Typography.SmallMl,
+            modifier = Modifier.fillMaxWidth(),
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+        )
         Spacer(Modifier.height(16.dp))
     }
 }
