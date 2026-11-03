@@ -1049,8 +1049,13 @@ if leg gifsearch; then
   snapshot() {
     local name=$1 req="${1}_$(date +%s)"
     adb logcat -c; dbg "windows:$req" 0.5
-    adb logcat -d -s WBDBG:I | tr -d '\r' > "shots/$name.txt"
-    grep -q "SNAPEND request=$req" "shots/$name.txt" || { fail "B2 snapshot $name incomplete"; return 1; }
+    adb logcat -d -s WBDBG:I | tr -d '\r' > "shots/${name}_raw.txt"
+    grep -q "SNAPBEGIN request=$req " "shots/${name}_raw.txt" &&
+      grep -q "SNAPEND request=$req" "shots/${name}_raw.txt" || { fail "B2 snapshot $name incomplete"; return 1; }
+    sed -n "/SNAPBEGIN request=$req /,/SNAPEND request=$req/p" "shots/${name}_raw.txt" > "shots/$name.txt"
+    # An attached duplicate tag is ambiguous. Do not choose the last provider silently.
+    DUP=$(grep 'WINDOW ' "shots/$name.txt" | sed -E 's/.*WINDOW (.*) cx=.*/\1/' | sort | uniq -d)
+    [ -z "$DUP" ] || { fail "B2 snapshot $name duplicate layout tag: $DUP"; return 1; }
   }
   focus_target; clear_field
   type_word hostok; sleep 0.5
@@ -1084,12 +1089,14 @@ if leg gifsearch; then
   snapshot gb2a; GA=$(pos shots/gb2a.txt 'EMOJISEARCHGO')
   if [ -n "$GA" ]; then
     adb logcat -c; adb shell input tap $GA; sleep 1.2
+    # Preserve host action evidence BEFORE snapshot() clears logcat.
+    adb logcat -d -s IMETARGET:I | tr -d '\r' > shots/gb2d_action_raw.txt
     snapshot gb2d
     shot gb2d_post_dismiss
     if ! grep -q 'keyboardHidden=true' shots/gb2d.txt; then fail "B2: active arrow did not dismiss the search keyboard"; else pass "B2: active arrow dismisses the search keyboard"; fi
     F1a=$(field_now)
     [ "$F1a" = "$F0" ] && pass "B2: active arrow leaves host field unchanged ('$F0')" || fail "B2: active arrow changed host field ('$F0' -> '$F1a')"
-    A1=$(adb logcat -d -s IMETARGET:I 2>/dev/null | tr -d '\r' | grep 'ACTION=' | tail -3)
+    A1=$(grep 'ACTION=' shots/gb2d_action_raw.txt | tail -3)
     [ -z "$A1" ] && pass "B2: active arrow delivered NO host editor action (no ACTION= marker)" || fail "B2: active arrow delivered host editor action: $A1"
     # Keep search dismissed for populated full-grid evidence and visible clipped-cell tap.
   else fail "B2: no EMOJISEARCHGO marker for the active arrow - leg not executed"; fi
@@ -1111,7 +1118,8 @@ if leg gifsearch; then
   elif [ "${WB_EXPECT_GIF:-0}" = "1" ]; then fail "B2 keyed: no GIF results within 12s on a keyed build"
   else note "INFO: no GIF results within 12s (keyless build) - results/insert not exercisable"; fi
   # check 2b: tab switch GIF->emoji releases the local capture - an emoji tap must reach the HOST
-  ET=$(pos shots/gb1.txt 'EMOJITAB')
+  snapshot gb2tabs
+  ET=$(pos shots/gb2tabs.txt 'EMOJITAB')
   if [ -n "$ET" ]; then
     adb shell input tap $ET; sleep 1.5
     snapshot gb2w
