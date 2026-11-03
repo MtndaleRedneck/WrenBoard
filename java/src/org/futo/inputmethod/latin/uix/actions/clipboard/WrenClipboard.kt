@@ -72,6 +72,7 @@ import androidx.core.net.toUri
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlin.math.abs
 import kotlinx.coroutines.launch
 import org.futo.inputmethod.latin.R
 import org.futo.inputmethod.latin.common.Constants
@@ -416,36 +417,62 @@ private fun WrenClipCard(w: WrenClipboardWindow, entry: ClipboardEntry, view: Vi
             // hold reaches the timeout and opens the same menu as the 3-dot button, and a lift before
             // either is a tap (paste). Interaction set unchanged; the winner is deterministic.
             .pointerInput(entry) {
+                // Tab's exact arbitration semantics (20:45 spec): the hold timer is cancelled
+                // by movement >3dp in ANY direction; the swipe claims at touch slop; the hold
+                // only wins if the finger stays within 3dp for the full long-press timeout;
+                // and once the Pin menu is open, no later drag in that gesture can delete.
+                val holdCancelPx = 3.dp.toPx()
                 awaitEachGesture {
                     val down = awaitFirstDown()
                     var slopCrossed = false
                     var lifted = false
+                    var cancelled = false
+                    var holdCancelledByMove = false
                     val timedOut = withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) {
-                        awaitHorizontalTouchSlopOrCancellation(down.id) { change, _ ->
-                            change.consume()
-                            slopCrossed = true
+                        while (true) {
+                            val change = awaitPointerEvent().changes.firstOrNull { it.id == down.id } ?: break
+                            if (change.changedToUp()) { lifted = true; break }
+                            if (!change.pressed) { cancelled = true; break }
+                            val dx = change.position.x - down.position.x
+                            val dy = change.position.y - down.position.y
+                            if (abs(dx) > holdCancelPx || abs(dy) > holdCancelPx) {
+                                holdCancelledByMove = true
+                                break
+                            }
                         }
-                        if (!slopCrossed) {
-                            lifted = currentEvent.changes.any { it.id == down.id && it.changedToUp() }
-                        }
-                        true
                     } == null
                     when {
-                        slopCrossed -> {
-                            dragging.value = true
-                            dragX.value = offsetX.value
-                            val finished = horizontalDrag(down.id) { change ->
-                                dragX.value += change.positionChange().x
-                                change.consume()
-                            }
-                            finishSwipe(finished)
-                        }
-                        timedOut -> {
-                            // stationary hold: the same Pin menu the 3-dot button opens
+                        cancelled -> waitForUpOrCancellation()
+                        timedOut && !lifted && !holdCancelledByMove -> {
+                            // stationary hold (within 3dp for the whole timeout): the same Pin
+                            // menu the 3-dot button opens. From here this gesture can only end -
+                            // a drag after the menu opened never deletes.
                             w.menuFor.value = entry
                             waitForUpOrCancellation()
                         }
                         lifted -> w.paste(entry, view)
+                        else -> {
+                            // hold timer cancelled by >3dp movement: the horizontal drag can
+                            // still claim at touch slop (any speed); a lift before slop pastes.
+                            awaitHorizontalTouchSlopOrCancellation(down.id) { change, _ ->
+                                change.consume()
+                                slopCrossed = true
+                            }
+                            if (!slopCrossed) {
+                                lifted = currentEvent.changes.any { it.id == down.id && it.changedToUp() }
+                            }
+                            if (slopCrossed) {
+                                dragging.value = true
+                                dragX.value = offsetX.value
+                                val finished = horizontalDrag(down.id) { change ->
+                                    dragX.value += change.positionChange().x
+                                    change.consume()
+                                }
+                                finishSwipe(finished)
+                            } else if (lifted) {
+                                w.paste(entry, view)
+                            }
+                        }
                     }
                 }
             }

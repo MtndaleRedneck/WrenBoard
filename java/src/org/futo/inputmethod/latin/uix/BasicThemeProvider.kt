@@ -391,7 +391,7 @@ class BasicThemeProvider(val context: Context, val colorScheme: KeyboardColorSch
         addIcon(KeyboardIconsSet.NAME_NEXT_KEY, R.drawable.sym_keyboard_next_lxx_light, enterKeyForeground)
         addIcon(KeyboardIconsSet.NAME_DONE_KEY, R.drawable.sym_keyboard_done_lxx_light, enterKeyForeground)
         addIcon(KeyboardIconsSet.NAME_PREVIOUS_KEY, R.drawable.sym_keyboard_previous_lxx_light, enterKeyForeground)
-        addIcon(KeyboardIconsSet.NAME_TAB_KEY, R.drawable.sym_keyboard_tab_holo_dark, onKeyColor) // TODO: Correct tint
+        addIcon(KeyboardIconsSet.NAME_TAB_KEY, R.drawable.wren_ic_tab_key, onKeyColor)
         addIcon(KeyboardIconsSet.NAME_ZWNJ_KEY, R.drawable.sym_keyboard_zwnj_lxx_dark, onKeyColor)
         addIcon(KeyboardIconsSet.NAME_ZWJ_KEY, R.drawable.sym_keyboard_zwj_lxx_dark, onPrimary)
         addIcon(KeyboardIconsSet.NAME_NUMPAD, R.drawable.numpad, onKeyColor)
