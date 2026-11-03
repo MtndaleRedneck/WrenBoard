@@ -68,6 +68,9 @@ tapcode() { local xy; xy=$(kxy code "$1") || { fail "no key with code $1 in geom
 type_word() { local w="$1" i; for ((i=0;i<${#w};i++)); do tapk "${w:$i:1}" || return 1; done; }
 field() { sleep 0.4; adb logcat -d -s IMETARGET:I 2>/dev/null | tr -d '\r' | grep 'FIELD=\|CLEARED' | tail -1 | sed -n 's/.*IMETARGET: FIELD=//p'; }
 clear_field() { adb shell am broadcast -a com.wrenboard.imetarget.CLEAR -p "$TPKG" >/dev/null 2>&1; sleep 0.8; }
+# On-demand current-content read (fixture REPORT): field() alone reads the last CHANGE marker,
+# which an unchanged field does not emit after a logcat clear (b2-check 41680568216 false FAILs).
+field_now() { adb shell am broadcast -a com.wrenboard.imetarget.REPORT -p "$TPKG" >/dev/null 2>&1; sleep 0.5; adb logcat -d -s IMETARGET:I 2>/dev/null | tr -d '\r' | grep 'FIELD=' | tail -1 | sed -n 's/.*IMETARGET: FIELD=//p'; }
 sugg() { adb logcat -d -s WBDBG:I | tr -d '\r' > shots/_s.txt; python3 tools/wb12_kv.py shots/_s.txt sugg; }
 elem() { geom "$1" keep >/dev/null; python3 tools/wb12_kv.py shots/geom_$1.txt kbd elementId; }
 focus_target() {
@@ -1059,7 +1062,7 @@ if leg gifsearch; then
   # check 1+2: typing lands in the local GIF query; host field stays byte-unchanged
   for ch in c a t; do XY=$(python3 tools/wb12_kv.py shots/geom_gb1.txt xy KEY label "$ch") && adb shell input tap $XY; sleep 0.3; done
   sleep 1.0
-  F1=$(field); note "host field after GIF-search typing: '$F1'"
+  F1=$(field_now); note "host field after GIF-search typing: '$F1'"
   [ "$F1" = "$F0" ] && pass "B2: typing in GIF search leaves host field byte-unchanged ('$F0')" || fail "B2: host field changed while typing in GIF search ('$F0' -> '$F1')"
   shot gb2_gif_query_typed
   # check 2b: tab switch GIF->emoji releases the local capture - an emoji tap must reach the HOST
@@ -1072,7 +1075,7 @@ if leg gifsearch; then
     GW=$(echo "$G" | sed -n 's/.* w=\([0-9]*\).*/\1/p'); GH=$(echo "$G" | sed -n 's/.* h=\([0-9]*\).*/\1/p')
     if [ -n "$GW" ]; then
       adb shell input tap $((GX-GW/2+GW/16)) $((GY-GH/2+503*${WB_DENSITY:-420}/1600/2)); sleep 0.8
-      FT=$(field); note "host field after emoji tap post-tab-switch: '$FT'"
+      FT=$(field_now); note "host field after emoji tap post-tab-switch: '$FT'"
       case "$FT" in "$F0"?*) pass "B2: tab switch GIF->emoji releases local capture (emoji reached host)";; *) fail "B2: after tab switch host field is '$FT' (wanted '$F0'+emoji)";; esac
     else fail "B2: no EMOJIGRID after tab switch"; fi
     # back to the GIF tab for the arrow check
@@ -1081,7 +1084,7 @@ if leg gifsearch; then
   # check 3: the round arrow must not deliver ENTER to the host (keyless GIF tab: innocuous close)
   if [ -n "$GA" ]; then
     adb logcat -c; adb shell input tap $GA; sleep 1.2
-    F2=$(field); note "host field after arrow: '$F2'"
+    F2=$(field_now); note "host field after arrow: '$F2'"
     [ "$F2" = "$F0" ] && pass "B2: round arrow leaves host field unchanged ('$F0')" || fail "B2: round arrow changed host field ('$F0' -> '$F2')"
     A2=$(adb logcat -d -s IMETARGET:I 2>/dev/null | tr -d '\r' | grep 'ACTION=' | tail -3)
     if [ -z "$A2" ]; then pass "B2: round arrow delivered NO host editor action (no ACTION= marker)"
