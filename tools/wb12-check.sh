@@ -1152,13 +1152,43 @@ if leg clipboard; then
     adb shell "input motionevent UP $((X+MV)) $Y"; sleep 1.2; wlog cl5n
     SLOP=$(grep -o 'slop=[0-9]*' shots/cl5n.txt | head -1 | cut -d= -f2)
     HC=$(grep -o 'holdCancel=[0-9]*' shots/cl5n.txt | head -1 | cut -d= -f2)
-    note "3dp-cancel move: ${MV}px horizontal at density ${DENS:-?} (trace slop=${SLOP:-?} holdCancel=${HC:-?})"
-    if [ -n "$SLOP" ] && [ -n "$HC" ] && { [ "$MV" -le "$HC" ] || [ "$MV" -ge "$SLOP" ]; }; then
+    DX=$(grep -o 'accDx=-\?[0-9]*' shots/cl5n.txt | sed 's/accDx=//' | awk '{if($1<0)$1=-$1; if($1>m)m=$1} END{print m+0}')
+    note "3dp-cancel move: ${MV}px horizontal at density ${DENS:-?} (trace slop=${SLOP:-?} holdCancel=${HC:-?} max|accDx|=${DX})"
+    if [ -z "$SLOP" ] || [ -z "$HC" ]; then
+      fail "3dp-cancel precondition: handler trace thresholds missing (slop=${SLOP:-?} holdCancel=${HC:-?}) - leg unverified"
+    elif [ "$MV" -le "$HC" ] || [ "$MV" -ge "$SLOP" ]; then
       fail "3dp-cancel precondition: ${MV}px move not strictly between holdCancel=${HC} and slop=${SLOP}"
+    elif [ "${DX:-0}" -le "$HC" ]; then
+      fail "3dp-cancel precondition: horizontal move not delivered to the handler (max |accDx| ${DX}px <= holdCancel ${HC}px)"
     elif grep -q 'WINDOW CLIPMENU' shots/cl5n.txt; then fail "3dp-cancel: Pin menu opened after a >3dp move (hold timer was not cancelled)"
     else F=$(field); note "field after move-hold-lift: ${F:0:80}"
       [ -n "$F" ] && pass "movement >3dp cancels the hold timer; the lift still pastes" || fail "3dp-cancel: the lift after the cancelled hold pasted nothing"; fi
   else fail "no card position for the 3dp-cancel leg"; fi
+  # Near-threshold vertical boundary (retains the old fixed-24px-vertical case density-scaled):
+  # 12dp vertical is strictly ABOVE touch slop at the gate densities, so the list must own the
+  # gesture as a scroll: no paste, no delete, no menu. Delivery proven by the handler trace.
+  adb logcat -c; dbg close 0.8; focus_target; clear_field; dbg "open:clipboard_history" 2.0; wlog cl5p
+  C=$(pos shots/cl5p.txt 'CLIPCARD i=1 ')
+  if [ -n "$C" ]; then read -r X Y <<< "$C"
+    DENS=$(adb shell wm density 2>/dev/null | tr -d '\r' | grep -o '[0-9]*' | tail -1)
+    MVV=$(( ${DENS:-420} * 12 / 160 ))
+    adb logcat -c
+    adb shell "input motionevent DOWN $X $Y"; sleep 0.1
+    adb shell "input motionevent MOVE $X $((Y-MVV))"; sleep 0.3
+    adb shell "input motionevent UP $X $((Y-MVV))"; sleep 1.2; wlog cl5q; shot cl05q_near_threshold_vertical
+    SLOPQ=$(grep -o 'slop=[0-9]*' shots/cl5q.txt | head -1 | cut -d= -f2)
+    EVQ=$(grep 'phase=' shots/cl5q.txt | grep -o 'accDy=-\?[0-9]*' | sed 's/accDy=//' | awk '{if($1<0)$1=-$1; if($1>m)m=$1} END{print m+0}')
+    note "near-threshold vertical: ${MVV}px at density ${DENS:-?} (trace slop=${SLOPQ:-?} max|accDy|=${EVQ})"
+    if [ -z "$SLOPQ" ]; then fail "near-threshold vertical: handler trace thresholds missing - leg unverified"
+    elif [ "$MVV" -le "$SLOPQ" ]; then fail "near-threshold vertical precondition: ${MVV}px not above slop=${SLOPQ}px"
+    elif [ "${EVQ:-0}" -le "$SLOPQ" ]; then fail "near-threshold vertical: gesture not delivered above slop (max |accDy| ${EVQ}px, slop ${SLOPQ}px)"
+    else F=$(field)
+      if [ -n "$F" ]; then fail "near-threshold vertical (>slop): pasted into the field ('${F:0:40}')"
+      elif grep -q 'CLIP removed=' shots/cl5q.txt; then fail "near-threshold vertical (>slop): deleted a clip"
+      elif grep -q 'WINDOW CLIPMENU' shots/cl5q.txt; then fail "near-threshold vertical (>slop): opened the Pin menu"
+      else pass "near-threshold vertical ${MVV}px (>slop): scroll-arbitrated, no paste/delete/menu"; fi
+    fi
+  else fail "no card position for the near-threshold vertical leg"; fi
   # Menu-then-drag leg (Tab's exact arbitration spec, 20:45): once the stationary hold has opened
   # the Pin menu, a later drag in the same gesture must never delete the clip.
   adb logcat -c; dbg close 0.8; dbg "open:clipboard_history" 2.0; wlog cl5k
@@ -1224,10 +1254,10 @@ if leg clipboard; then
     adb logcat -c; adb shell input swipe $X $Y $X $((Y-700)) 80
     sleep 1.2; wlog clv2; shot cl06w_fast_fling_scroll
     EV=$(vev clv2); F=$(field)
-    # Delivery floor for a coalesced 80ms fling: the handler's own accumulation crossing touch
-    # slop (parsed from its DOWN trace) proves delivery; the 60px device-paced floor cannot fit
-    # a coalesced fast delivery (rev32 observed 43-52px at slop=21, correctly scroll-arbitrated).
-    # This proves delivery + no paste/delete/menu only - not the UP-coalescing path shape.
+    # Delivery floor for the 80ms fling: the handler's own accumulation crossing touch slop
+    # (parsed from its DOWN trace) proves delivery. Observed on rev32 under this runner: 43-52px
+    # at slop=21 with correct scroll-arbitration, below the v1/v3 device-paced 60px floor. This
+    # proves delivery + no paste/delete/menu only - not the UP-coalescing path shape.
     VSLOP=$(grep -o 'slop=[0-9]*' shots/clv2.txt | head -1 | cut -d= -f2)
     VF=60; [ -n "$VSLOP" ] && VF=$((VSLOP + 1))
     note "  v2 fast fling (80ms requested); max |accDy| at handler: ${EV}px (trace slop=${VSLOP:-?}, floor=${VF})"; note "  field after fling: '${F:0:40}'"
@@ -1295,20 +1325,24 @@ if leg saveword; then
   # adb input text needs %s for a literal space; a raw space dropped the second canary on
   # rev30-32 and made the priority precondition degenerate. Field content verified below.
   adb shell input text "$SWP%s$SWT"; sleep 0.8
-  F=$(field); [ "$F" = "$SWP $SWT" ] || fail "positive precondition: field holds '${F:0:40}' (wanted both canaries)"
+  PRE0=0; F=$(field); if [ "$F" = "$SWP $SWT" ]; then PRE0=1; else fail "positive precondition: field holds '${F:0:40}' (wanted both canaries)"; fi
   adb shell am broadcast -a com.wrenboard.imetarget.SELECT --ei start 0 --ei end ${#SWP} -p "$TPKG" >/dev/null 2>&1; sleep 0.8
   # Chip lives 1.2s: shoot at ~0.4s to capture the branch verdict, again at 1.5s for the field state.
   adb logcat -c; dbg "open:save_word" 0.4; shot sw01_chip; sleep 1.1; shot sw01_selection_saved
   # Raw receiver-side evidence: any "CMD ... failed" exception from the action path lands here.
   adb logcat -d -s WBDBG:I 2>/dev/null | tr -d '\r' > shots/sw01_wbdbg_raw.txt
-  dict_has "$SWP" "positive"; rp=$?
-  dict_has "$SWT" "positive"; rt=$?
   # Raw provider payload (canary tokens only) preserved against row-shape false negatives.
   adb shell content query --uri content://user_dictionary/words --where "word='$SWP'" > shots/sw01_provider_raw.txt 2>&1
+  if [ "$PRE0" != 1 ]; then
+    note "INFO: saveword positive/priority UNQUALIFIED - two-canary precondition failed above"
+  else
+  dict_has "$SWP" "positive"; rp=$?
+  dict_has "$SWT" "positive"; rt=$?
   if [ $rp -eq 0 ] && [ $rt -eq 1 ]; then
     POS_OK=1; pass "save word saves the SELECTED word over the nonempty last-typed word (priority + liveness)"
   elif [ $rt -eq 0 ]; then fail "priority: the LAST-TYPED word was saved over the explicit selection"
   elif [ $rp -eq 1 ]; then fail "positive control: nothing was saved to the user dictionary (action path dead; negatives unqualified)"; fi
+  fi
   dictdel "$SWP"; dictdel "$SWT"
   negcheck() { # <token> <label> <precondition 0/1>
     local tok="$1" lbl="$2" pre="$3"
