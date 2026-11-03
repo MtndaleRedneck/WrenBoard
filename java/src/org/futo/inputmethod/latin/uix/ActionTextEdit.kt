@@ -178,6 +178,7 @@ private fun GenericEditTextCompose(
     textSize: TextUnit,
     placeholder: String?,
     autocorrect: Boolean,
+    noPersonalizedLearning: Boolean = false,
     typeface: Typeface? = null,
     modifier: Modifier = Modifier,
     onOverride: ((InputConnection, EditorInfo) -> Unit)? = null,
@@ -211,6 +212,7 @@ private fun GenericEditTextCompose(
     val editText = remember {
         ActionEditText(context, inspection = inspection).apply {
             this.inputType = inputType
+            if (noPersonalizedLearning) imeOptions = imeOptions or EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING
 
             setTextChangeCallback { text.value = it }
 
@@ -241,6 +243,7 @@ private fun GenericEditTextCompose(
                 val editorInfo = EditorInfo().apply {
                     this.inputType = inputType
                     this.packageName = context.packageName
+                    if (noPersonalizedLearning) imeOptions = imeOptions or EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING
                 }
                 onCreateInputConnection(editorInfo)
 
@@ -315,6 +318,7 @@ fun ActionTextEditor(
     textSize: TextUnit = 16.sp,
     typeface: Typeface? = null,
     autocorrect: Boolean = false,
+    noPersonalizedLearning: Boolean = false,
     modifier: Modifier = Modifier.fillMaxSize(),
     afterOverride: (() -> Unit)? = null,
     afterUnOverride: ((Boolean) -> Unit)? = null,
@@ -330,6 +334,7 @@ fun ActionTextEditor(
         textSize = textSize,
         typeface = typeface,
         autocorrect = autocorrect,
+        noPersonalizedLearning = noPersonalizedLearning,
         placeholder = placeholder,
         modifier = modifier,
         autofocus = autofocus,
