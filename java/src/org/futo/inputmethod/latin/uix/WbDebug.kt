@@ -63,8 +63,16 @@ object WbDebug {
         Log.i(TAG, "WINDOW $what")
     }
 
+    /** Set only by the test harness (synthetictrace:on via the WBDBG broadcast) on a test
+     *  device. While off, suggestion-strip logging carries counts only, never user text. */
+    @Volatile var syntheticTrace = false
+
     fun logSuggestions(words: SuggestedWords?) {
         if (!BuildConfig.DEBUG) return
+        if (!syntheticTrace) {
+            Log.i(TAG, "SUGG [n=${words?.size() ?: 0}]")
+            return
+        }
         val list = words?.mSuggestedWordInfoList?.joinToString("|") { it.mWord } ?: ""
         Log.i(TAG, "SUGG [$list]")
     }
@@ -84,6 +92,8 @@ object WbDebug {
                         cmd == "expand" -> ime.uixManager.debugSetActionsExpanded(true)
                         cmd == "collapse" -> ime.uixManager.debugSetActionsExpanded(false)
                         cmd == "close" -> ime.uixManager.closeActionWindow()
+                        cmd == "synthetictrace:on" -> syntheticTrace = true
+                        cmd == "synthetictrace:off" -> syntheticTrace = false
                         cmd.startsWith("prefbool:") -> {
                             val kv = cmd.removePrefix("prefbool:").split("=")
                             PreferenceUtils.getDefaultSharedPreferences(ime).edit()
