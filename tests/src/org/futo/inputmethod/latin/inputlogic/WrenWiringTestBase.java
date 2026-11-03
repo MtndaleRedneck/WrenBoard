@@ -21,6 +21,7 @@ import org.futo.inputmethod.latin.DictionaryFacilitator;
 import org.futo.inputmethod.latin.DictionaryFacilitatorImpl;
 import org.futo.inputmethod.latin.ExpandableBinaryDictionary;
 import org.futo.inputmethod.latin.InputTestsBase;
+import org.futo.inputmethod.latin.LatinIME;
 import org.futo.inputmethod.latin.LatinIMELegacy;
 import org.futo.inputmethod.latin.NgramContext;
 import org.futo.inputmethod.latin.RichInputConnection;
@@ -29,7 +30,13 @@ import org.futo.inputmethod.latin.settings.Settings;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import android.os.SystemClock;
+
+import androidx.test.InstrumentationRegistry;
+
+import java.io.File;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.TimeUnit;
@@ -136,21 +143,30 @@ public class WrenWiringTestBase extends InputTestsBase {
         // GeneralIME constructs InputLogic with the one shared facilitator instance;
         // swap both references to the same recorder so the whole path is observed and
         // writes still delegate to the real dictionaries.
-        mRecorder = new RecordingFacilitator();
         mGeneralFacilitatorField = getField(GeneralIME.class, "dictionaryFacilitator");
         mOriginalGeneralFacilitator = (DictionaryFacilitator) mGeneralFacilitatorField.get(mGeneralIme);
-        mGeneralFacilitatorField.set(mGeneralIme, mRecorder);
         mLogicFacilitatorField = getField(InputLogic.class, "mDictionaryFacilitator");
         mOriginalLogicFacilitator = (DictionaryFacilitator) mLogicFacilitatorField.get(mInputLogic);
+        // Clean-history reset, fail-closed:
+        // 1) LatinIMELegacy.clearPersonalizedDictionariesForTest() is an empty stub in this
+        //    tree (LatinIMELegacy.java:1006-1008, body is a TODO), so use the real mechanism
+        //    on the original facilitator: clearUserHistoryDictionary deletes the on-disk
+        //    history file (ExpandableBinaryDictionary.clear -> removeBinaryDictionaryLocked).
+        // 2) The deletion runs on the dictionary write queue - await the actual deletion by
+        //    polling the file itself; a fixed sleep is not proof. Fails the test if the file
+        //    survives the deadline.
+        // 3) Only then is the recorder constructed and loaded: a fresh load against an
+        //    absent file is a genuinely empty history. The real-wire test additionally
+        //    asserts dynamic absence of the fixture word before learning.
+        mOriginalGeneralFacilitator.clearUserHistoryDictionary(getContext());
+        awaitUserHistoryFileAbsent(Locale.US, 10_000);
+        mRecorder = new RecordingFacilitator();
+        mGeneralFacilitatorField.set(mGeneralIme, mRecorder);
         mLogicFacilitatorField.set(mInputLogic, mRecorder);
-        // Reset source for a clean history: clear the personalized dictionaries BEFORE
-        // loading dictionaries against the recorder, so each test starts with an empty
-        // user history regardless of what earlier tests on this device learned.
-        final Method clear = LatinIMELegacy.class.getDeclaredMethod(
-                "clearPersonalizedDictionariesForTest");
-        clear.setAccessible(true);
-        clear.invoke(mLatinIMELegacy);
         changeLanguage("en_US");
+        // changeLanguage resets the legacy-side facilitator, not the recorder; load the
+        // recorder's dictionaries explicitly against the just-cleared file state.
+        resetFacilitatorLocales(Collections.singletonList(Locale.US));
     }
 
     @Override
@@ -162,6 +178,17 @@ public class WrenWiringTestBase extends InputTestsBase {
             mLogicFacilitatorField.set(mInputLogic, mOriginalLogicFacilitator);
         }
         super.tearDown();
+        // ServiceTestCase.tearDown never destroys the service here: startService/bindService
+        // are never called, so mServiceCreated stays false and shutdownService() is a no-op
+        // (AOSP frameworks/base ServiceTestCase source). Destroy it explicitly - on the main
+        // thread because onDestroy mutates the LifecycleRegistry - so the coroutine jobs and
+        // receivers registered in onCreate do not leak into the next test.
+        InstrumentationRegistry.getInstrumentation().runOnMainSync(new Runnable() {
+            @Override public void run() {
+                final LatinIME service = getService();
+                if (service != null) service.onDestroy();
+            }
+        });
     }
 
     /** The exact call the abandon branch of commitCurrentAutoCorrection makes. */
@@ -258,5 +285,24 @@ public class WrenWiringTestBase extends InputTestsBase {
             }
         }
         return false;
+    }
+
+    /**
+     * Fails closed: waits until the on-disk user-history file for the locale is actually
+     * gone, i.e. the clear's queued deletion has run. The file name mirrors
+     * UserHistoryDictionary.getUserHistoryDictName + ExpandableBinaryDictionary.getDictFile
+     * ("UserHistoryDictionary.<locale>.dict" in filesDir).
+     */
+    protected void awaitUserHistoryFileAbsent(final Locale locale, final long timeoutMs) {
+        final File f = new File(getContext().getFilesDir(),
+                "UserHistoryDictionary." + locale.toString() + ".dict");
+        final long deadline = SystemClock.uptimeMillis() + timeoutMs;
+        while (f.exists() && SystemClock.uptimeMillis() < deadline) {
+            sleep(50);
+        }
+        if (f.exists()) {
+            fail("user-history file still present " + timeoutMs + "ms after clear: "
+                    + f.getName());
+        }
     }
 }
