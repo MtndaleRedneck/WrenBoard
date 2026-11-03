@@ -29,6 +29,8 @@ import android.text.style.CharacterStyle;
 import android.text.style.SuggestionSpan;
 import android.util.Log;
 import android.view.LayoutInflater;
+
+import org.futo.inputmethod.keyboard.KeyboardTheme;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.inputmethod.EditorInfo;
@@ -228,12 +230,19 @@ public class InputTestsBase extends ServiceTestCase<LatinIME> {
         });
         EditorInfo ei = new EditorInfo();
         final InputConnection ic = mEditText.onCreateInputConnection(ei);
-        // The keyboard view hierarchy requires the SERVICE as its context: MainKeyboardView
-        // walks the context for DynamicThemeProviderOwner (implemented by LatinIME), and the
-        // androidx.window layout listener requires a UI context (an InputMethodService
-        // qualifies). The mock test context satisfies neither and crashes the process.
-        final LayoutInflater inflater = LayoutInflater.from(getService());
-        final ViewGroup vg = new FrameLayout(getService());
+        // Mirror production exactly (KeyboardSwitcher.java:396-400): wrap the SERVICE in a
+        // ContextThemeWrapper carrying the keyboard theme and inflate with that context.
+        // LayoutInflater.from(getService()) is NOT sufficient under ServiceTestCase: the
+        // service's base context is the test's mock context, so getSystemService returns a
+        // mock-context inflater (rev23 run 41646020391 re-threw "Could not find
+        // DynamicThemeProviderOwner"). The explicit wrapper guarantees the chain the view
+        // hierarchy requires: wrapper -> LatinIME service, which implements
+        // DynamicThemeProviderOwner and is an InputMethodService (the UI context the
+        // androidx.window layout listener unwraps to).
+        final android.view.ContextThemeWrapper themeContext = new android.view.ContextThemeWrapper(
+                getService(), KeyboardTheme.getKeyboardTheme(getService()).mThemeId);
+        final LayoutInflater inflater = LayoutInflater.from(themeContext);
+        final ViewGroup vg = new FrameLayout(themeContext);
         mInputView = inflater.inflate(R.layout.input_view, vg);
         ei = enrichEditorInfo(ei);
         getService().onCreateInputMethodInterface().startInput(ic, ei);
