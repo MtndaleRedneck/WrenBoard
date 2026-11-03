@@ -1371,10 +1371,12 @@ if leg saveword; then
   adb shell am broadcast -a com.wrenboard.imetarget.PASSWORD --ez on false -p "$TPKG" >/dev/null 2>&1; sleep 1.0
   # Distinct privacy classification: visible password is NOT in isPasswordInputType.
   adb shell am broadcast -a com.wrenboard.imetarget.VISIBLEPASSWORD --ez on true -p "$TPKG" >/dev/null 2>&1
+  VP_APPLIED=$(adb logcat -d -s IMETARGET:I | grep 'VISIBLEPASSWORD=ON APPLIED' | tail -1)
+  [ -n "$VP_APPLIED" ] || fail "visible-password mode not applied"
   sleep 1; tap_field; clear_field
   adb shell input text zqxwvisible; sleep 0.5
   VP_PRE=0
-  [ "$(field_now)" = "zqxwvisible" ] && VP_PRE=1 || fail "visible-password fixture canary missing"
+  [ -n "$VP_APPLIED" ] && [ "$(field)" = "zqxwvisible" ] && VP_PRE=1 || fail "visible-password fixture canary missing"
   adb logcat -c; dbg "open:save_word" 0.4; shot sw_visible_password_blocked
   # Source is guarded before text retrieval; runtime refusal still needs the positive
   # persistence control before the provider-negative can qualify.
