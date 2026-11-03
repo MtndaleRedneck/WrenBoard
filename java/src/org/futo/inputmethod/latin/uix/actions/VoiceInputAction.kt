@@ -22,6 +22,7 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.yield
 import org.futo.inputmethod.latin.ATLCompat
@@ -239,13 +240,11 @@ private class VoiceInputActionWindow(
             return@launch
         }
 
-        this@VoiceInputActionWindow.recognizerView.value = recognizerView
-
-        //yield()
-        recognizerView.reset()
-
-        //yield()
-        recognizerView.start()
+        withContext(Dispatchers.Main) {
+            this@VoiceInputActionWindow.recognizerView.value = recognizerView
+            recognizerView.reset()
+            recognizerView.start()
+        }
     }
 
     private var inputTransaction = manager.createInputTransaction()
