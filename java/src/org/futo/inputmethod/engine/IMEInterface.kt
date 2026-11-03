@@ -89,6 +89,14 @@ interface IMEInterface {
     fun onMovingCursorLockEvent(canMoveCursor: Boolean)
     fun clearUserHistoryDictionaries()
 
+    /**
+     * Counterpart to [clearUserHistoryDictionaries] for personalization being re-enabled:
+     * rebuild whatever the clear tore down (or the facilitator excluded) so learning
+     * resumes in the current session. Implementations whose clear leaves them functional
+     * with an empty store keep this as a no-op.
+     */
+    fun recreateUserHistoryDictionaries()
+
     /** Refresh as a result of blacklist update */
     fun requestSuggestionRefresh()
 

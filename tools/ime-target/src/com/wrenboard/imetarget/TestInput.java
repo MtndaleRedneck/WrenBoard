@@ -24,8 +24,24 @@ import android.widget.LinearLayout;
 // White full-size EditText + control buttons + broadcast control + logcat text mirror.
 // Not part of the released app.
 public class TestInput extends Activity {
+    private static final String PREFS = "fixture";
+    private static final String KEY_MODE = "mode";
+    private static final String MODE_NORMAL = "NORMAL";
+    private static final String MODE_NOLEARN = "NOLEARN";
+    private static final String MODE_NOCORRECT = "NOCORRECT";
+
     private EditText edit;
     private final Handler main = new Handler(Looper.getMainLooper());
+
+    // Mode changes persist and RECREATE the activity: a live setImeOptions on a focused
+    // field never renegotiates the IME session (rev29 neg4 executed: the NO_PERSONALIZED_
+    // LEARNING flag was never seen). Persisted + applied in onCreate, the EditorInfo is
+    // fresh at onStartInput. MODE=... APPLIED is the harness readiness marker.
+    private void setMode(String mode) {
+        getSharedPreferences(PREFS, MODE_PRIVATE).edit().putString(KEY_MODE, mode).apply();
+        Log.i("IMETARGET", "MODE_SET=" + mode);
+        recreate();
+    }
 
     private final BroadcastReceiver control = new BroadcastReceiver() {
         @Override public void onReceive(Context context, Intent intent) {
@@ -51,12 +67,10 @@ public class TestInput extends Activity {
                         Log.i("IMETARGET", "PASSWORD=" + (on ? "ON" : "OFF"));
                     } else if ("com.wrenboard.imetarget.NOLEARN".equals(a)) {
                         boolean on = intent.getBooleanExtra("on", true);
-                        edit.setImeOptions(on
-                                ? (android.view.inputmethod.EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING
-                                        | android.view.inputmethod.EditorInfo.IME_ACTION_DONE)
-                                : android.view.inputmethod.EditorInfo.IME_ACTION_DONE);
-                        edit.setText("");
-                        Log.i("IMETARGET", "NOLEARN=" + (on ? "ON" : "OFF"));
+                        setMode(on ? MODE_NOLEARN : MODE_NORMAL);
+                    } else if ("com.wrenboard.imetarget.NOCORRECT".equals(a)) {
+                        boolean on = intent.getBooleanExtra("on", true);
+                        setMode(on ? MODE_NOCORRECT : MODE_NORMAL);
                     } else if ("com.wrenboard.imetarget.SETCLIP".equals(a)) {
                         ClipboardManager cm =
                                 (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
@@ -109,11 +123,26 @@ public class TestInput extends Activity {
         f.addAction("com.wrenboard.imetarget.CAPSENT");
         f.addAction("com.wrenboard.imetarget.PASSWORD");
         f.addAction("com.wrenboard.imetarget.NOLEARN");
+        f.addAction("com.wrenboard.imetarget.NOCORRECT");
         f.addAction("com.wrenboard.imetarget.SETCLIP");
         registerReceiver(control, f, Context.RECEIVER_EXPORTED);
 
+        String mode = getSharedPreferences(PREFS, MODE_PRIVATE).getString(KEY_MODE, MODE_NORMAL);
+        if (MODE_NOLEARN.equals(mode)) {
+            edit.setImeOptions(android.view.inputmethod.EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING
+                    | android.view.inputmethod.EditorInfo.IME_ACTION_DONE);
+        } else if (MODE_NOCORRECT.equals(mode)) {
+            // Email-variation field: mInputTypeNoAutoCorrect=true via isEmailVariation
+            // (InputAttributes) while suggestions stay shown - the production
+            // autocorrect-disabled-field condition the learn gate actually reads. The user
+            // pref_key_auto_correction toggle never reaches that gate (rev29 executed).
+            edit.setInputType(android.text.InputType.TYPE_CLASS_TEXT
+                    | android.text.InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS);
+        }
+
         setContentView(root);
         edit.requestFocus();
+        Log.i("IMETARGET", "MODE=" + mode + " APPLIED");
         Log.i("IMETARGET", "READY");
     }
 

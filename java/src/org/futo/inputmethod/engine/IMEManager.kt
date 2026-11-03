@@ -164,6 +164,23 @@ class IMEManager(
         service.deferSetSetting(service, ImesEverUsedWithDictionaryPersonalization.key, emptySet())
     }
 
+    // Every cached IME instance can hold a dictionary group built while personalization was
+    // off: the OFF direction tears them all down, and a cached instance's next activation
+    // only runs the NON-forced reset, which early-returns on isForLocales/isForAccount -
+    // neither carries personalization state - so an active-only reset would leave inactive
+    // cached instances stale. (Never-instantiated kinds build fresh with the current pref:
+    // their isForLocales is false at first onStartInput, so the reset proceeds.)
+    fun recreateUserHistoryDictionaries() {
+        if(!created) {
+            throwIfDebug(IllegalStateException("Cannot recreate user history dictionaries before being created."))
+            return
+        }
+
+        if(!helper.context.isDirectBootUnlocked) return
+
+        imes.values.forEach { it.recreateUserHistoryDictionaries() }
+    }
+
     private var currentActionInputTransactionIME: ActionInputTransactionIME? = null
     fun createInputTransaction(): ActionInputTransaction {
         if(currentActionInputTransactionIME != null) {

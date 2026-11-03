@@ -215,7 +215,18 @@ if leg keyboard; then
   wait_wq() { local want=$1 i; for i in $(seq 1 25); do [ "$(wqcount)" -ge "$want" ] && return 0; sleep 1; done; return 1; }
   entercount() { adb logcat -d -s WBDBG:I 2>/dev/null | tr -d '\r' | grep -c "STARTER learnEnter"; }
   skipcount() { adb logcat -d -s WBDBG:I 2>/dev/null | tr -d '\r' | grep -c "STARTER learnSkip id=[0-9]* reason=$1"; }
-  privnote() { adb logcat -d -s WBDBG:I 2>/dev/null | tr -d '\r' | grep -oE 'STARTER (learnEnter|learnSkip|writeQueued)( id=[0-9]+)?( reason=[a-zA-Z]+)?' | sed 's/ id=[0-9]*//' | sort | uniq -c | sed 's/^ *//' | tr '\n' ' '; }
+  privnote() { adb logcat -d -s WBDBG:I 2>/dev/null | tr -d '\r' | grep -oE 'STARTER (learnEnter|learnSkip|writeQueued|drop)( id=[0-9]+)?( reason=[a-zA-Z]+)?' | sed 's/ id=[0-9]*//' | sort | uniq -c | sed 's/^ *//' | tr '\n' ' '; }
+  # Dropped submissions (drop reason=noHistoryDict hid for 3 revisions because nothing counted
+  # them): control/learning legs must drop ZERO; negatives must skip before ever reaching a drop.
+  dropcount() { adb logcat -d -s WBDBG:I 2>/dev/null | tr -d '\r' | grep -c "STARTER drop id="; }
+  # Bounded wait for the fixture to apply a persisted mode (it recreates itself so the IME
+  # renegotiates with fresh attributes; live setImeOptions never renegotiated - rev29 neg4).
+  wait_mode() { local want=$1 i; for i in $(seq 1 12); do [ "$(adb logcat -d -s IMETARGET:I 2>/dev/null | tr -d '\r' | grep -oE 'MODE=[A-Z]+ APPLIED' | tail -1)" = "MODE=$want APPLIED" ] && return 0; sleep 1; done; return 1; }
+  # Bounded wait for the app's OWN keyboard dump to report the expected layout, then promote
+  # that dump to the shared tap geometry. Anchors post-addlang legs to app-visible layout state:
+  # kills both pre-reload suggestion reads (rev29 fr absent-before '') and stale-geometry taps
+  # (rev29 shift leg typed 'a' at azerty coordinates after the board had reloaded to qwerty).
+  wait_layout() { local want=$1 i; for i in $(seq 1 10); do geom wait_layout keep >/dev/null 2>&1; [ "$(python3 tools/wb12_kv.py shots/geom_wait_layout.txt kbd layout 2>/dev/null)" = "$want" ] && { cp shots/geom_wait_layout.txt shots/geom.txt; return 0; }; sleep 1; done; return 1; }
   # Bounded marker-settle: poll until any terminal learn marker appears (max 8s) so a delayed
   # submission can't be erased by the next window's log clear. writeQueued is a SUBMISSION
   # marker; stored completion is proven by the post-restoration production readback below.
@@ -241,8 +252,17 @@ if leg keyboard; then
   [ "$SN" = "n=3" ] && pass "neg1 post-restoration readback: strip is 3-word fallback, token not retrievable ($SN)" || fail "neg1 post-restoration readback: strip '$SN' (wanted n=3)"
   shot k01g_neg1_strip_fallback_pixels
 
-  # negative 2: autocorrect off (personalization ON -> expected skip reason autocorrectOff)
-  dbg "prefbool:pref_key_auto_correction=false" 1.0; adb shell input keyevent 4; sleep 0.6; focus_target
+  # negative 2: autocorrect-DISABLED FIELD (email variation -> mInputTypeNoAutoCorrect=true,
+  # suggestions still shown). The learn gate's autocorrectOff branch reads
+  # mAutoCorrectionEnabledPerTextFieldSettings, which is field-driven (InputAttributes:
+  # email/URI/filter variations, suppressed-suggestion fields); the user
+  # pref_key_auto_correction toggle never reaches this gate (rev29 executed: enter=3 skip=0
+  # after the prefbool write). The fixture persists the mode and restarts so the IME
+  # renegotiates; personalization stays ON.
+  focus_target
+  adb shell am broadcast -a com.wrenboard.imetarget.NOCORRECT --ez on true -p "$TPKG" >/dev/null 2>&1
+  wait_mode NOCORRECT || fail "neg2: fixture did not apply NOCORRECT mode"
+  adb shell input keyevent 4; sleep 0.8; tap_field
   adb logcat -c
   for i in 1 2 3; do clear_field; type_word jkqzxv; tapcode 32; sleep 0.8; done
   clear_field
@@ -250,7 +270,9 @@ if leg keyboard; then
   WQ=$(wqcount); PN=$(privnote); SK=$(skipcount autocorrectOff); EN=$(entercount)
   note "neg2 autocorrect-off (3 commits): queued=$WQ enter=$EN skip[autocorrectOff]=$SK markers: $PN"
   [ "$EN" -ge 3 ] && [ "$SK" -ge 3 ] && [ "$WQ" -eq 0 ] && pass "privacy neg2: all 3 commits entered and were skipped reason=autocorrectOff, zero writes queued in-window" || fail "privacy neg2: enter=$EN skip=$SK queued=$WQ (wanted >=3,>=3,0) [$PN]"
-  dbg "prefbool:pref_key_auto_correction=true" 1.0; adb shell input keyevent 4; sleep 0.6; focus_target; sleep 2
+  adb shell am broadcast -a com.wrenboard.imetarget.NOCORRECT --ez on false -p "$TPKG" >/dev/null 2>&1
+  wait_mode NORMAL || fail "neg2: fixture did not restore NORMAL mode"
+  adb shell input keyevent 4; sleep 0.8; focus_target; sleep 2
   verify_empty || fail "neg2: field not empty at retrieval read"
   SN=$(sugg)
   [ "$SN" = "n=3" ] && pass "neg2 post-restoration readback: strip is 3-word fallback, token not retrievable ($SN)" || fail "neg2 post-restoration readback: strip '$SN' (wanted n=3)"
@@ -277,7 +299,8 @@ if leg keyboard; then
   # negative 4: explicit IME_FLAG_NO_PERSONALIZED_LEARNING, otherwise normal field, gates ON
   # -> expected skip reason noLearning via the flag (fresh EditorInfo, distinct from neg3's password path)
   focus_target
-  adb shell am broadcast -a com.wrenboard.imetarget.NOLEARN --ez on true -p "$TPKG" >/dev/null 2>&1; sleep 0.8
+  adb shell am broadcast -a com.wrenboard.imetarget.NOLEARN --ez on true -p "$TPKG" >/dev/null 2>&1
+  wait_mode NOLEARN || fail "neg4: fixture did not apply NOLEARN mode"
   adb shell input keyevent 4; sleep 0.8; tap_field
   adb logcat -c; PREF4=$(prefnote)
   for i in 1 2 3; do clear_field; type_word qjxwvz; tapcode 32; sleep 0.8; done
@@ -286,7 +309,8 @@ if leg keyboard; then
   WQ=$(wqcount); PN=$(privnote); SK=$(skipcount noLearning); EN=$(entercount)
   note "neg4 nolearn-flag (3 commits, $PREF4): queued=$WQ enter=$EN skip[noLearning]=$SK markers: $PN"
   [ "$EN" -ge 3 ] && [ "$SK" -ge 3 ] && [ "$WQ" -eq 0 ] && pass "privacy neg4: all 3 commits entered and were skipped reason=noLearning (explicit flag, normal field)" || fail "privacy neg4: enter=$EN skip=$SK queued=$WQ (wanted >=3,>=3,0) [$PN]"
-  adb shell am broadcast -a com.wrenboard.imetarget.NOLEARN --ez on false -p "$TPKG" >/dev/null 2>&1; sleep 0.8
+  adb shell am broadcast -a com.wrenboard.imetarget.NOLEARN --ez on false -p "$TPKG" >/dev/null 2>&1
+  wait_mode NORMAL || fail "neg4: fixture did not restore NORMAL mode"
   adb shell input keyevent 4; sleep 0.8; focus_target; sleep 2
   verify_empty || fail "neg4: field not empty at retrieval read"
   SN=$(sugg)
@@ -299,8 +323,9 @@ if leg keyboard; then
   adb logcat -c
   for i in 1 2 3; do clear_field; type_word zebra; tapcode 32; sleep 0.8; done
   clear_field
-  PN=$(privnote); note "positive control markers: $PN"
-  if wait_wq 3; then pass "positive control: 3 submissions observed after the negative windows (marker path live) [$PN]"; else fail "positive control: fewer than 3 submissions within 25s ($(wqcount)) [$PN]"; fi
+  if wait_wq 3; then WQOK=1; else WQOK=0; fi
+  PN=$(privnote); DR=$(dropcount); note "positive control markers: $PN drops=$DR"
+  [ "$WQOK" = 1 ] && [ "$DR" -eq 0 ] && pass "positive control: 3 submissions observed after the negative windows, zero dropped (marker path live) [$PN]" || fail "positive control: submissions=$(wqcount) drops=$DR (wanted >=3,0) [$PN]";
   clear_field; focus_target; sleep 2
   for i in $(seq 1 10); do SC=$(sugg); grep -q 'STARTER history chosen=' shots/_s.txt && break; sleep 2; done
   [ "$SC" = "n=1" ] && pass "positive control stored completion: production readback surfaces the control word ($SC)" || fail "positive control stored completion: strip '$SC' (wanted n=1)"
@@ -320,7 +345,7 @@ if leg keyboard; then
   done
   WC=$(adb logcat -d -s WBDBG:I 2>/dev/null | tr -d '\r' | grep -c "STARTER writeQueued")
   note "learn writes seen: $WC"
-  [ "$WC" -ge 3 ] && pass "3 learn-queue writes recorded since the zebra commits began ($WC, enqueue marker)" || fail "only $WC of 3 required learn-queue writes seen since the zebra commits began"
+  [ "$WC" -ge 3 ] && [ "$(dropcount)" -eq 0 ] && pass "3 learn-queue writes recorded since the zebra commits began ($WC, enqueue marker, zero dropped)" || fail "learn-queue writes=$WC drops=$(dropcount) since the zebra commits began (wanted >=3 writes, 0 drops)"
   clear_field; adb logcat -c; focus_target; sleep 2; S2=$(sugg)
   # Content-free readiness: wait until the strip update is logged as sourced from history
   # (the wordless "STARTER history chosen=N from=... history=M" line), not for a word.
@@ -386,6 +411,7 @@ if leg keyboard; then
   # --- Acceptance: simultaneous en/fr multi-locale, fresh commit identity via the content-free
   # locale tag on the write marker (DEBUG-only). fr is bundled (res-large/raw/main_fr.dict). ---
   dbg "addlang:fr" 1.5; adb shell input keyevent 4; sleep 0.8; focus_target
+  wait_layout azerty || fail "fr leg: keyboard did not reach azerty after addlang:fr"
   adb logcat -c; sleep 1; SFR0=$(sugg); shot k02a_fr_absent_before
   [ "$SFR0" = "n=3" ] && pass "fr absent-before: fresh fr field shows 3-word fallback ($SFR0)" || fail "fr absent-before: '$SFR0' (wanted n=3)"
   # actual fr commits: bonjour is in the bundled fr main dict, so fr confidence can rise
@@ -410,6 +436,7 @@ if leg keyboard; then
   clear_field
   # positive control en: switch back, one commit must be tagged locale=en*
   dbg "addlang:en_US" 1.5; adb shell input keyevent 4; sleep 0.8; focus_target
+  wait_layout qwerty || fail "en leg: keyboard did not reach qwerty after addlang:en_US"
   adb logcat -c; type_word zebra; tapcode 32
   if wait_wq 1; then
     WEN2=$(adb logcat -d -s WBDBG:I 2>/dev/null | tr -d '\r' | grep -c 'STARTER writeQueued.* locale=en')
@@ -430,6 +457,7 @@ if leg keyboard; then
   # retrievable. This proves per-locale isolation across switches, NOT simultaneously loaded
   # dictionary groups (no facilitator state evidence is collected for that claim).
   dbg "addlang:fr" 1.5; adb shell input keyevent 4; sleep 0.8; focus_target; sleep 2
+  wait_layout azerty || fail "fr reload: keyboard did not reach azerty after addlang:fr"
   for i in $(seq 1 10); do SFR2=$(sugg); grep -q 'STARTER history chosen=' shots/_s.txt && break; sleep 2; done
   shot k02d_fr_reload_readback
   clear_field
@@ -438,6 +466,7 @@ if leg keyboard; then
   case "$F" in bonjour|Bonjour) pass "locale-switch round-trip: fr word still retrievable after the en session ('$F', pixels k02d)";; *) fail "locale-switch round-trip: fr readback field='$F' (wanted the fr word)";; esac
   clear_field
   dbg "addlang:en_US" 1.5; adb shell input keyevent 4; sleep 0.8; focus_target
+  wait_layout qwerty || fail "en leg: keyboard did not reach qwerty after addlang:en_US"
 fi
 
 if leg shift; then

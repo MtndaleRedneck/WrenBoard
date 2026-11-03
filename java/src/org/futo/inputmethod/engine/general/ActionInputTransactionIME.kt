@@ -68,6 +68,7 @@ class ActionInputTransactionIME(val helper: IMEHelper) : IMEInterface, ActionInp
     override fun onSwipeLanguage(direction: Int) {}
     override fun onMovingCursorLockEvent(canMoveCursor: Boolean) {}
     override fun clearUserHistoryDictionaries() {}
+    override fun recreateUserHistoryDictionaries() {}
     override fun requestSuggestionRefresh() {}
     override fun onLayoutUpdated(layout: KeyboardLayoutSetV2) { }
 
