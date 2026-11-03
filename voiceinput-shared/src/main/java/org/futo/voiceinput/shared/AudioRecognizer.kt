@@ -116,6 +116,7 @@ class AudioRecognizer(
         var decode: Job? = null
         val publications = Channel<() -> Unit>(Channel.UNLIMITED)
         var publisher: Job? = null
+        @Volatile var terminalWaiter: CompletableDeferred<Unit>? = null
     }
     private class OwnedRecorder(val value: AudioRecord) {
         private val released = AtomicBoolean(false)
@@ -244,6 +245,7 @@ class AudioRecognizer(
         session = null // invalidate callbacks before any cancellation or cleanup
         if (old != null) {
             old.capturing = false
+            old.terminalWaiter?.cancel()
             old.publications.cancel()
             old.publisher?.cancel()
             old.routeRequest++
@@ -296,6 +298,15 @@ class AudioRecognizer(
         session = owner
         owner.publisher = lifecycleScope.launch(Dispatchers.Main) {
             for (publish in owner.publications) if (current(owner)) publish()
+        }.also { publisher ->
+            publisher.invokeOnCompletion { failure ->
+                // A dead publisher must never accept a final which can wait forever.
+                owner.publications.cancel()
+                owner.terminalWaiter?.let { waiter ->
+                    if (failure == null) waiter.cancel()
+                    else waiter.completeExceptionally(failure)
+                }
+            }
         }
         listener.loading()
 
@@ -619,11 +630,25 @@ class AudioRecognizer(
     private suspend fun publishFinal(owner: CaptureSession, text: String) {
         val delivered = CompletableDeferred<Unit>()
         if (!current(owner)) return
-        if (owner.publications.trySend {
-            try { listener.finished(text) } finally { delivered.complete(Unit) }
-        }.isFailure) return
-        // Same ordered queue as partial/status. Reset cancels the owning decode job and queue.
-        delivered.await()
+        owner.terminalWaiter = delivered
+        val publisher = owner.publisher ?: return
+        val completion = publisher.invokeOnCompletion { failure ->
+            if (failure == null) delivered.cancel() else delivered.completeExceptionally(failure)
+        }
+        try {
+            if (owner.publications.trySend {
+                try { listener.finished(text) }
+                catch (failure: Throwable) { delivered.completeExceptionally(failure); throw failure }
+                finally { if (!delivered.isCompleted) delivered.complete(Unit) }
+            }.isFailure) return
+            delivered.await()
+        } finally {
+            completion.dispose()
+            owner.terminalWaiter = null
+            // Release retained transcript closures after final, failure or cancellation.
+            owner.publications.cancel()
+            owner.publisher?.cancel()
+        }
     }
 
     private suspend fun runModel(owner: CaptureSession) {
