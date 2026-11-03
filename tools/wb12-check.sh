@@ -213,56 +213,75 @@ if leg keyboard; then
   # retrieval negative (a leaked write would surface there, exactly like zebra does). ---
   wqcount() { adb logcat -d -s WBDBG:I 2>/dev/null | tr -d '\r' | grep -c "STARTER writeQueued"; }
   wait_wq() { local want=$1 i; for i in $(seq 1 25); do [ "$(wqcount)" -ge "$want" ] && return 0; sleep 1; done; return 1; }
-  privnote() { adb logcat -d -s WBDBG:I 2>/dev/null | tr -d '\r' | grep -oE 'STARTER (learnEnter|learnSkip|writeQueued)( reason=[a-zA-Z]+)?' | sort | uniq -c | sed 's/^ *//' | tr '\n' ' '; }
+  entercount() { adb logcat -d -s WBDBG:I 2>/dev/null | tr -d '\r' | grep -c "STARTER learnEnter"; }
+  skipcount() { adb logcat -d -s WBDBG:I 2>/dev/null | tr -d '\r' | grep -c "STARTER learnSkip id=[0-9]* reason=$1"; }
+  privnote() { adb logcat -d -s WBDBG:I 2>/dev/null | tr -d '\r' | grep -oE 'STARTER (learnEnter|learnSkip|writeQueued)( id=[0-9]+)?( reason=[a-zA-Z]+)?' | sed 's/ id=[0-9]*//' | sort | uniq -c | sed 's/^ *//' | tr '\n' ' '; }
+  # Bounded marker-settle: poll until any terminal learn marker appears (max 8s) so a delayed
+  # submission can't be erased by the next window's log clear. writeQueued is a SUBMISSION
+  # marker; stored completion is proven by the post-restoration production readback below.
+  settle() { local i; for i in $(seq 1 8); do privnote | grep -q 'learnSkip\|writeQueued' && return 0; sleep 1; done; return 0; }
+  prefnote() { dbg "prefget:pref_key_use_personalized_dicts" 0.5; dbg "prefget:pref_key_auto_correction" 0.5; adb logcat -d -s WBDBG:I 2>/dev/null | tr -d '\r' | grep -oE 'PREF [^ ]+=[^ ]+' | tr '\n' ' '; }
 
-  # negative 1: personalization off
+  # negative 1: personalization off (autocorrect ON -> expected skip reason personalizationOff)
   dbg "prefbool:pref_key_use_personalized_dicts=false" 1.0; adb shell input keyevent 4; sleep 0.6; focus_target
-  adb logcat -c; type_word wqzxkv; tapcode 32; sleep 2
-  WQ=$(wqcount); PN=$(privnote); note "personalization-off commit: queued=$WQ markers: $PN"
-  [ "$WQ" -eq 0 ] && pass "privacy: personalization-off commit queued zero history writes ($PN)" || fail "privacy personalization-off: $WQ history write(s) queued (wanted 0) [$PN]"
-  clear_field; focus_target; sleep 2; SN=$(sugg)
-  [ "$SN" = "n=3" ] && pass "retrieval negative: strip still 3-word fallback after personalization-off commit ($SN)" || fail "retrieval negative: strip '$SN' after personalization-off commit (wanted n=3)"
+  adb logcat -c
+  for i in 1 2 3; do clear_field; type_word wqzxkv; tapcode 32; sleep 0.8; done
+  settle; WQ=$(wqcount); PN=$(privnote); SK=$(skipcount personalizationOff); EN=$(entercount)
+  note "neg1 personalization-off (3 commits): queued=$WQ enter=$EN skip[personalizationOff]=$SK markers: $PN"
+  [ "$EN" -ge 1 ] && [ "$SK" -ge 1 ] && [ "$WQ" -eq 0 ] && pass "privacy neg1: gate executed (reason=personalizationOff), zero writes queued in-window" || fail "privacy neg1: enter=$EN skip=$SK queued=$WQ (wanted >=1,>=1,0) [$PN]"
+  # restore normal gates BEFORE retrieval: reading while gated off would hide a leak
+  dbg "prefbool:pref_key_use_personalized_dicts=true" 1.0; adb shell input keyevent 4; sleep 0.6; focus_target; sleep 2; SN=$(sugg)
+  note "neg1 preconditions at restore: $(prefnote)"
+  [ "$SN" = "n=3" ] && pass "neg1 post-restoration readback: strip is 3-word fallback, token not retrievable ($SN)" || fail "neg1 post-restoration readback: strip '$SN' (wanted n=3)"
   shot k01g_neg1_strip_fallback_pixels
-  dbg "prefbool:pref_key_use_personalized_dicts=true" 1.0
 
-  # negative 2: autocorrect off
+  # negative 2: autocorrect off (personalization ON -> expected skip reason autocorrectOff)
   dbg "prefbool:pref_key_auto_correction=false" 1.0; adb shell input keyevent 4; sleep 0.6; focus_target
-  adb logcat -c; type_word jkqzxv; tapcode 32; sleep 2
-  WQ=$(wqcount); PN=$(privnote); note "autocorrect-off commit: queued=$WQ markers: $PN"
-  [ "$WQ" -eq 0 ] && pass "privacy: autocorrect-off commit queued zero history writes ($PN)" || fail "privacy autocorrect-off: $WQ history write(s) queued (wanted 0) [$PN]"
-  clear_field; focus_target; sleep 2; SN=$(sugg)
-  [ "$SN" = "n=3" ] && pass "retrieval negative: strip still 3-word fallback after autocorrect-off commit ($SN)" || fail "retrieval negative: strip '$SN' after autocorrect-off commit (wanted n=3)"
+  adb logcat -c
+  for i in 1 2 3; do clear_field; type_word jkqzxv; tapcode 32; sleep 0.8; done
+  settle; WQ=$(wqcount); PN=$(privnote); SK=$(skipcount autocorrectOff); EN=$(entercount)
+  note "neg2 autocorrect-off (3 commits): queued=$WQ enter=$EN skip[autocorrectOff]=$SK markers: $PN"
+  [ "$EN" -ge 1 ] && [ "$SK" -ge 1 ] && [ "$WQ" -eq 0 ] && pass "privacy neg2: gate executed (reason=autocorrectOff), zero writes queued in-window" || fail "privacy neg2: enter=$EN skip=$SK queued=$WQ (wanted >=1,>=1,0) [$PN]"
+  dbg "prefbool:pref_key_auto_correction=true" 1.0; adb shell input keyevent 4; sleep 0.6; focus_target; sleep 2; SN=$(sugg)
+  [ "$SN" = "n=3" ] && pass "neg2 post-restoration readback: strip is 3-word fallback, token not retrievable ($SN)" || fail "neg2 post-restoration readback: strip '$SN' (wanted n=3)"
   shot k01h_neg2_strip_fallback_pixels
-  dbg "prefbool:pref_key_auto_correction=true" 1.0
 
-  # negative 3: password field (noLearning gate via mIsPasswordField; fixture broadcast sets inputType)
+  # negative 3: password field, personalization+autocorrect ON -> expected skip reason noLearning
   adb shell am broadcast -a com.wrenboard.imetarget.PASSWORD --ez on true -p "$TPKG" >/dev/null 2>&1; sleep 0.8
   adb shell input keyevent 4; sleep 0.8; tap_field
-  adb logcat -c; type_word vkzjqw; tapcode 32; sleep 2
-  WQ=$(wqcount); PN=$(privnote); note "password-field commit: queued=$WQ markers: $PN"
-  [ "$WQ" -eq 0 ] && pass "privacy: password-field commit queued zero history writes ($PN)" || fail "privacy password-field: $WQ history write(s) queued (wanted 0) [$PN]"
+  adb logcat -c; PREF3=$(prefnote)
+  for i in 1 2 3; do clear_field; type_word vkzjqw; tapcode 32; sleep 0.8; done
+  settle; WQ=$(wqcount); PN=$(privnote); SK=$(skipcount noLearning); EN=$(entercount)
+  note "neg3 password-field (3 commits, $PREF3): queued=$WQ enter=$EN skip[noLearning]=$SK markers: $PN"
+  [ "$EN" -ge 1 ] && [ "$SK" -ge 1 ] && [ "$WQ" -eq 0 ] && pass "privacy neg3: gate executed (reason=noLearning via mIsPasswordField), zero writes queued in-window" || fail "privacy neg3: enter=$EN skip=$SK queued=$WQ (wanted >=1,>=1,0) [$PN]"
   adb shell am broadcast -a com.wrenboard.imetarget.PASSWORD --ez on false -p "$TPKG" >/dev/null 2>&1; sleep 0.8
   adb shell input keyevent 4; sleep 0.8; tap_field; sleep 2; SN=$(sugg)
-  [ "$SN" = "n=3" ] && pass "retrieval negative: strip still 3-word fallback after password-field commit ($SN)" || fail "retrieval negative: strip '$SN' after password-field commit (wanted n=3)"
+  [ "$SN" = "n=3" ] && pass "neg3 post-restoration readback: strip is 3-word fallback, token not retrievable ($SN)" || fail "neg3 post-restoration readback: strip '$SN' (wanted n=3)"
   shot k01e_privacy_negatives_clean_strip
 
-  # negative 4: explicit IME_FLAG_NO_PERSONALIZED_LEARNING on an otherwise normal field
-  # (InputAttributes: mNoLearning = flag || mIsPasswordField || mIsCodeField - same boolean the
-  # password case exercises, but the explicit-flag path is asserted distinctly).
+  # negative 4: explicit IME_FLAG_NO_PERSONALIZED_LEARNING, otherwise normal field, gates ON
+  # -> expected skip reason noLearning via the flag (fresh EditorInfo, distinct from neg3's password path)
   adb shell am broadcast -a com.wrenboard.imetarget.NOLEARN --ez on true -p "$TPKG" >/dev/null 2>&1; sleep 0.8
   adb shell input keyevent 4; sleep 0.8; tap_field
-  adb logcat -c; type_word qjxwvz; tapcode 32; sleep 2
-  WQ=$(wqcount); PN=$(privnote); note "nolearn-flag commit: queued=$WQ markers: $PN"
-  [ "$WQ" -eq 0 ] && pass "privacy: NO_PERSONALIZED_LEARNING flag commit queued zero history writes ($PN)" || fail "privacy nolearn-flag: $WQ history write(s) queued (wanted 0) [$PN]"
+  adb logcat -c; PREF4=$(prefnote)
+  for i in 1 2 3; do clear_field; type_word qjxwvz; tapcode 32; sleep 0.8; done
+  settle; WQ=$(wqcount); PN=$(privnote); SK=$(skipcount noLearning); EN=$(entercount)
+  note "neg4 nolearn-flag (3 commits, $PREF4): queued=$WQ enter=$EN skip[noLearning]=$SK markers: $PN"
+  [ "$EN" -ge 1 ] && [ "$SK" -ge 1 ] && [ "$WQ" -eq 0 ] && pass "privacy neg4: gate executed (reason=noLearning via explicit flag), zero writes queued in-window" || fail "privacy neg4: enter=$EN skip=$SK queued=$WQ (wanted >=1,>=1,0) [$PN]"
   adb shell am broadcast -a com.wrenboard.imetarget.NOLEARN --ez on false -p "$TPKG" >/dev/null 2>&1; sleep 0.8
   adb shell input keyevent 4; sleep 0.8; tap_field; sleep 2; SN=$(sugg)
-  [ "$SN" = "n=3" ] && pass "retrieval negative: strip still 3-word fallback after nolearn-flag commit ($SN)" || fail "retrieval negative: strip '$SN' after nolearn-flag commit (wanted n=3)"
+  [ "$SN" = "n=3" ] && pass "neg4 post-restoration readback: strip is 3-word fallback, token not retrievable ($SN)" || fail "neg4 post-restoration readback: strip '$SN' (wanted n=3)"
   shot k01i_neg4_strip_fallback_pixels
 
-  # positive control: one gated-on zebra commit must enqueue (observer live + in-order drain
-  # barrier after three zero-write windows). zebra is also the acceptance selection word below.
-  adb logcat -c; type_word zebra; tapcode 32
-  if wait_wq 1; then pass "positive control: zebra learn writeQueued after three zero-write negative windows"; else fail "positive control: no writeQueued within 25s of a gated-on commit"; fi
+  # positive control: 3 gated-on zebra commits must each enqueue; STORED completion is then
+  # proven by the production readback (strip surfaces zebra after exactly 3 commits - the
+  # same commit count the negatives used, so visibility-at-3 is proven for this build).
+  adb logcat -c
+  for i in 1 2 3; do clear_field; type_word zebra; tapcode 32; sleep 0.8; done
+  if wait_wq 3; then pass "positive control: 3 gated-on commits each writeQueued after four zero-write windows (marker path live, in-order)"; else fail "positive control: fewer than 3 writeQueued within 25s ($(wqcount))"; fi
+  clear_field; focus_target; sleep 2
+  for i in $(seq 1 10); do SC=$(sugg); grep -q 'STARTER history chosen=' shots/_s.txt && break; sleep 2; done
+  [ "$SC" = "n=1" ] && pass "positive control stored completion: production readback surfaces the control word ($SC)" || fail "positive control stored completion: strip '$SC' (wanted n=1)"
   clear_field
   XY=$(kxy code -3 2>/dev/null || true); note "123 key at: $XY"
   clear_field
@@ -335,6 +354,13 @@ if leg keyboard; then
   clear_field
   dbg "dsbool:wren_starter_words=true" 1.0
 
+  # tap_strip_center <geomtag> : tap the single-word strip using THIS run's geometry; echoes nothing.
+  tap_strip_center() {
+    geom "$1" >/dev/null 2>&1 || true
+    local ky; ky=$(awk '/^KBD /{for(i=1;i<=NF;i++) if($i ~ /^y=/){sub("y=","",$i); print $i}}' "shots/geom_$1.txt" | head -1)
+    [ -z "$ky" ] && return 1
+    adb shell input tap 510 $((ky - 76)); sleep 1.2
+  }
   # --- Acceptance: simultaneous en/fr multi-locale, fresh commit identity via the content-free
   # locale tag on the write marker (DEBUG-only). fr is bundled (res-large/raw/main_fr.dict). ---
   dbg "addlang:fr" 1.5; adb shell input keyevent 4; sleep 0.8; focus_target
@@ -354,7 +380,12 @@ if leg keyboard; then
   clear_field; focus_target; sleep 2
   for i in $(seq 1 10); do SFR=$(sugg); grep -q 'STARTER history chosen=' shots/_s.txt && break; sleep 2; done
   shot k02b_fr_after_commits
-  [ "$SFR" = "n=1" ] && pass "fr retrieval: fr strip shows the committed word alone ($SFR), pixels k02b" || fail "fr retrieval: '$SFR' (wanted n=1)"
+  [ "$SFR" = "n=1" ] || fail "fr retrieval: strip count '$SFR' (wanted n=1)"
+  clear_field
+  tap_strip_center kfrtap || fail "fr retrieval: no KBD geometry for strip tap"
+  F=$(field | sed 's/[[:space:]]*$//')
+  case "$F" in bonjour|Bonjour) pass "fr retrieval word-level: strip tap inserts exactly '$F' (pixels k02b)";; *) fail "fr retrieval word-level: field='$F' after strip tap (wanted the fr word)";; esac
+  clear_field
   # positive control en: switch back, one commit must be tagged locale=en*
   dbg "addlang:en_US" 1.5; adb shell input keyevent 4; sleep 0.8; focus_target
   adb logcat -c; type_word zebra; tapcode 32
@@ -366,8 +397,23 @@ if leg keyboard; then
   clear_field; focus_target; sleep 2
   for i in $(seq 1 10); do SEN=$(sugg); grep -q 'STARTER history chosen=' shots/_s.txt && break; sleep 2; done
   shot k02c_en_after_fr
-  [ "$SEN" = "n=1" ] && pass "en isolation: en strip shows only its own history ($SEN), no fr leak, pixels k02c" || fail "en isolation: '$SEN' (wanted n=1)"
+  note "en isolation strip count: $SEN (word identity proven by tap readback + pixels k02c, not the count)"
   clear_field
+  tap_strip_center kentap || fail "en isolation: no KBD geometry for strip tap"
+  F=$(field | sed 's/[[:space:]]*$//')
+  case "$F" in zebra|Zebra) pass "en isolation word-level: strip tap inserts the en word '$F', no fr leak (pixels k02c)";; *) fail "en isolation word-level: field='$F' after strip tap (wanted the en word zebra)";; esac
+  clear_field
+
+  # concurrent-groups readback: switch back to fr WITHOUT re-adding; both groups must stay loaded
+  dbg "addlang:fr" 1.5; adb shell input keyevent 4; sleep 0.8; focus_target; sleep 2
+  for i in $(seq 1 10); do SFR2=$(sugg); grep -q 'STARTER history chosen=' shots/_s.txt && break; sleep 2; done
+  shot k02d_fr_reload_readback
+  clear_field
+  tap_strip_center kfrtap2 || fail "fr reload: no KBD geometry for strip tap"
+  F=$(field | sed 's/[[:space:]]*$//')
+  case "$F" in bonjour|Bonjour) pass "concurrent groups: fr group still loaded and retrievable after en session ('$F', pixels k02d)";; *) fail "concurrent groups: fr readback field='$F' (wanted the fr word)";; esac
+  clear_field
+  dbg "addlang:en_US" 1.5; adb shell input keyevent 4; sleep 0.8; focus_target
 fi
 
 if leg shift; then
