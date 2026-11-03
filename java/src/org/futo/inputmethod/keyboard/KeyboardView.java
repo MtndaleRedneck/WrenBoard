@@ -667,6 +667,8 @@ public class KeyboardView extends View {
                 // Candidate: 50px icon bounds at the 420dpi reference surface. Actual vector
                 // ink can be smaller than its viewport; measure the render before acceptance.
                 iconWidth = (int)(19.84f * iconDm);
+                // Keep this explicit measured size out of the generic text-size cap below.
+                iconHeightOverride = iconWidth;
             } else if (KeyboardIconsSet.NAME_TAB_KEY.equals(key.getIconId())) {
                 // WrenBoard 1.5 (Tab's exact 20:45 spec, candidate): tab key icon is a bold
                 // arrow-into-bar 20dp wide x 11dp tall (2.5dp stroke lives in the vector),
