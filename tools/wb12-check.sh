@@ -844,6 +844,23 @@ if leg clipboard; then
     U=$(pos shots/cl4.txt 'CLIPUNDO'); [ -n "$U" ] && { adb logcat -c; adb shell input tap $U; sleep 1.0; wlog cl5; shot cl05_after_undo
       grep -q 'CLIP undo restored=1' shots/cl5.txt && pass "Undo brings the swiped clip back" || fail "Undo did not restore"; } || fail "no Undo bar after swipe"
   else fail "no card position"; fi
+  # Retained-interaction legs for the arbitration gesture handler: a stationary hold opens the same
+  # card menu as the 3-dot, and a tap pastes the card into the target field.
+  adb logcat -c; dbg close 0.8; focus_target; clear_field; dbg "open:clipboard_history" 2.0; wlog cl5g
+  C=$(pos shots/cl5g.txt 'CLIPCARD i=1 ')
+  if [ -n "$C" ]; then read -r X Y <<< "$C"
+    adb logcat -c
+    adb shell "input motionevent DOWN $X $Y"; sleep 1.0; shot cl05h_hold_mid
+    adb shell "input motionevent UP $X $Y"; sleep 1.2; wlog cl5h; shot cl05h_hold_pin_menu
+    grep -q 'WINDOW CLIPMENU' shots/cl5h.txt && pass "stationary hold opens the card menu (retained interaction)" || fail "stationary hold did not open the card menu"
+  else fail "no card position for the hold leg"; fi
+  adb logcat -c; dbg close 0.8; focus_target; clear_field; dbg "open:clipboard_history" 2.0; wlog cl5s
+  C=$(pos shots/cl5s.txt 'CLIPCARD i=1 ')
+  if [ -n "$C" ]; then read -r X Y <<< "$C"
+    adb logcat -c; adb shell input tap $X $Y; sleep 1.2; wlog cl5t; shot cl05t_tap_paste
+    F=$(field); note "field after card tap: ${F:0:80}"
+    [ -n "$F" ] && pass "tap on a card pastes it into the field (retained interaction)" || fail "tap on a card pasted nothing"
+  else fail "no card position for the tap leg"; fi
   adb logcat -c; dbg close 0.8; dbg "open:clipboard_history" 2.0; wlog cl6
   D=$(pos shots/cl6.txt 'CLIPDOTS i=2 ')
   if [ -n "$D" ]; then adb logcat -c; adb shell input tap $D; sleep 1.0; wlog cl7
