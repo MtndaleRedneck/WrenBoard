@@ -139,8 +139,8 @@ private class TopLineGradientDrawable(
             0f, inner.top.toFloat(), 0f, inner.bottom.toFloat(),
             0xFF707070.toInt(), 0xFF0B0B0B.toInt(), android.graphics.Shader.TileMode.CLAMP
         )
-        canvas.drawLine(rimX_l, inner.top + radiusPx, rimX_l, inner.bottom - 1f, rimPaint)
-        canvas.drawLine(rimX_r, inner.top + radiusPx, rimX_r, inner.bottom - 1f, rimPaint)
+        canvas.drawLine(rimX_l, inner.top + radiusPx, rimX_l, inner.bottom - radiusPx, rimPaint)
+        canvas.drawLine(rimX_r, inner.top + radiusPx, rimX_r, inner.bottom - radiusPx, rimPaint)
         drawTopLine(canvas, inner)
         drawBorderNoBottom(canvas, inner)
         drawBottomFade(canvas, inner)
@@ -158,7 +158,9 @@ private class TopLineGradientDrawable(
         // corners. 1px stroke centred on the edge (half-px offset keeps it one crisp pixel);
         // sides stop above the bottom fade.
         val half = borderPaint.strokeWidth / 2f
-        val stop = b.bottom - 3.5f * px420
+        // Straight sides must stop where the lower rounded corner begins, not project
+        // past its silhouette as dark feet. The clipped fade owns the bottom edge.
+        val stop = b.bottom - radiusPx
         val r = radiusPx
         val path = android.graphics.Path().apply {
             moveTo(b.left + half, stop)
