@@ -112,6 +112,8 @@ val SaveWordAction = Action(
                 InputTypeUtils.isPasswordInputType(ei.inputType) ||
                 InputTypeUtils.isVisiblePasswordInputType(ei.inputType) || codeField
         if (blockedField) {
+            if (org.futo.inputmethod.latin.BuildConfig.DEBUG) android.util.Log.i("WBDBG",
+                "SAVEWORD blocked visiblePassword=${ei != null && InputTypeUtils.isVisiblePasswordInputType(ei.inputType)}")
             WrenSaveWordNotice.show(context.getString(R.string.wren_word_save_blocked_field))
         } else {
         val ic = ime.currentInputConnection
