@@ -852,11 +852,9 @@ if leg clipboard; then
       C2=$(pos shots/cl3d.txt 'CLIPCARD i=1 '); note "swipe diagnostic: cards=$(grep -c 'CLIPCARD' shots/cl3d.txt); target=$(grep 'CLIPCARD i=1 ' shots/cl3d.txt | head -1 | cut -c1-140)"
       if [ -n "$C2" ]; then read -r X2 Y2 <<< "$C2"
         adb logcat -c
-        adb shell "input motionevent DOWN $X2 $Y2"; sleep 0.2
-        adb shell "input motionevent MOVE $((X2-150)) $Y2"; sleep 0.15; shot cl04d_drag_150
-        adb shell "input motionevent MOVE $((X2-350)) $Y2"; sleep 0.15; shot cl04e_drag_350
-        adb shell "input motionevent MOVE $((X2-650)) $Y2"; sleep 0.15; shot cl04f_drag_650
-        adb shell "input motionevent UP $((X2-650)) $Y2"; sleep 1.5; wlog cl4d
+        # single device-paced shell (see the slow-drag leg): no per-command process spawn gaps
+        adb shell "input motionevent DOWN $X2 $Y2; sleep 0.2; input motionevent MOVE $((X2-150)) $Y2; sleep 0.15; input motionevent MOVE $((X2-350)) $Y2; sleep 0.15; input motionevent MOVE $((X2-650)) $Y2; sleep 0.15; input motionevent UP $((X2-650)) $Y2"
+        sleep 1.5; wlog cl4d
         shot cl04g_after_diagnostic_swipe
         note "diagnostic stream CLIP lines: $(grep -o 'CLIP [a-z =0-9]*' shots/cl4d.txt | head -4 | tr '\n' '|')"
         grep -q 'CLIP removed=1' shots/cl4d.txt && pass "diagnostic swipe deletes via manual stream (first-attempt FAIL above stands)" || fail "diagnostic swipe also did not delete (manual stream; see frames cl04d-f)"
@@ -916,11 +914,14 @@ if leg clipboard; then
   C=$(pos shots/cl5u.txt 'CLIPCARD i=1 ')
   if [ -n "$C" ]; then read -r X Y <<< "$C"
     adb logcat -c
-    adb shell "input motionevent DOWN $X $Y"; sleep 0.2
-    adb shell "input motionevent MOVE $((X-150)) $Y"; sleep 0.3; shot cl05v_slowdrag_150
-    adb shell "input motionevent MOVE $((X-350)) $Y"; sleep 0.3
-    adb shell "input motionevent MOVE $((X-650)) $Y"; sleep 0.3
-    adb shell "input motionevent UP $((X-650)) $Y"; sleep 1.5; wlog cl5v; shot cl05v_slowdrag_after
+    # ONE adb shell, device-paced: each `input motionevent` as its own command spawns a fresh
+    # on-device process, which can stall for seconds apiece on a loaded emulator (480/load=3 run
+    # 41605113045: DOWN delivered, then 18 s of silence, the hold timer correctly fired for zero
+    # delivered movement). In one shell the dwells are device-timed and in-order; a pipeline stall
+    # before the DOWN flushes the stream together, so the app-visible DOWN->first-MOVE gap stays
+    # small. The dwell structure is unchanged; the verdict stays strict.
+    adb shell "input motionevent DOWN $X $Y; sleep 0.2; input motionevent MOVE $((X-150)) $Y; sleep 0.3; input motionevent MOVE $((X-350)) $Y; sleep 0.3; input motionevent MOVE $((X-650)) $Y; sleep 0.3; input motionevent UP $((X-650)) $Y"
+    sleep 1.5; wlog cl5v; shot cl05v_slowdrag_after
     if grep -q 'CLIP removed=1' shots/cl5v.txt; then pass "slow drag with dwells deletes the clip"
     elif grep -q 'WINDOW CLIPMENU' shots/cl5v.txt; then fail "slow drag opened the long-press menu instead of dragging"
     else fail "slow drag did not delete"; fi
