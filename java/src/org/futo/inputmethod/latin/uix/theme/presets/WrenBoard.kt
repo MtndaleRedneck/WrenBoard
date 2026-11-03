@@ -129,9 +129,9 @@ private class TopLineGradientDrawable(
         canvas.restoreToCount(save)
         // two crisp halo rings just outside the border: inner ring 1px out, outer ring 2px out
         val ringInner = android.graphics.RectF(inner).apply { inset(-haloPx, -haloPx) }
-        canvas.drawRoundRect(ringInner, radiusPx, radiusPx, haloInnerPaint)
+        canvas.drawRoundRect(ringInner, radiusPx + haloPx, radiusPx + haloPx, haloInnerPaint)
         val ringOuter = android.graphics.RectF(inner).apply { inset(-2.0f * haloPx, -2.0f * haloPx) }
-        canvas.drawRoundRect(ringOuter, radiusPx, radiusPx, haloOuterPaint)
+        canvas.drawRoundRect(ringOuter, radiusPx + 2.0f * haloPx, radiusPx + 2.0f * haloPx, haloOuterPaint)
         // side rims: vertical gradient #616161 -> #0B0B0B, 2px inside the border
         val rimX_l = inner.left + 2.0f * px420 + rimPaint.strokeWidth / 2f
         val rimX_r = inner.right - 2.0f * px420 - rimPaint.strokeWidth / 2f
@@ -153,9 +153,21 @@ private class TopLineGradientDrawable(
         strokeWidth = 1.0f
     }
     private fun drawBorderNoBottom(canvas: android.graphics.Canvas, b: android.graphics.Rect) {
-        canvas.drawLine(b.left.toFloat(), b.top.toFloat(), b.right.toFloat(), b.top.toFloat(), borderPaint)
-        canvas.drawLine(b.left.toFloat(), b.top.toFloat(), b.left.toFloat(), b.bottom.toFloat(), borderPaint)
-        canvas.drawLine(b.right.toFloat(), b.top.toFloat(), b.right.toFloat(), b.bottom.toFloat(), borderPaint)
+        // Rounded path, not straight full-length lines: the straight version squared the rounded
+        // corners. 1px stroke centred on the edge (half-px offset keeps it one crisp pixel);
+        // sides stop above the bottom fade.
+        val half = borderPaint.strokeWidth / 2f
+        val stop = b.bottom - 3.5f * px420
+        val r = radiusPx
+        val path = android.graphics.Path().apply {
+            moveTo(b.left + half, stop)
+            lineTo(b.left + half, b.top + r)
+            arcTo(android.graphics.RectF(b.left + half, b.top + half, b.left + half + 2 * r, b.top + half + 2 * r), 180f, 90f)
+            lineTo(b.right - half - r, b.top + half)
+            arcTo(android.graphics.RectF(b.right - half - 2 * r, b.top + half, b.right - half, b.top + half + 2 * r), 270f, 90f)
+            lineTo(b.right - half, stop)
+        }
+        canvas.drawPath(path, borderPaint)
     }
     private val bottomFadePaint = android.graphics.Paint().apply { isDither = true }
     private fun drawBottomFade(canvas: android.graphics.Canvas, b: android.graphics.Rect) {
