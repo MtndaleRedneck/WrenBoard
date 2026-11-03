@@ -82,6 +82,9 @@ object WbDebug {
                 Log.i(TAG, "CMD $cmd")
                 try {
                     when {
+                        cmd == "savefixture:query" || cmd == "savefixture:reset" -> {
+                            org.futo.inputmethod.latin.uix.actions.querySaveWordFixture(ime, cmd.endsWith(":reset"))
+                        }
                         cmd == "geom" -> {
                             val v = ime.latinIMELegacy.mKeyboardSwitcher.mainKeyboardView
                             logKeyboard(v, v?.keyboard)

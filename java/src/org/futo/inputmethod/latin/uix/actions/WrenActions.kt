@@ -1,5 +1,6 @@
 package org.futo.inputmethod.latin.uix.actions
 
+import androidx.lifecycle.lifecycleScope
 import android.content.Context
 import android.content.Intent
 import android.util.Log
@@ -202,10 +203,36 @@ private fun queryUserDictionary(context: Context, word: String): DictionaryPrese
         ?: DictionaryPresence.ERROR
 } catch (_: Exception) { DictionaryPresence.ERROR }
 
+/** Fixed synthetic fixture only. No command argument can retrieve or delete arbitrary words. */
+internal fun querySaveWordFixture(ime: org.futo.inputmethod.latin.LatinIME, reset: Boolean) {
+    if (!org.futo.inputmethod.latin.BuildConfig.DEBUG) return
+    val editor = ime.actionEditorGeneration
+    val request = WrenSaveWordNotice.currentRequest()
+    val context = ime.applicationContext
+    ime.lifecycleScope.launch {
+        val results = withContext(Dispatchers.IO) {
+            listOf("zqxwjpos", "zqxwjtail", "zqxwjctb", "zqxwjctc", "zqxwjctd", "zqxwvisible").mapIndexed { index, token ->
+                val result = try {
+                    if (reset) context.contentResolver.delete(UserDictionary.Words.CONTENT_URI,
+                        "${UserDictionary.Words.WORD}=?", arrayOf(token))
+                    queryUserDictionary(context, token)
+                } catch (_: Exception) { DictionaryPresence.ERROR }
+                index to result
+            }
+        }
+        results.forEach { (index, result) ->
+            Log.i("WBDBG", "SAVEFIXTURE request=$request reset=$reset case=$index result=$result " +
+                "currentEditor=${ime.actionEditorGeneration == editor} " +
+                "currentRequest=${WrenSaveWordNotice.isCurrentRequest(request)}")
+        }
+    }
+}
+
 /** Transient centre-chip text (save-word confirmation). New instance per show so StateFlow re-emits. */
 object WrenSaveWordNotice {
     data class Notice(val text: String, val at: Long = android.os.SystemClock.uptimeMillis())
     private var requestGeneration = 0L
+    fun currentRequest(): Long = requestGeneration
     fun beginRequest(): Long = ++requestGeneration
     fun isCurrentRequest(value: Long): Boolean = value == requestGeneration
     val notice = MutableStateFlow<Notice?>(null)
