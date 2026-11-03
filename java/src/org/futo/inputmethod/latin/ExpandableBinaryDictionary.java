@@ -292,7 +292,15 @@ abstract public class ExpandableBinaryDictionary extends Dictionary {
         final Runnable task = new Runnable() {
             @Override
             public void run() {
+                if (BuildConfig.DEBUG && Dictionary.TYPE_USER_HISTORY.equals(mDictName)) {
+                    Log.i("WBDBG", "STARTER writeTaskStart at "
+                            + android.os.SystemClock.uptimeMillis());
+                }
                 if (getBinaryDictionary() == null) {
+                    if (BuildConfig.DEBUG && Dictionary.TYPE_USER_HISTORY.equals(mDictName)) {
+                        Log.i("WBDBG", "STARTER writeDropped-nullDict at "
+                                + android.os.SystemClock.uptimeMillis());
+                    }
                     return;
                 }
                 runGCIfRequiredLocked(true /* mindsBlockByGC */);
