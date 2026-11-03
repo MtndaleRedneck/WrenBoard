@@ -827,6 +827,17 @@ pos() { # pos <file> <tag regex> -> "cx cy" of the last WINDOW line matching
 wlog() { adb logcat -d -s WBDBG:I | tr -d '\r' > "shots/$1.txt"; }
 
 
+if leg symbolspacing; then
+  ensure_ime; focus_target; clear_field
+  geom symbolspacing_letters >/dev/null; shot symbolspacing_letters
+  tapcode -3 >/dev/null; sleep 1
+  geom symbolspacing_page1 >/dev/null; shot symbolspacing_page1
+  tapcode -1 >/dev/null; sleep 1
+  geom symbolspacing_page2 >/dev/null; shot symbolspacing_page2
+  tapcode -1 >/dev/null; sleep 0.5
+  tapcode -3 >/dev/null; sleep 0.5
+fi
+
 if leg symbols; then
   note "== SYMBOLS: 123 page shot (no checks, screenshot for review) =="
   focus_target

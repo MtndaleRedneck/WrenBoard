@@ -1,4 +1,5 @@
 name: "Symbols (Shifted)"
+rowHeightMode: FillHeight
 numberRowMode: AlwaysDisabled
 attributes:
   shiftable: false
