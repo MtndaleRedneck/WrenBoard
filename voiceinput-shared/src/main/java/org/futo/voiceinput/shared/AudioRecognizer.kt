@@ -23,6 +23,7 @@ import com.konovalov.vad.config.Mode
 import com.konovalov.vad.config.Model
 import com.konovalov.vad.config.SampleRate
 import com.konovalov.vad.models.VadModel
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancelAndJoin
@@ -43,6 +44,7 @@ import org.futo.voiceinput.shared.whisper.ModelManager
 import org.futo.voiceinput.shared.whisper.MultiModelRunConfiguration
 import org.futo.voiceinput.shared.whisper.MultiModelRunner
 import org.futo.voiceinput.shared.whisper.isBlankResult
+import java.util.concurrent.atomic.AtomicBoolean
 import java.nio.FloatBuffer
 import java.nio.ShortBuffer
 import kotlin.math.min
@@ -99,18 +101,29 @@ class AudioRecognizer(
     private val listener: AudioRecognizerListener,
     private val settings: AudioRecognizerSettings
 ) {
-    private var isRecording = false
-    private var recorder: AudioRecord? = null
-
+    private class CaptureSession {
+        val samples = SampleBuffer()
+        @Volatile var capturing = true
+        var routeRequest = 0L
+        var recorder: OwnedRecorder? = null
+        var reader: Job? = null
+        var switchJob: Job? = null
+        var preload: Job? = null
+        var decode: Job? = null
+    }
+    private class OwnedRecorder(val value: AudioRecord) {
+        private val released = AtomicBoolean(false)
+        fun stop() { if (!released.get()) runCatching { value.stop() } }
+        fun release() { if (released.compareAndSet(false, true)) value.release() }
+    }
+    private class SampleBuffer {
+        var floats: FloatBuffer = FloatBuffer.allocate(16000 * 30)
+    }
+    @Volatile private var session: CaptureSession? = null
+    private fun current(owner: CaptureSession) = session === owner
     private val modelRunner = MultiModelRunner(modelManager)
-
     private val canExpandSpace = settings.recordingConfiguration.canExpandSpace
     private val useVAD = settings.recordingConfiguration.useVADAutoStop
-
-    private var floatSamples: FloatBuffer = FloatBuffer.allocate(16000 * 30)
-    private var recorderJob: Job? = null
-    private var modelJob: Job? = null
-    private var loadModelJob: Job? = null
 
     private var focusRequest: AudioFocusRequest? = null
 
@@ -216,25 +229,32 @@ class AudioRecognizer(
     }
 
     fun reset() {
-        recorder?.stop()
-        recorderJob?.cancel()
-
-        recorder?.release()
-        recorder = null
-
-        modelJob?.cancel()
-        isRecording = false
-
+        val old = session
+        session = null // invalidate callbacks before any cancellation or cleanup
+        if (old != null) {
+            old.capturing = false
+            old.routeRequest++
+            old.switchJob?.cancel()
+            old.preload?.cancel()
+            old.decode?.cancel()
+            old.recorder?.stop()
+            old.reader?.cancel()
+            // Completion handlers run even if the parent lifecycle scope is already cancelled.
+            // Each recorder is released exactly once, only after its reader stops.
+            val recorder = old.recorder
+            val reader = old.reader
+            if (reader == null) recorder?.release()
+            else reader.invokeOnCompletion { recorder?.release() }
+        }
         modelRunner.cancelAll()
-
         unfocusAudio()
-
         clearCommunicationDevice()
     }
 
     fun finish() {
-        if(!isRecording) return
-        onFinishRecording()
+        val owner = session ?: return
+        if (!owner.capturing) return
+        onFinishRecording(owner)
     }
 
     fun cancel() {
@@ -255,20 +275,21 @@ class AudioRecognizer(
     }
 
     fun start() {
+        reset()
+        val owner = CaptureSession()
+        session = owner
         listener.loading()
 
         if (context.checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-            requestPermission()
+            requestPermission(owner)
         } else {
-            startRecording()
+            startRecording(owner)
         }
     }
 
-    private fun requestPermission() {
+    private fun requestPermission(owner: CaptureSession) {
         listener.needPermission { wasGranted ->
-            if(wasGranted) {
-                startRecording()
-            }
+            if (wasGranted && current(owner) && owner.capturing) startRecording(owner)
         }
     }
 
@@ -283,32 +304,34 @@ class AudioRecognizer(
             16000 * 2 * 5
         )
 
-        this.recorder = recorder
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            recorder.setPreferredMicrophoneDirection(MicrophoneDirection.MIC_DIRECTION_TOWARDS_USER)
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                recorder.setPreferredMicrophoneDirection(MicrophoneDirection.MIC_DIRECTION_TOWARDS_USER)
+            }
+            return recorder
+        } catch (error: Throwable) {
+            recorder.release()
+            throw error
         }
-
-        return recorder
     }
 
     private suspend fun preloadModels() {
         modelRunner.preload(settings.modelRunConfiguration)
     }
 
-    private fun expandSpaceIfAllowed(): Boolean {
+    private fun expandSpaceIfAllowed(owner: CaptureSession): Boolean {
         if(canExpandSpace) {
             // Allocate an extra 30 seconds
-            val newSampleBuffer = FloatBuffer.allocate(floatSamples.capacity() + 16000 * 30)
-            //Log.d("AudioRecognizer", "Allocating extra space: ${floatSamples.capacity() / 16000} -> ${newSampleBuffer.capacity() / 16000}")
-            newSampleBuffer.put(floatSamples.array(), 0, floatSamples.capacity() - floatSamples.remaining())
-            floatSamples = newSampleBuffer
+            val newSampleBuffer = FloatBuffer.allocate(owner.samples.floats.capacity() + 16000 * 30)
+            //Log.d("AudioRecognizer", "Allocating extra space: ${owner.samples.floats.capacity() / 16000} -> ${newSampleBuffer.capacity() / 16000}")
+            newSampleBuffer.put(owner.samples.floats.array(), 0, owner.samples.floats.capacity() - owner.samples.floats.remaining())
+            owner.samples.floats = newSampleBuffer
             return true
         }
         return false
     }
 
-    private suspend fun recordingJob(recorder: AudioRecord, vad: VadModel?) {
+    private suspend fun recordingJob(recorder: AudioRecord, vad: VadModel?, owner: CaptureSession, request: Long) {
         var hasTalked = false
         var anyNoiseAtAll = false
 
@@ -327,19 +350,21 @@ class AudioRecognizer(
 
         val samples = ShortArray(1600)
 
-        while (isRecording) {
+        while (current(owner) && owner.capturing && owner.routeRequest == request) {
             yield()
+            if (!current(owner) || !owner.capturing || owner.routeRequest != request) return
             val nRead = recorder.read(samples, 0, 1600, AudioRecord.READ_BLOCKING)
             if (nRead <= 0) break
             yield()
+            if (!current(owner) || !owner.capturing || owner.routeRequest != request) return
 
-            var isRunningOutOfSpace = (floatSamples.remaining() < nRead.coerceAtLeast(1600)) && !expandSpaceIfAllowed()
+            var isRunningOutOfSpace = (owner.samples.floats.remaining() < nRead.coerceAtLeast(1600)) && !expandSpaceIfAllowed(owner)
 
             val hasNotTalkedRecently = hasTalked && (numConsecutiveNonSpeech > 66) && useVAD
             if (isRunningOutOfSpace || hasNotTalkedRecently) {
                 yield()
                 withContext(Dispatchers.Main) {
-                    finish()
+                    if (current(owner) && owner.routeRequest == request) finish()
                 }
                 return
             }
@@ -374,11 +399,11 @@ class AudioRecognizer(
                 }
             }
 
-            floatSamples.put(samples.sliceArray(0 until nRead).map { it.toFloat() / Short.MAX_VALUE.toFloat() }.toFloatArray())
+            owner.samples.floats.put(samples.sliceArray(0 until nRead).map { it.toFloat() / Short.MAX_VALUE.toFloat() }.toFloatArray())
 
             // Don't set hasTalked if the start sound may still be playing, otherwise on some
             // devices the rms just explodes and `hasTalked` is always true
-            val startSoundPassed = (floatSamples.position() > 16000 * 0.6)
+            val startSoundPassed = (owner.samples.floats.position() > 16000 * 0.6)
             if (!startSoundPassed) {
                 numConsecutiveSpeech = 0
                 numConsecutiveNonSpeech = 0
@@ -397,7 +422,7 @@ class AudioRecognizer(
             }
 
             // Check if mic is blocked
-            val blockCheckTimePassed = (floatSamples.position() > 2 * 16000) // two seconds
+            val blockCheckTimePassed = (owner.samples.floats.position() > 2 * 16000) // two seconds
             if (!anyNoiseAtAll && canMicBeBlocked && blockCheckTimePassed) {
                 isMicBlocked = true
             }
@@ -414,25 +439,28 @@ class AudioRecognizer(
 
             yield()
             withContext(Dispatchers.Main) {
-                listener.updateMagnitude(magnitude, state)
+                if (current(owner) && owner.capturing && owner.routeRequest == request)
+                    listener.updateMagnitude(magnitude, state)
             }
 
             // Skip ahead as much as possible, in case we are behind (taking more than
             // 100ms to process 100ms)
             while (true) {
                 yield()
+                if (!current(owner) || !owner.capturing || owner.routeRequest != request) return
                 val nRead2 = recorder.read(
                     samples, 0, 1600, AudioRecord.READ_NON_BLOCKING
                 )
+                if (!current(owner) || !owner.capturing || owner.routeRequest != request) return
                 if (nRead2 > 0) {
-                    if (floatSamples.remaining() < nRead2 && !expandSpaceIfAllowed()) {
+                    if (owner.samples.floats.remaining() < nRead2 && !expandSpaceIfAllowed(owner)) {
                         yield()
                         withContext(Dispatchers.Main) {
-                            finish()
+                            if (current(owner) && owner.routeRequest == request) finish()
                         }
                         break
                     }
-                    floatSamples.put(samples.sliceArray(0 until nRead2).map { it.toFloat() / Short.MAX_VALUE.toFloat() }.toFloatArray())
+                    owner.samples.floats.put(samples.sliceArray(0 until nRead2).map { it.toFloat() / Short.MAX_VALUE.toFloat() }.toFloatArray())
                 } else {
                     break
                 }
@@ -453,134 +481,123 @@ class AudioRecognizer(
                 (Build.VERSION.SDK_INT >= 33 && device.type == AudioDeviceInfo.TYPE_BLE_HEADSET)
     }
 
-    private fun reportActualRoute(recorder: AudioRecord, state: MicrophoneDeviceState) {
-        try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                val routed = recorder.routedDevice
-                if (routed != null) {
-                    listener.recordingStarted(state.copy(
-                        actualRouteIsBluetooth = routeIsBluetooth(routed),
-                        actualRouteName = routed.productName?.toString()
-                    ))
-                }
-            }
-        } catch(_: Exception) {}
+    private fun reportActualRoute(recorder: OwnedRecorder, state: MicrophoneDeviceState,
+                                  owner: CaptureSession, request: Long) {
+        // Routing notifications can arrive on a framework thread. Publish only on owned Main,
+        // and recheck identity after dispatch (including a late callback from an old recorder).
+        lifecycleScope.launch(Dispatchers.Main) {
+            if (!current(owner) || !owner.capturing || owner.routeRequest != request || owner.recorder !== recorder) return@launch
+            try {
+                val routed = recorder.value.routedDevice
+                if (routed != null) listener.recordingStarted(state.copy(
+                    actualRouteIsBluetooth = routeIsBluetooth(routed),
+                    actualRouteName = routed.productName?.toString()
+                ))
+            } catch (_: Exception) { }
+        }
     }
 
-    private fun createRecorderAndJob(preferBluetoothMic: Boolean): MicrophoneDeviceState {
-        isRecording = false
-        recorder?.stop()
-
-        val bluetoothInfo = setCommunicationDevice(preferBluetoothMic)
-
-        val state = MicrophoneDeviceState(
-            bluetoothAvailable = bluetoothInfo.first || isBluetoothAvailable(),
-            bluetoothActive = bluetoothInfo.first,
-            deviceName = bluetoothInfo.second,
-            bluetoothPreferredByUser = settings.recordingConfiguration.preferBluetoothMic,
-            setBluetooth = {
-                listener.recordingStarted(createRecorderAndJob(it))
-            }
-        )
-
-        val task = {
-            recorder?.release()
-
-            val recorder = createAudioRecorder()
-
-            recorder.startRecording()
-            this.recorder = recorder
-
-            // The acknowledged communication device can differ from the recorder's actual
-            // input route; report the true route, and keep it updated if it changes.
-            reportActualRoute(recorder, state)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                recorder.addOnRoutingChangedListener({ reportActualRoute(recorder, state) }, null)
-            }
-
-            isRecording = true
-
-            recorderJob = lifecycleScope.launch {
-                withContext(Dispatchers.Default) {
-                    if(useVAD) {
-                        createVad().use { vad ->
-                            recordingJob(recorder, vad)
-                        }
-                    } else {
-                        recordingJob(recorder, null)
+    private fun createRecorderAndJob(preferBluetoothMic: Boolean, owner: CaptureSession) {
+        if (!current(owner) || !owner.capturing) return
+        val oldReader = owner.reader // capture before suspension, never adopt a newer reader
+        val oldRecorder = owner.recorder
+        owner.switchJob?.cancel()
+        val request = ++owner.routeRequest
+        oldRecorder?.stop()
+        oldReader?.cancel()
+        owner.switchJob = lifecycleScope.launch {
+            oldReader?.join()
+            if (!current(owner) || !owner.capturing || owner.routeRequest != request) return@launch
+            oldRecorder?.release()
+            if (owner.recorder === oldRecorder) owner.recorder = null
+            var created: OwnedRecorder? = null
+            try {
+                val bluetoothInfo = setCommunicationDevice(preferBluetoothMic)
+                val state = MicrophoneDeviceState(
+                    bluetoothAvailable = bluetoothInfo.first || isBluetoothAvailable(),
+                    bluetoothActive = bluetoothInfo.first,
+                    deviceName = bluetoothInfo.second,
+                    bluetoothPreferredByUser = settings.recordingConfiguration.preferBluetoothMic,
+                    setBluetooth = { selected ->
+                        if (current(owner) && owner.capturing && owner.routeRequest == request &&
+                            selected != preferBluetoothMic) createRecorderAndJob(selected, owner)
                     }
+                )
+                val activeRecorder = OwnedRecorder(createAudioRecorder())
+                created = activeRecorder
+                activeRecorder.value.startRecording()
+                owner.recorder = activeRecorder
+                listener.recordingStarted(state)
+                reportActualRoute(activeRecorder, state, owner, request)
+                activeRecorder.value.addOnRoutingChangedListener({
+                    reportActualRoute(activeRecorder, state, owner, request)
+                }, null)
+                val reader = lifecycleScope.launch(Dispatchers.Default, start = CoroutineStart.LAZY) {
+                    if (!current(owner) || !owner.capturing || owner.routeRequest != request) return@launch
+                    if (useVAD) createVad().use { recordingJob(activeRecorder.value, it, owner, request) }
+                    else recordingJob(activeRecorder.value, null, owner, request)
+                }
+                // Handler registered before start, including already-cancelled lifecycle scope.
+                reader.invokeOnCompletion { activeRecorder.release() }
+                owner.reader = reader
+                reader.start()
+            } catch (e: Exception) {
+                created?.stop()
+                created?.release()
+                if (owner.recorder === created) owner.recorder = null
+                if (current(owner) && owner.capturing && owner.routeRequest == request) {
+                    clearCommunicationDevice()
+                    if (e is SecurityException) requestPermission(owner)
+                    else { reset(); listener.cancelled() }
                 }
             }
         }
-
-        if(recorderJob != null) {
-            lifecycleScope.launch {
-                recorderJob?.cancelAndJoin()
-                task()
-            }
-        } else {
-            task()
-        }
-
-
-        return state
     }
 
-    private fun startRecording() {
-        val device = try {
-            createRecorderAndJob(settings.recordingConfiguration.preferBluetoothMic)
-        } catch (e: SecurityException) {
-            // It's possible we may have lost permission, so let's just ask for permission again
-            clearCommunicationDevice()
-            requestPermission()
-            return
-        }
-
+    private fun startRecording(owner: CaptureSession) {
+        if (!current(owner) || !owner.capturing) return
         focusAudio()
-
-        listener.recordingStarted(device)
-
-        loadModelJob = lifecycleScope.launch {
-            withContext(Dispatchers.Default) {
-                try {
-                    preloadModels()
-                } catch(_: InvalidModelException) {
-                    withContext(Dispatchers.Main) {
-                        reset()
-                        listener.modelLoadingFailed()
-                    }
+        createRecorderAndJob(settings.recordingConfiguration.preferBluetoothMic, owner)
+        owner.preload = lifecycleScope.launch(Dispatchers.Default) {
+            try {
+                preloadModels()
+                if (!current(owner)) return@launch
+            } catch (_: InvalidModelException) {
+                withContext(Dispatchers.Main) {
+                    if (current(owner)) { reset(); listener.modelLoadingFailed() }
                 }
             }
         }
     }
 
-    private val runnerCallback: ModelInferenceCallback = object : ModelInferenceCallback {
+    private fun runnerCallback(owner: CaptureSession): ModelInferenceCallback = object : ModelInferenceCallback {
         override fun updateStatus(state: InferenceState) {
-            listener.decodingStatus(state)
+            if (current(owner)) listener.decodingStatus(state)
         }
 
         override fun languageDetected(language: Language) {
-            listener.languageDetected(language)
+            if (current(owner)) listener.languageDetected(language)
         }
 
         override fun partialResult(string: String) {
-            if(isBlankResult(string)) return
+            if (!current(owner) || isBlankResult(string)) return
             listener.partialResult(string)
         }
     }
 
-    private suspend fun runModel() {
-        loadModelJob?.let {
+    private suspend fun runModel(owner: CaptureSession) {
+        owner.preload?.let {
             if (it.isActive) {
                 println("Model was not finished loading...")
                 it.join()
             }
         }
 
-        val floatArray = floatSamples.array().sliceArray(0 until floatSamples.position())
+        if (!current(owner)) return
+        val floatArray = owner.samples.floats.array().sliceArray(0 until owner.samples.floats.position())
         // Exact zero only. This does not classify nonzero noise or reject quiet speech.
         if (isExactEmptyCapture(floatArray)) {
-            withContext(Dispatchers.Main) { listener.finished("") }
+            withContext(Dispatchers.Main) { if (current(owner)) listener.finished("") }
             return
         }
 
@@ -590,7 +607,7 @@ class AudioRecognizer(
                 floatArray,
                 settings.modelRunConfiguration,
                 settings.decodingConfiguration,
-                runnerCallback
+                runnerCallback(owner)
             ).trim()
         }catch(e: InferenceCancelledException) {
             yield()
@@ -603,29 +620,25 @@ class AudioRecognizer(
         }
 
         yield()
-        lifecycleScope.launch {
-            withContext(Dispatchers.Main) {
-                yield()
-                listener.finished(text)
-            }
-        }
+        if (!current(owner)) return
+        withContext(Dispatchers.Main) { if (current(owner)) listener.finished(text) }
     }
 
-    private fun onFinishRecording() {
-        recorderJob?.cancel()
-
-        if (!isRecording) {
-            throw IllegalStateException("Should not call onFinishRecording when not recording")
-        }
-
-        isRecording = false
-        recorder?.stop()
-
+    private fun onFinishRecording(owner: CaptureSession) {
+        // Stop also works during a pending route switch: preserve this session's collected
+        // audio, cancel the pending restart, then wait for its captured reader before decode.
+        owner.capturing = false
+        owner.routeRequest++
+        owner.switchJob?.cancel()
+        val oldReader = owner.reader
+        owner.recorder?.stop()
+        oldReader?.cancel()
         listener.processing()
-
-        modelJob = lifecycleScope.launch {
+        owner.decode = lifecycleScope.launch {
+            oldReader?.join()
+            if (!current(owner)) return@launch
             withContext(Dispatchers.Default) {
-                runModel()
+                if (current(owner)) runModel(owner)
             }
         }
     }
