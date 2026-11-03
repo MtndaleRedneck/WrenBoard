@@ -402,8 +402,9 @@ abstract public class ExpandableBinaryDictionary extends Dictionary {
                         Log.e(TAG, "Cannot update counter. dictionary: " + mDictName);
                     }
                 } else if (BuildConfig.DEBUG && Dictionary.TYPE_USER_HISTORY.equals(mDictType)) {
-                    Log.i("WBDBG", "STARTER stored '" + word + "' at "
-                            + android.os.SystemClock.uptimeMillis());
+                    Log.i("WBDBG", "STARTER stored '"
+                            + org.futo.inputmethod.engine.general.WrenTraceRedact.word(word)
+                            + "' at " + android.os.SystemClock.uptimeMillis());
                 }
             }
         });
