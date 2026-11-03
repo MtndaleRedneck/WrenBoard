@@ -57,7 +57,7 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
       - name: Build stable DEBUG APK (x86_64 only)
         env:
-          # SCRATCH BRANCH ONLY: keyed GIF evidence runs (bounded, owner-authorized). Empty secret
+          # SCRATCH BRANCH ONLY: keyed GIF evidence runs against the configured test API. Empty secret
           # keeps the keyless placeholder state; wrenboard-1.5 CI stays keyless.
           KLIPY_APP_KEY: ${{ secrets.KLIPY_APP_KEY }}
         run: ./gradlew --no-daemon assembleStableDebug -Pandroid.injected.build.abi=x86_64 -Pandroid.injected.testOnly=false
