@@ -142,7 +142,7 @@ class GeneralIME(val helper: IMEHelper) : IMEInterface, WordLearner, SuggestionS
         val isWordBlacklisted = SuggestionBlacklist.getCapitalVariants(word, settings.current.mLocale).any { !suggestionBlacklist.isWordOk(it) }
         if(isWordBlacklisted) return
 
-        if (BuildConfig.DEBUG) android.util.Log.i("WBDBG", "STARTER learn '$word' at ${android.os.SystemClock.uptimeMillis()}")
+        if (BuildConfig.DEBUG) android.util.Log.i("WBDBG", "STARTER learn '${WrenTraceRedact.word(word)}' at ${android.os.SystemClock.uptimeMillis()}")
         dictionaryFacilitator.addToUserHistory(
             word, wasCapitalized,
             ngramContext, timestamp,
@@ -836,7 +836,7 @@ class GeneralIME(val helper: IMEHelper) : IMEInterface, WordLearner, SuggestionS
             val enabled = helper.context.getSetting(StarterWordsSetting)
             val fromHistory = words.mSuggestedWordInfoList.filter { it.mSourceDict?.mDictType == Dictionary.TYPE_USER_HISTORY }
             val chosen = WrenStarterWords.choose(fromHistory.map { it.mWord }, enabled)
-            if (BuildConfig.DEBUG) Log.i("WBDBG", "STARTER ${if (!enabled) "setting off" else if (fromHistory.isEmpty()) "fallback" else "history"} [${chosen.joinToString("|")}] from [${(0 until words.size()).joinToString("|") { words.getWord(it) }}]")
+            if (BuildConfig.DEBUG) Log.i("WBDBG", "STARTER ${if (!enabled) "setting off" else if (fromHistory.isEmpty()) "fallback" else "history"} [${WrenTraceRedact.words(chosen)}] from [${WrenTraceRedact.words((0 until words.size()).map { words.getWord(it) })}]")
             if (chosen.isEmpty()) return SuggestedWords.getEmptyInstance()
             val list = ArrayList<SuggestedWordInfo>()
             chosen.forEach { w ->
