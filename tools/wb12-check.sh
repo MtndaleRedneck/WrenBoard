@@ -1337,6 +1337,14 @@ if leg saveword; then
   adb logcat -c; dbg "open:save_word" 0.4; shot sw01_chip; sleep 1.1; shot sw01_selection_saved
   # Raw receiver-side evidence: any "CMD ... failed" exception from the action path lands here.
   adb logcat -d -s WBDBG:I 2>/dev/null | tr -d '\r' > shots/sw01_wbdbg_raw.txt
+  # Actual action result: independent of the shell's provider/user visibility. This proves
+  # only the selected word's same-app absent -> write-returned -> present transition in
+  # the same current editor/request. It does NOT qualify shell negatives or tail absence.
+  if [ "$PRE0" = 1 ] && grep -qE '^.*SAVEWORD_RESULT request=[0-9]+ before=ABSENT after=PRESENT writeReturned=true selected=true currentEditor=true currentRequest=true persisted=true$' shots/sw01_wbdbg_raw.txt; then
+    pass "selected word persisted and re-queried present in the actual app/current editor/request (bounded same-app control only)"
+  else
+    fail "same-app selected-word persistence control not established (inspect content-free action result)"
+  fi
   # Raw provider payload (canary tokens only) preserved against row-shape false negatives.
   adb shell content query --uri content://user_dictionary/words --where "word='$SWP'" > shots/sw01_provider_raw.txt 2>&1
   if [ "$PRE0" != 1 ]; then
@@ -1347,7 +1355,7 @@ if leg saveword; then
   if [ $rp -eq 0 ] && [ $rt -eq 1 ]; then
     POS_OK=1; pass "save word saves the SELECTED word over the nonempty last-typed word (priority + liveness)"
   elif [ $rt -eq 0 ]; then fail "priority: the LAST-TYPED word was saved over the explicit selection"
-  elif [ $rp -eq 1 ]; then fail "positive control: nothing was saved to the user dictionary (action path dead; negatives unqualified)"; fi
+  elif [ $rp -eq 1 ]; then fail "shell provider did not expose the selected word; shell-negative controls unqualified (not evidence the app action is dead)"; fi
   fi
   dictdel "$SWP"; dictdel "$SWT"
   negcheck() { # <token> <label> <precondition 0/1>

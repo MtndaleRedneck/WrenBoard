@@ -153,20 +153,35 @@ val SaveWordAction = Action(
                 manager.getLifecycleScope().launch {
                     if (ime.actionEditorGeneration != editorGeneration ||
                         !WrenSaveWordNotice.isCurrentRequest(requestGeneration)) return@launch
-                    var preExisting = false
-                    val persisted = withContext(Dispatchers.IO) { try {
-                        preExisting = alreadyInUserDictionary(appContext, word)
-                        preExisting || run {
-                            UserDictionaryCompatUtils.addWord(appContext, word, 250, null, null)
-                            alreadyInUserDictionary(appContext, word)
+                    var before = DictionaryPresence.ERROR
+                    var after = DictionaryPresence.ERROR
+                    var writeReturned = false
+                    val persisted = withContext(Dispatchers.IO) {
+                        before = queryUserDictionary(appContext, word)
+                        when (before) {
+                            DictionaryPresence.PRESENT -> { after = before; true }
+                            DictionaryPresence.ERROR -> false
+                            DictionaryPresence.ABSENT -> try {
+                                UserDictionaryCompatUtils.addWord(appContext, word, 250, null, null)
+                                writeReturned = true
+                                after = queryUserDictionary(appContext, word)
+                                after == DictionaryPresence.PRESENT
+                            } catch (_: Exception) { false }
                         }
-                    } catch (_: Exception) { false } }
+                    }
+                    val currentEditor = ime.actionEditorGeneration == editorGeneration
+                    val currentRequest = WrenSaveWordNotice.isCurrentRequest(requestGeneration)
+                    // Content-free diagnostic from the actual action, not a shell-provider view.
+                    // No text, length, digest, package, or identity derived from the word is logged.
+                    if (org.futo.inputmethod.latin.BuildConfig.DEBUG) Log.i("WBDBG",
+                        "SAVEWORD_RESULT request=$requestGeneration before=$before after=$after " +
+                            "writeReturned=$writeReturned selected=${selected != null} " +
+                            "currentEditor=$currentEditor currentRequest=$currentRequest persisted=$persisted")
                     // Never apply a delayed chip to a new/closed editor or a newer save request.
-                    if (ime.actionEditorGeneration != editorGeneration ||
-                        !WrenSaveWordNotice.isCurrentRequest(requestGeneration)) return@launch
+                    if (!currentEditor || !currentRequest) return@launch
                     WrenSaveWordNotice.show(
                         if (persisted) appContext.getString(
-                            if (preExisting) R.string.wren_word_already_saved
+                            if (before == DictionaryPresence.PRESENT) R.string.wren_word_already_saved
                             else R.string.wren_word_saved_chip, word)
                         else appContext.getString(R.string.wren_word_save_failed))
                 }
@@ -177,12 +192,15 @@ val SaveWordAction = Action(
     windowImpl = null,
 )
 
-private fun alreadyInUserDictionary(context: Context, word: String): Boolean = try {
+private enum class DictionaryPresence { PRESENT, ABSENT, ERROR }
+
+private fun queryUserDictionary(context: Context, word: String): DictionaryPresence = try {
     context.contentResolver.query(
         UserDictionary.Words.CONTENT_URI, arrayOf(UserDictionary.Words.WORD),
         "${UserDictionary.Words.WORD}=?", arrayOf(word), null
-    )?.use { it.moveToFirst() } == true
-} catch (_: Exception) { false }
+    )?.use { if (it.moveToFirst()) DictionaryPresence.PRESENT else DictionaryPresence.ABSENT }
+        ?: DictionaryPresence.ERROR
+} catch (_: Exception) { DictionaryPresence.ERROR }
 
 /** Transient centre-chip text (save-word confirmation). New instance per show so StateFlow re-emits. */
 object WrenSaveWordNotice {
