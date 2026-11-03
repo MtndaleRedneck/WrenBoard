@@ -13,7 +13,6 @@
 package org.futo.inputmethod.latin.inputlogic;
 
 import android.os.SystemClock;
-import android.view.inputmethod.EditorInfo;
 
 import org.futo.inputmethod.engine.IMEManager;
 import org.futo.inputmethod.engine.general.GeneralIME;
@@ -25,11 +24,15 @@ import org.futo.inputmethod.latin.InputTestsBase;
 import org.futo.inputmethod.latin.LatinIMELegacy;
 import org.futo.inputmethod.latin.NgramContext;
 import org.futo.inputmethod.latin.RichInputConnection;
+import org.futo.inputmethod.latin.SuggestedWords;
 import org.futo.inputmethod.latin.settings.Settings;
 
 import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
+import java.util.concurrent.TimeUnit;
 
 import javax.annotation.Nonnull;
 
@@ -79,6 +82,10 @@ public class WrenWiringTestBase extends InputTestsBase {
                 if (word.equals(r.word)) out.add(r);
             }
             return out;
+        }
+
+        synchronized int totalLearnCount() {
+            return learns.size();
         }
 
         synchronized List<String> eventsSnapshot() {
@@ -136,7 +143,13 @@ public class WrenWiringTestBase extends InputTestsBase {
         mLogicFacilitatorField = getField(InputLogic.class, "mDictionaryFacilitator");
         mOriginalLogicFacilitator = (DictionaryFacilitator) mLogicFacilitatorField.get(mInputLogic);
         mLogicFacilitatorField.set(mInputLogic, mRecorder);
-        // (Re)load dictionaries against the recorder and start from a clean history.
+        // Reset source for a clean history: clear the personalized dictionaries BEFORE
+        // loading dictionaries against the recorder, so each test starts with an empty
+        // user history regardless of what earlier tests on this device learned.
+        final Method clear = LatinIMELegacy.class.getDeclaredMethod(
+                "clearPersonalizedDictionariesForTest");
+        clear.setAccessible(true);
+        clear.invoke(mLatinIMELegacy);
         changeLanguage("en_US");
     }
 
@@ -184,5 +197,66 @@ public class WrenWiringTestBase extends InputTestsBase {
 
     protected void resetSlowInputConnection() {
         mInputLogic.mConnection.onStartInput();
+    }
+
+    /**
+     * Invokes the production starter-words function on the live engine and returns the
+     * actual strip words it would show for the current (empty) field. This is the real
+     * output path GeneralIME.showSuggestionStrip feeds, called in-process so the word
+     * identity comes out as PASS/FAIL only.
+     */
+    protected List<String> invokeStarterWordsIfNeeded(final SuggestedWords input) throws Exception {
+        final Method m = GeneralIME.class.getDeclaredMethod(
+                "starterWordsIfNeeded", SuggestedWords.class, int.class, int.class);
+        m.setAccessible(true);
+        final SuggestedWords out = (SuggestedWords) m.invoke(mGeneralIme, input,
+                SuggestedWords.INPUT_STYLE_TYPING, 1);
+        final List<String> words = new ArrayList<>();
+        for (int i = 0; i < out.size(); i++) {
+            words.add(out.getWord(i));
+        }
+        return words;
+    }
+
+    /** A SuggestedWords shaped the way the empty-field prediction feeds the starter path. */
+    protected SuggestedWords predictionWithHistoryWord(final String word) {
+        final ExpandableBinaryDictionary historyDict =
+                mRecorder.getSubDictForTesting(Dictionary.TYPE_USER_HISTORY);
+        final ArrayList<SuggestedWords.SuggestedWordInfo> infos = new ArrayList<>();
+        infos.add(new SuggestedWords.SuggestedWordInfo(word, "" /* prevWordsContext */,
+                SuggestedWords.SuggestedWordInfo.MAX_SCORE,
+                SuggestedWords.SuggestedWordInfo.KIND_PREDICTION, historyDict,
+                SuggestedWords.SuggestedWordInfo.NOT_AN_INDEX,
+                SuggestedWords.SuggestedWordInfo.NOT_A_CONFIDENCE));
+        return new SuggestedWords(infos, null /* rawSuggestions */, null /* typedWordInfo */,
+                false, false, false, SuggestedWords.INPUT_STYLE_TYPING, 1,
+                null /* highlightedCandidate */);
+    }
+
+    /** Resets the recorder's dictionaries to hold several locale groups AT ONCE. */
+    protected void resetFacilitatorLocales(final List<Locale> locales) throws Exception {
+        mRecorder.resetDictionaries(getContext(), locales,
+                false /* useContactsDict */, true /* usePersonalizedDicts */,
+                true /* forceReloadAllDictionaries */, null /* account */,
+                "" /* dictNamePrefix, same as the app */, null /* listener */);
+        mRecorder.waitForLoadingDictionariesForTesting(5, TimeUnit.SECONDS);
+    }
+
+    /** Queries the user-history sub-dictionary of ONE specific locale group. */
+    protected boolean isInLocaleGroupHistory(final Locale locale, final String word)
+            throws Exception {
+        final Field groupsF = getField(DictionaryFacilitatorImpl.class, "mDictionaryGroups");
+        final List<?> groups = (List<?>) groupsF.get(mRecorder);
+        for (final Object g : groups) {
+            final Field localeF = getField(g.getClass(), "mLocale");
+            if (locale.equals(localeF.get(g))) {
+                final Method getSub = g.getClass().getDeclaredMethod("getSubDict", String.class);
+                getSub.setAccessible(true);
+                final ExpandableBinaryDictionary d =
+                        (ExpandableBinaryDictionary) getSub.invoke(g, Dictionary.TYPE_USER_HISTORY);
+                return d != null && d.isInDictionary(word);
+            }
+        }
+        return false;
     }
 }

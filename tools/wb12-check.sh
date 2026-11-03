@@ -200,6 +200,7 @@ if leg keyboard; then
   type_word hello; F=$(field); case "$F" in hello|Hello) pass "typing hello ($F)";; *) fail "typing hello (got '$F')";; esac
   clear_field
   # fix1b: starter words come from the person's own typing history; I/The/You only stand in when there is none
+  adb logcat -c   # count learn-queue writes from the zebra commits only
   for i in 1 2 3; do clear_field; type_word zebra; tapcode 32; sleep 0.6; done
   note "field after learning: '$(field)'"
   # Deterministic readiness: wait until the app has LOGGED all three learn writes (wave2-480 read
@@ -209,7 +210,7 @@ if leg keyboard; then
   done
   WC=$(adb logcat -d -s WBDBG:I 2>/dev/null | tr -d '\r' | grep -c "STARTER writeQueued")
   note "learn writes seen: $WC"
-  [ "$WC" -ge 3 ] && pass "all 3 typed words reached the learn queue ($WC)" || fail "only $WC of 3 required learn writes seen"
+  [ "$WC" -ge 3 ] && pass "3 learn-queue writes recorded since the zebra commits began ($WC, enqueue marker)" || fail "only $WC of 3 required learn-queue writes seen since the zebra commits began"
   clear_field; adb logcat -c; focus_target; sleep 2; S2=$(sugg)
   # Content-free readiness: wait until the strip update is logged as sourced from history
   # (the wordless "STARTER history chosen=N from=... history=M" line), not for a word.

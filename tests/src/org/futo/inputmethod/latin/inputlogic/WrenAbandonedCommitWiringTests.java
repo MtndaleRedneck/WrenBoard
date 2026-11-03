@@ -6,24 +6,32 @@
  * dictionaries; a recording facilitator counts and orders the learning calls, and the
  * known synthetic fixture word is verified as actually stored in the user history
  * dictionary (PASS/FAIL only - no word content leaves the test process).
+ *
+ * Claim bound: the seam tests prove the branch BODY - the exact learning call the
+ * abandon branch makes - exactly once. They do not prove the 450ms timeout routing
+ * itself; the on-device rev13-J trace (CI run 41629290203) is that evidence.
  */
 package org.futo.inputmethod.latin.inputlogic;
 
 import org.futo.inputmethod.latin.NgramContext;
+import org.futo.inputmethod.latin.SuggestedWords;
 import org.futo.inputmethod.latin.settings.Settings;
 
+import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
+import java.util.concurrent.TimeUnit;
 
 public class WrenAbandonedCommitWiringTests extends WrenWiringTestBase {
 
     private static final long HISTORY_WRITE_TIMEOUT_MS = 5000;
 
     /**
-     * Timeout path: the exact call the abandon branch makes learns the typed word
-     * exactly once, in commitChosenWord's order (onWordCommitted before the history
-     * write), and the word that lands in history is the known typed word.
+     * Timeout-path branch BODY: the exact call the abandon branch makes learns the
+     * typed word exactly once, in commitChosenWord's order (onWordCommitted before
+     * the history write), and the stored word is the known typed word.
      */
-    public void testAbandonedCommitLearnsTypedWordExactlyOnceThroughRealPath() {
+    public void testAbandonedLearnBodyLearnsTypedWordExactlyOnce() {
         mRecorder.clearRecords();
         type("zebra");
         callAbandonedLearn();
@@ -55,7 +63,31 @@ public class WrenAbandonedCommitWiringTests extends WrenWiringTestBase {
                 waitForHistoryWord("zebra", HISTORY_WRITE_TIMEOUT_MS));
     }
 
-    /** N-gram, start of field: the abandoned learn carries no real previous word. */
+    /**
+     * Actual starter-OUTPUT identity: the production starter-words function shows
+     * exactly the fallback set on a fresh history, then exactly the learned word with
+     * no padding once the word is in the user history.
+     */
+    public void testStarterOutputIdentityFallbackThenLearnedWord() throws Exception {
+        // Fresh history (per setUp's explicit clear): exactly the fallback set, in order.
+        assertEquals("fallback starters, exactly and in order",
+                Arrays.asList("I", "The", "You"),
+                invokeStarterWordsIfNeeded(SuggestedWords.getEmptyInstance()));
+
+        type("zebra ");
+        runMessages();
+        assertTrue("zebra stored", waitForHistoryWord("zebra", HISTORY_WRITE_TIMEOUT_MS));
+
+        // Back to an empty field, then feed the production starter function the history
+        // word the way the empty-field prediction feeds it.
+        mEditText.setText("");
+        sendUpdateForCursorMoveTo(0);
+        assertEquals("starter output is exactly the learned word, no padding",
+                Arrays.asList("zebra"),
+                invokeStarterWordsIfNeeded(predictionWithHistoryWord("zebra")));
+    }
+
+    /** N-gram, start of field: the abandoned learn carries exactly a sentence start. */
     public void testAbandonedCommitNgramContextAtStartOfField() {
         mRecorder.clearRecords();
         type("zebra");
@@ -64,13 +96,13 @@ public class WrenAbandonedCommitWiringTests extends WrenWiringTestBase {
         final List<WrenWiringTestBase.LearnRecord> learns = mRecorder.learnsFor("zebra");
         assertEquals(1, learns.size());
         final String ctx = learns.get(0).context.extractPrevWordsContext();
+        assertEquals("start-of-field context is exactly the sentence-start marker",
+                NgramContext.BEGINNING_OF_SENTENCE.extractPrevWordsContext(), ctx);
         assertFalse("context must not contain the word being committed: " + ctx,
                 ctx.contains("zebra"));
-        assertTrue("start-of-field context is empty or sentence start, got: '" + ctx + "'",
-                ctx.isEmpty() || ctx.contains(NgramContext.BEGINNING_OF_SENTENCE_TAG));
     }
 
-    /** N-gram, prior word: the abandoned learn carries the real previous word. */
+    /** N-gram, prior word: the abandoned learn carries exactly the real previous word. */
     public void testAbandonedCommitNgramContextWithPriorWord() {
         type("hello ");
         runMessages();
@@ -81,11 +113,11 @@ public class WrenAbandonedCommitWiringTests extends WrenWiringTestBase {
         final List<WrenWiringTestBase.LearnRecord> learns = mRecorder.learnsFor("zebra");
         assertEquals(1, learns.size());
         final String ctx = learns.get(0).context.extractPrevWordsContext();
-        assertTrue("context contains the actual previous word 'hello', got: '" + ctx + "'",
-                ctx.contains("hello"));
+        assertEquals("context is exactly the sentence start then the previous word",
+                "<S> hello", ctx);
     }
 
-    /** Privacy gate: personalization off blocks the history write on the real path. */
+    /** Privacy gate: personalization off blocks every history write on the real path. */
     public void testPersonalizationOffBlocksAbandonedLearn() {
         setBooleanPreference(Settings.PREF_KEY_USE_PERSONALIZED_DICTS, false, true);
         runMessages();
@@ -94,8 +126,8 @@ public class WrenAbandonedCommitWiringTests extends WrenWiringTestBase {
         mRecorder.clearRecords();
         type("zebra");
         callAbandonedLearn();
-        assertTrue("no user-history write when personalization is off",
-                mRecorder.learnsFor("zebra").isEmpty());
+        assertEquals("no user-history write at all when personalization is off",
+                0, mRecorder.totalLearnCount());
         setBooleanPreference(Settings.PREF_KEY_USE_PERSONALIZED_DICTS, true, true);
         runMessages();
     }
@@ -104,13 +136,13 @@ public class WrenAbandonedCommitWiringTests extends WrenWiringTestBase {
     public void testAutoCorrectionOffBlocksAbandonedLearn() {
         setBooleanPreference(Settings.PREF_AUTO_CORRECTION, false, true);
         runMessages();
-        assertFalse("precondition: auto-correction is off for this field",
+        assertFalse("precondition: the gate's own per-field variable reads off",
                 mSettings.getCurrent().mAutoCorrectionEnabledPerTextFieldSettings);
         mRecorder.clearRecords();
         type("zebra");
         callAbandonedLearn();
-        assertTrue("no user-history write when auto-correction is off",
-                mRecorder.learnsFor("zebra").isEmpty());
+        assertEquals("no user-history write at all when auto-correction is off",
+                0, mRecorder.totalLearnCount());
         setBooleanPreference(Settings.PREF_AUTO_CORRECTION, true, true);
         runMessages();
     }
@@ -121,38 +153,51 @@ public class WrenAbandonedCommitWiringTests extends WrenWiringTestBase {
         mRecorder.clearRecords();
         type("zebra");
         callAbandonedLearn();
-        assertTrue("no user-history write on a slow input connection",
-                mRecorder.learnsFor("zebra").isEmpty());
+        assertEquals("no user-history write at all on a slow input connection",
+                0, mRecorder.totalLearnCount());
         resetSlowInputConnection();
     }
 
     /**
-     * Multi-locale: after switching locales the abandoned learn still records and
-     * stores, exercising the confidence-based group selection on a fresh locale.
+     * Multi-locale with SIMULTANEOUS groups: with several locale groups loaded at
+     * once, a zero-confidence write is refused (the refusal branch requires
+     * groups > 1 by construction), and the real abandoned-learn path - which runs
+     * onWordCommitted first - lands the word in the confidence-selected locale group.
      */
-    public void testAbandonedCommitLearnsAfterLocaleSwitch() {
-        mRecorder.clearRecords();
-        type("zebra");
-        callAbandonedLearn();
-        assertEquals(1, mRecorder.learnsFor("zebra").size());
-        assertTrue("en word stored", waitForHistoryWord("zebra", HISTORY_WRITE_TIMEOUT_MS));
+    public void testMultiLocaleSimultaneousGroupsConfidenceSelection() throws Exception {
+        resetFacilitatorLocales(Arrays.asList(Locale.US, Locale.FRANCE));
+        assertTrue("precondition: several locale groups loaded simultaneously",
+                mRecorder.getLocales().size() > 1);
 
-        changeLanguage("fr_FR");
+        // Zero-confidence precondition: the write attempt happens but is refused
+        // (addToUserHistory returns early when the selected group has confidence 0
+        // and more than one group exists).
+        mRecorder.clearRecords();
+        mRecorder.addToUserHistory("bonjour", false /* wasAutoCapitalized */,
+                NgramContext.BEGINNING_OF_SENTENCE,
+                TimeUnit.MILLISECONDS.toSeconds(System.currentTimeMillis()),
+                false /* blockPotentiallyOffensive */);
+        assertEquals("the write attempt was made", 1, mRecorder.learnsFor("bonjour").size());
+        assertFalse("zero-confidence write is refused by group selection",
+                waitForHistoryWord("bonjour", 2000));
+        assertFalse("refused write not in the fr group either",
+                isInLocaleGroupHistory(Locale.FRANCE, "bonjour"));
+
+        // Real seam path: onWordCommitted first -> the fr group is selected and accepts.
         mRecorder.clearRecords();
         type("bonjour");
         callAbandonedLearn();
-        assertEquals("abandoned learn still happens after the locale switch",
-                1, mRecorder.learnsFor("bonjour").size());
-        final List<String> frEvents = mRecorder.eventsSnapshot();
-        final int frCommitIdx = frEvents.indexOf("commit:bonjour");
-        final int frLearnIdx = frEvents.indexOf("learn:bonjour");
-        assertTrue("confidence update (onWordCommitted) precedes the write on the second "
-                + "locale too (order: " + frEvents + ")",
-                frCommitIdx >= 0 && frLearnIdx > frCommitIdx);
-        // Observable effect of the confidence mechanism: addToUserHistory's confidence-based
-        // group selection refuses a zero-confidence write, so the word landing in the fr
-        // history proves the onWordCommitted-first order made the write acceptable.
-        assertTrue("fr word stored: confidence-based group selection accepted the write",
+        assertEquals(1, mRecorder.learnsFor("bonjour").size());
+        final List<String> events = mRecorder.eventsSnapshot();
+        final int commitIdx = events.indexOf("commit:bonjour");
+        final int learnIdx = events.indexOf("learn:bonjour");
+        assertTrue("confidence update precedes the write (order: " + events + ")",
+                commitIdx >= 0 && learnIdx > commitIdx);
+        assertTrue("word stored after the confidence update",
                 waitForHistoryWord("bonjour", HISTORY_WRITE_TIMEOUT_MS));
+        assertTrue("stored in the confidence-selected fr group",
+                isInLocaleGroupHistory(Locale.FRANCE, "bonjour"));
+        assertFalse("not stored in the en group",
+                isInLocaleGroupHistory(Locale.US, "bonjour"));
     }
 }
