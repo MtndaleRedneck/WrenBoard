@@ -49,6 +49,14 @@ public class TestInput extends Activity {
                                 : (android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES));
                         edit.setText("");
                         Log.i("IMETARGET", "PASSWORD=" + (on ? "ON" : "OFF"));
+                    } else if ("com.wrenboard.imetarget.NOLEARN".equals(a)) {
+                        boolean on = intent.getBooleanExtra("on", true);
+                        edit.setImeOptions(on
+                                ? (android.view.inputmethod.EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING
+                                        | android.view.inputmethod.EditorInfo.IME_ACTION_DONE)
+                                : android.view.inputmethod.EditorInfo.IME_ACTION_DONE);
+                        edit.setText("");
+                        Log.i("IMETARGET", "NOLEARN=" + (on ? "ON" : "OFF"));
                     } else if ("com.wrenboard.imetarget.SETCLIP".equals(a)) {
                         ClipboardManager cm =
                                 (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
@@ -100,6 +108,7 @@ public class TestInput extends Activity {
         f.addAction("com.wrenboard.imetarget.CLEAR");
         f.addAction("com.wrenboard.imetarget.CAPSENT");
         f.addAction("com.wrenboard.imetarget.PASSWORD");
+        f.addAction("com.wrenboard.imetarget.NOLEARN");
         f.addAction("com.wrenboard.imetarget.SETCLIP");
         registerReceiver(control, f, Context.RECEIVER_EXPORTED);
 

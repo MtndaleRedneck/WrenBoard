@@ -222,6 +222,7 @@ if leg keyboard; then
   [ "$WQ" -eq 0 ] && pass "privacy: personalization-off commit queued zero history writes ($PN)" || fail "privacy personalization-off: $WQ history write(s) queued (wanted 0) [$PN]"
   clear_field; focus_target; sleep 2; SN=$(sugg)
   [ "$SN" = "n=3" ] && pass "retrieval negative: strip still 3-word fallback after personalization-off commit ($SN)" || fail "retrieval negative: strip '$SN' after personalization-off commit (wanted n=3)"
+  shot k01g_neg1_strip_fallback_pixels
   dbg "prefbool:pref_key_use_personalized_dicts=true" 1.0
 
   # negative 2: autocorrect off
@@ -231,6 +232,7 @@ if leg keyboard; then
   [ "$WQ" -eq 0 ] && pass "privacy: autocorrect-off commit queued zero history writes ($PN)" || fail "privacy autocorrect-off: $WQ history write(s) queued (wanted 0) [$PN]"
   clear_field; focus_target; sleep 2; SN=$(sugg)
   [ "$SN" = "n=3" ] && pass "retrieval negative: strip still 3-word fallback after autocorrect-off commit ($SN)" || fail "retrieval negative: strip '$SN' after autocorrect-off commit (wanted n=3)"
+  shot k01h_neg2_strip_fallback_pixels
   dbg "prefbool:pref_key_auto_correction=true" 1.0
 
   # negative 3: password field (noLearning gate via mIsPasswordField; fixture broadcast sets inputType)
@@ -243,6 +245,19 @@ if leg keyboard; then
   adb shell input keyevent 4; sleep 0.8; tap_field; sleep 2; SN=$(sugg)
   [ "$SN" = "n=3" ] && pass "retrieval negative: strip still 3-word fallback after password-field commit ($SN)" || fail "retrieval negative: strip '$SN' after password-field commit (wanted n=3)"
   shot k01e_privacy_negatives_clean_strip
+
+  # negative 4: explicit IME_FLAG_NO_PERSONALIZED_LEARNING on an otherwise normal field
+  # (InputAttributes: mNoLearning = flag || mIsPasswordField || mIsCodeField - same boolean the
+  # password case exercises, but the explicit-flag path is asserted distinctly).
+  adb shell am broadcast -a com.wrenboard.imetarget.NOLEARN --ez on true -p "$TPKG" >/dev/null 2>&1; sleep 0.8
+  adb shell input keyevent 4; sleep 0.8; tap_field
+  adb logcat -c; type_word qjxwvz; tapcode 32; sleep 2
+  WQ=$(wqcount); PN=$(privnote); note "nolearn-flag commit: queued=$WQ markers: $PN"
+  [ "$WQ" -eq 0 ] && pass "privacy: NO_PERSONALIZED_LEARNING flag commit queued zero history writes ($PN)" || fail "privacy nolearn-flag: $WQ history write(s) queued (wanted 0) [$PN]"
+  adb shell am broadcast -a com.wrenboard.imetarget.NOLEARN --ez on false -p "$TPKG" >/dev/null 2>&1; sleep 0.8
+  adb shell input keyevent 4; sleep 0.8; tap_field; sleep 2; SN=$(sugg)
+  [ "$SN" = "n=3" ] && pass "retrieval negative: strip still 3-word fallback after nolearn-flag commit ($SN)" || fail "retrieval negative: strip '$SN' after nolearn-flag commit (wanted n=3)"
+  shot k01i_neg4_strip_fallback_pixels
 
   # positive control: one gated-on zebra commit must enqueue (observer live + in-order drain
   # barrier after three zero-write windows). zebra is also the acceptance selection word below.
@@ -302,9 +317,9 @@ if leg keyboard; then
     fail "strip select: no KBD geometry line for the tap position"
   else
     clear_field
+    shot k01f_strip_select_zebra
     adb shell input tap 510 $((KY - 76)); sleep 1.2; F=$(field | sed 's/[[:space:]]*$//')
     case "$F" in zebra|Zebra) : ;; *) adb shell input tap 540 $((KY - 38)); sleep 1.2; F=$(field | sed 's/[[:space:]]*$//');; esac
-    shot k01f_strip_select_zebra
     case "$F" in zebra|Zebra) pass "strip select: tapping the learned word inserts exactly '$F'";; *) fail "strip select: field='$F' after strip taps (wanted the learned word)";; esac
   fi
   clear_field
@@ -319,6 +334,40 @@ if leg keyboard; then
   [ -n "$S4" ] && [ "$S4" != "n=0" ] && pass "toggle off: typed word still gets normal suggestions ($S4)" || fail "toggle off: typed 'hel' got no normal suggestions ($S4)"
   clear_field
   dbg "dsbool:wren_starter_words=true" 1.0
+
+  # --- Acceptance: simultaneous en/fr multi-locale, fresh commit identity via the content-free
+  # locale tag on the write marker (DEBUG-only). fr is bundled (res-large/raw/main_fr.dict). ---
+  dbg "addlang:fr" 1.5; adb shell input keyevent 4; sleep 0.8; focus_target
+  adb logcat -c; sleep 1; SFR0=$(sugg); shot k02a_fr_absent_before
+  [ "$SFR0" = "n=3" ] && pass "fr absent-before: fresh fr field shows 3-word fallback ($SFR0)" || fail "fr absent-before: '$SFR0' (wanted n=3)"
+  # actual fr commits: bonjour is in the bundled fr main dict, so fr confidence can rise
+  adb logcat -c
+  for i in 1 2 3 4; do clear_field; type_word bonjour; tapcode 32; sleep 0.8; done
+  for i in $(seq 1 30); do
+    [ "$(adb logcat -d -s WBDBG:I 2>/dev/null | tr -d '\r' | grep -c 'STARTER writeQueued.* locale=fr ')" -ge 1 ] && break; sleep 1
+  done
+  WFR=$(adb logcat -d -s WBDBG:I 2>/dev/null | tr -d '\r' | grep -c 'STARTER writeQueued.* locale=fr ')
+  WEN=$(adb logcat -d -s WBDBG:I 2>/dev/null | tr -d '\r' | grep -c 'STARTER writeQueued.* locale=en')
+  note "fr commits: writeQueued locale=fr x$WFR, locale=en* x$WEN"
+  [ "$WFR" -ge 1 ] && [ "$WEN" -eq 0 ] && pass "fr commit identity: writes tagged locale=fr ($WFR), zero en-tagged writes" || fail "fr commit identity: fr=$WFR en=$WEN"
+  # fr retrieval: empty fr field must surface the committed word (count + pixels)
+  clear_field; focus_target; sleep 2
+  for i in $(seq 1 10); do SFR=$(sugg); grep -q 'STARTER history chosen=' shots/_s.txt && break; sleep 2; done
+  shot k02b_fr_after_commits
+  [ "$SFR" = "n=1" ] && pass "fr retrieval: fr strip shows the committed word alone ($SFR), pixels k02b" || fail "fr retrieval: '$SFR' (wanted n=1)"
+  # positive control en: switch back, one commit must be tagged locale=en*
+  dbg "addlang:en_US" 1.5; adb shell input keyevent 4; sleep 0.8; focus_target
+  adb logcat -c; type_word zebra; tapcode 32
+  if wait_wq 1; then
+    WEN2=$(adb logcat -d -s WBDBG:I 2>/dev/null | tr -d '\r' | grep -c 'STARTER writeQueued.* locale=en')
+    [ "$WEN2" -ge 1 ] && pass "positive control en: commit tagged locale=en* ($WEN2)" || fail "positive control en: writeQueued without en locale tag"
+  else fail "positive control en: no writeQueued within 25s"; fi
+  # en isolation: en strip must show only its own history word (zebra, n=1); a bonjour leak would add a second
+  clear_field; focus_target; sleep 2
+  for i in $(seq 1 10); do SEN=$(sugg); grep -q 'STARTER history chosen=' shots/_s.txt && break; sleep 2; done
+  shot k02c_en_after_fr
+  [ "$SEN" = "n=1" ] && pass "en isolation: en strip shows only its own history ($SEN), no fr leak, pixels k02c" || fail "en isolation: '$SEN' (wanted n=1)"
+  clear_field
 fi
 
 if leg shift; then
