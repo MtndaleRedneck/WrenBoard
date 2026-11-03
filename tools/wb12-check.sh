@@ -1530,14 +1530,32 @@ if leg settingspreview; then
     P=$(uitext "sp_$d"); [ -n "$P" ] && pass "preview $d has visible UI text" || fail "preview $d empty UI"
     adb shell input swipe 540 1800 540 600 400; sleep 1; shot "sp_${d}_bottom"
   done
+  # Exercise the actual About row, not only a debug navigation destination.
+  opensettings about 2
+  dumpui sp_about_license_route
+  XY=$(node_center sp_about_license_route "FUTO Source First License")
+  if [ -n "$XY" ]; then
+    adb shell input tap $XY; sleep 1
+    dumpui sp_license_opened; shot sp_license_via_about_top
+    uitext sp_license_opened | grep -q "FUTO Source First License 1.1-kb" && pass "About license row opens exact bundled license" || fail "About license row did not open exact license"
+    for i in $(seq 1 16); do
+      dumpui sp_license_scrolled
+      uitext sp_license_scrolled | grep -q "Trademark" && break
+      adb shell input swipe 540 1800 540 450 400; sleep 0.3
+    done
+    shot sp_license_via_about_bottom
+    uitext sp_license_scrolled | grep -q "Trademark" && pass "license scroll reaches final Definitions/Trademark text" || fail "license final text not reached by scroll"
+  else fail "About license row missing from actual UI"; fi
   # Paid-notice preservation is exercised on this disposable emulator only, never a user's account.
   dbg "dsbool:already_paid=true" 0.8
-  opensettings "" 3
+  # Empty navDest only resumes the current page. Explicit Home is required after
+  # the inventory loop's Advanced/payment pages, before notice assertions.
+  opensettings home 3
   dumpui sp_paid_transition
   if grep -q 'text="Thank you"' shots/sp_paid_transition.xml; then
     XY=$(node_center sp_paid_transition "Continue")
     [ -n "$XY" ] && { adb shell input tap $XY; sleep 1.5; }
-    opensettings "" 2
+    opensettings home 2
   fi
   dumpui sp_paid_root
   grep -q 'text="WrenBoard Settings"' shots/sp_paid_root.xml || fail "paid fixture did not return to actual Home root"
@@ -1547,13 +1565,15 @@ if leg settingspreview; then
   dbg "dsbool:already_paid=false" 0.8
   adb logcat -d -s WBDBG:I > shots/sp_paid_reset_raw.txt
   grep -q 'DSBOOL already_paid=false' shots/sp_paid_reset_raw.txt || fail "disposable paid fixture reset not acknowledged"
-  opensettings "" 2
+  opensettings home 2
   for i in 1 2 3; do adb shell input swipe 540 1800 540 500 400; sleep 0.5; done
   dumpui sp_unpaid_restored; shot sp_unpaid_restored
   # Require current Home identity before absence can qualify.
   grep -q 'text="FUTO license &amp; payment"' shots/sp_unpaid_restored.xml &&
     grep -q 'text="Advanced"' shots/sp_unpaid_restored.xml || fail "restored unpaid capture lacks expected current Home nodes"
-  uitext sp_unpaid_restored | grep -q "paid version" && fail "paid notice remains after disposable fixture reset" || pass "paid notice absent after disposable fixture reset"
+  if grep -q 'text="FUTO license &amp; payment"' shots/sp_unpaid_restored.xml && grep -q 'text="Advanced"' shots/sp_unpaid_restored.xml; then
+    uitext sp_unpaid_restored | grep -q "paid version" && fail "paid notice remains after disposable fixture reset" || pass "paid notice absent after disposable fixture reset on confirmed Home"
+  else note "INFO: unpaid notice absence unqualified - Home precondition failed"; fi
 
 fi
 
