@@ -125,7 +125,6 @@ for i in $(seq 1 30); do IME=$(adb shell ime list -a -s 2>/dev/null | tr -d '\r'
 note "ime id: $IME"
 
 if leg setup; then
-  dbg "synthetictrace:on" 0.5   # allow SUGG content logging on this test device (default: counts only)
   note "== SETUP: no wall, settings usable before WrenBoard is on =="
   adb shell ime disable "$IME" >/dev/null 2>&1
   adb shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1; sleep 6
@@ -193,7 +192,9 @@ if leg keyboard; then
   note "== KEYBOARD: starter words, 123 hint =="
   adb logcat -c; focus_target; sleep 2; S=$(sugg); note "suggestions in empty field: [$S]"
   grep 'STARTER' shots/_s.txt | tail -5 | sed 's/^.*WBDBG *: /  /' | tee -a "$R"
-  [ "$S" = "I|The|You" ] && pass "fresh empty field, toggle on: fallback starter words I|The|You ($S)" || fail "fresh empty field shows '$S' (wanted I|The|You)"
+  # Content-free assertion: suggestion logging is counts-only (no typed/learned text in
+  # diagnostics). The fallback set is exactly 3 words; word identity is covered by unit tests.
+  [ "$S" = "n=3" ] && pass "fresh empty field, toggle on: 3 fallback starter words ($S)" || fail "fresh empty field shows '$S' (wanted n=3 fallback)"
   XY=$(kxy code -3 2>/dev/null || true); note "123 key at: $XY"
   clear_field
   type_word hello; F=$(field); case "$F" in hello|Hello) pass "typing hello ($F)";; *) fail "typing hello (got '$F')";; esac
@@ -208,21 +209,25 @@ if leg keyboard; then
   done
   note "learn writes seen: $(adb logcat -d -s WBDBG:I 2>/dev/null | tr -d '\r' | grep -c "STARTER writeQueued")"
   clear_field; adb logcat -c; focus_target; sleep 2; S2=$(sugg)
-  for i in 1 2 3; do echo "$S2" | grep -qi zebra && break; sleep 2; S2=$(sugg); done
-  note "starter words after typing 'zebra' 3x at the start of a field: [$S2]"
+  # Content-free readiness: wait until the strip update is logged as sourced from history
+  # (the wordless "STARTER history chosen=N from=... history=M" line), not for a word.
+  for i in $(seq 1 10); do grep -q 'STARTER history chosen=' shots/_s.txt && break; sleep 2; S2=$(sugg); done
+  HIST=$(grep 'STARTER history chosen=' shots/_s.txt | tail -1 | sed 's/^.*WBDBG *: //')
+  note "starter strip after typing 'zebra' 3x at the start of a field: [$S2] $HIST"
   grep 'STARTER' shots/_s.txt | tail -3 | sed 's/^.*WBDBG *: /  /' | tee -a "$R"
   shot k01b_starter_words_from_history
-  echo "$S2" | grep -qi "zebra" && pass "starter words come from typing history ($S2)" || fail "starter words did not pick up typing history (got '$S2')"
-  [ "$(echo "$S2" | tr 'A-Z' 'a-z')" = "zebra" ] && pass "short history shown as predicted, no I/The/You padding ($S2)" || fail "empty field with history 'zebra' shows '$S2' (wanted just zebra)"
+  CH=$(echo "$HIST" | sed -n 's/.*chosen=\([0-9][0-9]*\).*/\1/p')
+  [ -n "$CH" ] && pass "starter strip sourced from typing history ($HIST)" || fail "starter strip not sourced from history ($HIST)"
+  [ -n "$CH" ] && [ "$S2" = "n=$CH" ] && pass "strip count matches the history pick, no fallback padding ($S2)" || fail "empty field with history shows '$S2' (wanted n=$CH)"
   dbg "dsbool:wren_starter_words=false" 1.0; adb logcat -c; focus_target; sleep 2; S3=$(sugg); note "starter words with the toggle off: [$S3]"
   shot k01c_starter_words_toggle_off
-  [ -z "$S3" ] && pass "toggle off: no starter words in an empty field" || fail "starter words still shown with the toggle off ($S3)"
+  [ "$S3" = "n=0" ] && pass "toggle off: no starter words in an empty field" || fail "starter words still shown with the toggle off ($S3)"
   # toggle off only blanks the empty field: typing a word still gets FUTO's normal suggestions
   adb logcat -c; type_word hel; sleep 1; S4=$(sugg)
   # Under emulator load the suggestion broadcast can land after the 1s read; give it a few retries before judging.
-  for i in 1 2 3; do [ -n "$S4" ] && break; sleep 1.5; S4=$(sugg); done
+  for i in 1 2 3; do [ -n "$S4" ] && [ "$S4" != "n=0" ] && break; sleep 1.5; S4=$(sugg); done
   F4=$(field); note "toggle off, typed '$F4': [$S4]"; shot k01d_typed_word_toggle_off
-  echo "$S4" | tr '|' '\n' | grep -qi "^hel" && pass "toggle off: typed word still gets normal suggestions ($S4)" || fail "toggle off: typed 'hel' got no normal suggestions ($S4)"
+  [ -n "$S4" ] && [ "$S4" != "n=0" ] && pass "toggle off: typed word still gets normal suggestions ($S4)" || fail "toggle off: typed 'hel' got no normal suggestions ($S4)"
   clear_field
   dbg "dsbool:wren_starter_words=true" 1.0
 fi

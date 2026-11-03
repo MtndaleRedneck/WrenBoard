@@ -17,7 +17,8 @@ import org.futo.inputmethod.latin.uix.actions.AllActionsMap
  * DEBUG BUILDS ONLY (every entry point checks BuildConfig.DEBUG; the receiver is never registered in a release
  * build). Lets the CI emulator harness find keys on screen and open panels without guessing pixels:
  *  - logcat tag WBDBG, lines "KEY code=.. label=.. cx=.. cy=.. w=.. h=.." in SCREEN pixels (key centres)
- *  - "MORE ..." lines for an open long-press panel, "SUGG ..." lines for every suggestion strip update
+ *  - "MORE ..." lines for an open long-press panel, "SUGG [n=N]" count-only lines for every
+ *    suggestion strip update (never typed or learned text)
  *  - adb shell am broadcast -a com.wrenboard.keyboard.WBDBG --es cmd geom|expand|collapse|open:<action>|close
  */
 object WbDebug {
@@ -63,18 +64,10 @@ object WbDebug {
         Log.i(TAG, "WINDOW $what")
     }
 
-    /** Set only by the test harness (synthetictrace:on via the WBDBG broadcast) on a test
-     *  device. While off, suggestion-strip logging carries counts only, never user text. */
-    @Volatile var syntheticTrace = false
-
+    /** Counts only: suggestion-strip logging never carries typed or learned text. */
     fun logSuggestions(words: SuggestedWords?) {
         if (!BuildConfig.DEBUG) return
-        if (!syntheticTrace) {
-            Log.i(TAG, "SUGG [n=${words?.size() ?: 0}]")
-            return
-        }
-        val list = words?.mSuggestedWordInfoList?.joinToString("|") { it.mWord } ?: ""
-        Log.i(TAG, "SUGG [$list]")
+        Log.i(TAG, "SUGG [n=${words?.size() ?: 0}]")
     }
 
     fun install(ime: LatinIME) {
@@ -92,8 +85,6 @@ object WbDebug {
                         cmd == "expand" -> ime.uixManager.debugSetActionsExpanded(true)
                         cmd == "collapse" -> ime.uixManager.debugSetActionsExpanded(false)
                         cmd == "close" -> ime.uixManager.closeActionWindow()
-                        cmd == "synthetictrace:on" -> syntheticTrace = true
-                        cmd == "synthetictrace:off" -> syntheticTrace = false
                         cmd.startsWith("prefbool:") -> {
                             val kv = cmd.removePrefix("prefbool:").split("=")
                             PreferenceUtils.getDefaultSharedPreferences(ime).edit()

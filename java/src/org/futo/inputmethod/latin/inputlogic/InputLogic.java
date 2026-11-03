@@ -2017,7 +2017,12 @@ public final class InputLogic {
         // If correction is not enabled, we don't add words to the user history dictionary.
         // That's to avoid unintended additions in some sensitive fields, or fields that
         // expect to receive non-words.
-        final int learnTraceId = org.futo.inputmethod.engine.general.WrenLearnTrace.begin();
+        // Debug diagnostics only: the trace id lifecycle is compiled out of release
+        // (these guards plus no-op release methods in WrenLearnTrace).
+        final int prevLearnTraceId = BuildConfig.DEBUG
+                ? org.futo.inputmethod.engine.general.WrenLearnTrace.id() : 0;
+        final int learnTraceId = BuildConfig.DEBUG
+                ? org.futo.inputmethod.engine.general.WrenLearnTrace.begin() : 0;
         if (BuildConfig.DEBUG) Log.i("WBDBG", "STARTER learnEnter id=" + learnTraceId
                 + " at " + SystemClock.uptimeMillis());
         try {
@@ -2059,7 +2064,8 @@ public final class InputLogic {
                 ngramContext, timeStampInSeconds, settingsValues.mBlockPotentiallyOffensive,
                 importance);
         } finally {
-            org.futo.inputmethod.engine.general.WrenLearnTrace.end();
+            if (BuildConfig.DEBUG)
+                org.futo.inputmethod.engine.general.WrenLearnTrace.restore(prevLearnTraceId);
         }
     }
 
