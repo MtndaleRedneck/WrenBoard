@@ -1163,12 +1163,12 @@ fun ActionWindowBar(
 }
 
 @Composable
-private fun CloseActionWindowButton(onClose: () -> Unit) {
+private fun CloseActionWindowButton(onClose: () -> Unit, width: androidx.compose.ui.unit.Dp = 42.dp) {
     val color = LocalKeyboardScheme.current.primary
     IconButton(
         onClick = onClose,
         modifier = Modifier
-            .width(42.dp)
+            .width(width)
             .fillMaxHeight()
             .drawBehind {
                 drawCircle(color = color, radius = size.width / 3.0f + 1.0f)
@@ -1204,11 +1204,16 @@ fun CollapsibleSuggestionsBar(
         {
             Row(Modifier.safeKeyboardPadding()) {
                 if(showClose) {
-                    CloseActionWindowButton(onClose)
+                    // 1.5 item 5g (Tab's cosmetic target, candidate, NOT owner-approved): the close
+                    // circle takes the SAME 40dp leading slot as the normal spacer, so opening a
+                    // docked window (voice bar) no longer shifts the suggestion chips - same start x,
+                    // same widths. Circle radius tracks the width (1px smaller than the 42dp case).
+                    Box(Modifier.width(40.dp).fillMaxHeight()) {
+                        CloseActionWindowButton(onClose, width = 40.dp)
+                    }
                 } else {
                     // 1.5 item-15 candidate (see weights note below): 40dp = the 105px left margin of
-                    // Tab's 1080px geometry; baseline was 42dp. When the close button shows, the left
-                    // offset is the button width instead - deviation noted for pixel verification.
+                    // Tab's 1080px geometry; baseline was 42dp.
                     Spacer(Modifier.width(40.dp))
                 }
 

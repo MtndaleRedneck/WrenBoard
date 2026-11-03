@@ -208,7 +208,7 @@ private fun wrenKeyBackgrounds(context: android.content.Context) = KeyedBitmaps(
                 outlineColor = 0xFFD0D0D0.toInt(),
                 outlineWidth = 1.dp,
                 // S7: selected cell inset so it doesn't paint over the panel outline (420dpi px in Rect)
-                padding = run { val d = context.resources.displayMetrics.density; android.graphics.Rect((6*d/2.625f).toInt(), (13*d/2.625f).toInt(), (6*d/2.625f).toInt(), (13*d/2.625f).toInt()) },
+                padding = run { val d = context.resources.displayMetrics.density; android.graphics.Rect((5*d/2.625f).toInt(), (13*d/2.625f).toInt(), (5*d/2.625f).toInt(), (13*d/2.625f).toInt()) },
                 background = keyGradient(context, 0xFF626262.toInt(), 0xFF2A2A2A.toInt(), chrome = false)
             )
         ),
