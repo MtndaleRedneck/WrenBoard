@@ -8,6 +8,11 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.changedToUp
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -323,7 +328,28 @@ private fun EmojiCell(
         Modifier.fillMaxWidth().height(44.dp)
             .semantics { if (item.description.isNotBlank()) contentDescription = item.description }
             .then(if (popup.value) Modifier.padding(horizontal = 4.dp, vertical = 2.dp).clip(RoundedCornerShape(7.6.dp)).background(Color(0x29FFFFFF)) else Modifier)
-            .combinedClickable(onClick = { w.type(item, view) }, onLongClick = { popup.value = true }),
+            // Passive gesture observer (DEBUG only, wb12 e02 investigation): logs what the cell
+            // actually received - DOWN/UP eventTimes and the app-visible hold duration - without
+            // consuming anything, so a long-press that the pipeline delivered as a tap is visible
+            // as a short delivered hold rather than guessed from the outcome.
+            .then(if (org.futo.inputmethod.latin.BuildConfig.DEBUG) Modifier.pointerInput(item.emoji) {
+                awaitEachGesture {
+                    val d = awaitFirstDown(requireUnconsumed = false)
+                    val t0 = android.os.SystemClock.uptimeMillis()
+                    var upEv = -1L
+                    while (true) {
+                        val ch = awaitPointerEvent(PointerEventPass.Initial)
+                            .changes.firstOrNull { it.id == d.id } ?: break
+                        if (ch.changedToUp()) { upEv = ch.uptimeMillis; break }
+                        if (!ch.pressed) break
+                    }
+                    android.util.Log.i("WBDBG", "EMOJITOUCH rx0=$t0 evDown=${d.uptimeMillis} evUp=$upEv heldMs=${if (upEv > 0) upEv - d.uptimeMillis else -1}")
+                }
+            } else Modifier)
+            .combinedClickable(
+                onClick = { if (org.futo.inputmethod.latin.BuildConfig.DEBUG) android.util.Log.i("WBDBG", "EMOJITOUCH outcome=TAP ${item.emoji}"); w.type(item, view) },
+                onLongClick = { if (org.futo.inputmethod.latin.BuildConfig.DEBUG) android.util.Log.i("WBDBG", "EMOJITOUCH outcome=LONG ${item.emoji}"); popup.value = true }
+            ),
         contentAlignment = Alignment.TopCenter
     ) {
         EmojiGlyph(item.emoji, if (item.category == "ASCII") 16f else 24.5f, Modifier.padding(top = 9.dp))
