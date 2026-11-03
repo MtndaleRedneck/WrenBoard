@@ -874,6 +874,9 @@ if leg states; then
         fi
       done
       shot states_voice_stopped
+      # Capture-finished precedes the Compose Stopped marker; assert from the current
+      # post-screenshot log, not the earlier polling snapshot that only saw completion.
+      adb logcat -d -s WBDBG:I | tr -d '\r' > shots/voicestop_log.txt
       grep -q 'VOICEBARPILLTAP' shots/voicestop_log.txt || note "v9 bar: pill-tap marker missing - the tap did not reach the bar (targeting, not behavior)"
       grep -q 'VOICEBAR state=Stopped' shots/voicestop_log.txt && pass "v9 bar: pill tap stops capture, bar stays open in Stopped state" || fail "v9 bar: no Stopped state after pill tap"
       grep -qE 'VOICE capture (finished|cancelled)' shots/voicestop_log.txt && pass "v9 bar: capture released after pill tap (recognizer lifecycle event)" || fail "v9 bar: no capture-release lifecycle event after pill tap"
@@ -1366,6 +1369,18 @@ if leg saveword; then
   negcheck "$SW2" "password field" $PRE1
   clear_field
   adb shell am broadcast -a com.wrenboard.imetarget.PASSWORD --ez on false -p "$TPKG" >/dev/null 2>&1; sleep 1.0
+  # Distinct privacy classification: visible password is NOT in isPasswordInputType.
+  adb shell am broadcast -a com.wrenboard.imetarget.VISIBLEPASSWORD --ez on true -p "$TPKG" >/dev/null 2>&1
+  sleep 1; tap_field; clear_field
+  adb shell input text zqxwvisible; sleep 0.5
+  VP_PRE=0
+  [ "$(field_now)" = "zqxwvisible" ] && VP_PRE=1 || fail "visible-password fixture canary missing"
+  adb logcat -c; dbg "open:save_word" 0.4; shot sw_visible_password_blocked
+  # Source is guarded before text retrieval; runtime refusal still needs the positive
+  # persistence control before the provider-negative can qualify.
+  negcheck zqxwvisible "visible password field" $VP_PRE
+  adb shell am broadcast -a com.wrenboard.imetarget.VISIBLEPASSWORD --ez on false -p "$TPKG" >/dev/null 2>&1
+  sleep 1; clear_field
   # negative 2: IME_FLAG_NO_PERSONALIZED_LEARNING field (persisted+recreated fixture mode: the
   # flag is fresh in the EditorInfo at onStartInput, MODE=NOLEARN APPLIED is the readiness marker)
   PRE2=0
