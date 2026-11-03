@@ -69,6 +69,14 @@ public class TestInput extends Activity {
                         edit.requestFocus();
                         edit.selectAll();
                         Log.i("IMETARGET", "SELECTALL=1");
+                    } else if ("com.wrenboard.imetarget.SELECT".equals(a)) {
+                        edit.requestFocus();
+                        int st = intent.getIntExtra("start", 0);
+                        int en = intent.getIntExtra("end", edit.getText().length());
+                        int len = edit.getText().length();
+                        if (st < 0) st = 0; if (en > len) en = len; if (st > en) st = en;
+                        edit.setSelection(st, en);
+                        Log.i("IMETARGET", "SELECT=" + st + "-" + en);
                     } else if ("com.wrenboard.imetarget.NOLEARN".equals(a)) {
                         boolean on = intent.getBooleanExtra("on", true);
                         setMode(on ? MODE_NOLEARN : MODE_NORMAL);
@@ -127,6 +135,7 @@ public class TestInput extends Activity {
         f.addAction("com.wrenboard.imetarget.CAPSENT");
         f.addAction("com.wrenboard.imetarget.PASSWORD");
         f.addAction("com.wrenboard.imetarget.SELECTALL");
+        f.addAction("com.wrenboard.imetarget.SELECT");
         f.addAction("com.wrenboard.imetarget.NOLEARN");
         f.addAction("com.wrenboard.imetarget.NOCORRECT");
         f.addAction("com.wrenboard.imetarget.SETCLIP");
