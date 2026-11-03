@@ -105,7 +105,7 @@ internal interface CaptureRecorder {
     fun stop()
     fun release()
     fun read(samples: ShortArray, offset: Int, count: Int, mode: Int): Int
-    fun route(): Pair<Boolean, String>?
+    fun route(): Pair<Boolean, String?>?
     fun onRouteChanged(callback: () -> Unit)
 }
 
@@ -387,8 +387,8 @@ class AudioRecognizer internal constructor(
         override fun stop() = audio.stop()
         override fun release() = audio.release()
         override fun read(samples: ShortArray, offset: Int, count: Int, mode: Int) = audio.read(samples, offset, count, mode)
-        override fun route(): Pair<Boolean, String>? = audio.routedDevice?.let {
-            routeIsBluetooth(it) to it.productName.toString()
+        override fun route(): Pair<Boolean, String?>? = audio.routedDevice?.let {
+            routeIsBluetooth(it) to it.productName?.toString()
         }
         override fun onRouteChanged(callback: () -> Unit) = audio.addOnRoutingChangedListener({ callback() }, null)
     }

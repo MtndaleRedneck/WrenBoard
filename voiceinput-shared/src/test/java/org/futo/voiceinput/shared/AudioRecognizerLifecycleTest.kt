@@ -115,18 +115,21 @@ class AudioRecognizerLifecycleTest {
     @Test fun reentrantFinishedResetCompletesWithoutHanging() {
         val r = Rig(TestCoroutineScheduler()); r.listener.onFinished = { r.recognizer.reset() }
         r.recognizer.start(); r.drain(); r.recognizer.finish(); r.drain()
-        assertEquals(1, r.listener.events.count { it == "final:done" }); assertEquals(1, r.recorders.single().releases); r.close()
+        assertEquals(1, r.listener.events.count { it == "final:done" }); assertEquals(1, r.recorders.single().releases)
+        assertFalse("reset left a suspended decode/publisher child", r.job.children.any { it.isActive }); r.close()
     }
     @Test fun finalListenerThrowDoesNotStrandDecode() {
         val r = Rig(TestCoroutineScheduler()); r.listener.onFinished = { error("publisher failed") }
         r.recognizer.start(); r.drain(); r.recognizer.finish(); r.drain()
-        assertTrue(r.failures.isNotEmpty()); assertEquals(1, r.listener.events.count { it == "final:done" }); r.close()
+        assertTrue(r.failures.isNotEmpty()); assertEquals(1, r.listener.events.count { it == "final:done" })
+        assertFalse("final failure stranded a decode/publisher child", r.job.children.any { it.isActive }); r.close()
     }
     @Test fun partialPublisherThrowClosesQueuedFinalWithoutHang() {
         val r = Rig(TestCoroutineScheduler()); r.listener.onPartial = { error("partial publication failed") }
         r.recognizer.start(); r.drain(); r.recognizer.finish(); r.drain()
         assertTrue(r.failures.isNotEmpty())
-        assertFalse(r.listener.events.any { it.startsWith("final:") }); r.close()
+        assertFalse(r.listener.events.any { it.startsWith("final:") })
+        assertFalse("partial failure stranded a decode/publisher child", r.job.children.any { it.isActive }); r.close()
     }
     @Test fun cancelledBeforeLazyReaderStartReleasesOnce() {
         val r = Rig(TestCoroutineScheduler()); r.listener.onStarted = { r.job.cancel() }
