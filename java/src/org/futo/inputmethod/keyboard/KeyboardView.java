@@ -483,11 +483,23 @@ public class KeyboardView extends View {
             if (key.getCode() == Constants.CODE_SHIFT && "123".equals(label)) {
                 paint.setTextSize(kdc.getTextSize() * (30.0f / 22.0f));
             }
+            // WrenBoard 1.5 (item 10, candidate): the global 0.84 multiplier gives +14%;
+            // Tab's LIST has digits +20% (centred in the number row) - top digits up.
+            final boolean isSingleDigit = label.length() == 1 && Character.isDigit(label.charAt(0));
+            if (isSingleDigit) {
+                paint.setTextSize(paint.getTextSize() * (1.20f / 1.14f));
+            }
             final float labelCharHeight = TypefaceUtils.getReferenceCharHeight(paint);
             final float labelCharWidth = TypefaceUtils.getReferenceCharWidth(paint);
 
             // Vertical label text alignment.
             labelBaseline = centerY + labelCharHeight / 2.0f;
+            // WrenBoard 1.5 (item 10, candidate): SwiftKey's LETTERS sit lower in the key
+            // (x-height top ~53% of key height vs our ~47%) - bias alphabet letter keys down
+            // ~6% of key height. Digits/symbols stay centred (LIST item 10).
+            if (label.length() == 1 && Character.isLetter(label.charAt(0))) {
+                labelBaseline += keyHeight * 0.06f;
+            }
 
 
             if(kdc.getCenteredHint() && kdc.getHintLabel() != null && !key.getHasHintLabel() && !key.getHasShiftedLetterHint()) {
@@ -651,10 +663,16 @@ public class KeyboardView extends View {
                 iconWidth = (int)(24.0f * iconDm);
                 iconHeightOverride = (int)(6.0f * iconDm);
             } else if (KeyboardIconsSet.NAME_EMOJI_NORMAL_KEY.equals(key.getIconId())
-                    || KeyboardIconsSet.NAME_EMOJI_ACTION_KEY.equals(key.getIconId())) {
-                // WrenBoard 1.5 item 5f (Tab's cosmetic value, candidate): emoji key icon 17dp
-                // (45px at 420dpi, 51 at 480), centred - the centring below already does that.
-                iconWidth = (int)(17.0f * iconDm);
+                    || KeyboardIconsSet.NAME_EMOJI_ACTION_KEY.equals(key.getIconId())
+                    || "action_emoji".equals(key.getIconId())
+                    || "action_0".equals(key.getIconId())) {
+                // Candidate: 50px icon bounds at the 420dpi reference surface. Actual vector
+                // ink can be smaller than its viewport; measure the render before acceptance.
+                // smile.xml uses 22/24 of its viewport for visible stroke. A 55px
+                // drawing box at420 is the candidate for50px ink, verified by render.
+                iconWidth = Math.round(20.95f * iconDm);
+                // Keep this explicit measured size out of the generic text-size cap below.
+                iconHeightOverride = iconWidth;
             } else if (KeyboardIconsSet.NAME_TAB_KEY.equals(key.getIconId())) {
                 // WrenBoard 1.5 (Tab's exact 20:45 spec, candidate): tab key icon is a bold
                 // arrow-into-bar 20dp wide x 11dp tall (2.5dp stroke lives in the vector),

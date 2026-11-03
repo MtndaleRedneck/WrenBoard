@@ -587,7 +587,10 @@ class KeyboardSizingCalculator(val context: Context, val uixManager: UixManager)
         // WrenBoard 1.3 (teardown item 2): 3-6dp gaps looked about 3x too wide vs SwiftKey (3.6dp on a
         // 360dp-wide phone); aim for ~2.4dp there, never below 2dp or above 3dp.
         // SwiftKey list item 4: gap reads 2.0f on a 360dp-wide phone, not 2.4f.
-        return (minDp / 180.0f).coerceIn(2.0f, 3.0f)
+        // WrenBoard 1.5 (item 10/15, candidate pending owner pixel sign-off): Tab measured the VISIBLE
+        // outline-to-outline gap at 8px@420 vs SwiftKey's 6px. The visible gap is the layout gap plus the
+        // key chrome (halo inset + border on each side), so the layout gap drops to ~1.5dp at 411dp width.
+        return (minDp / 274.0f).coerceIn(1.25f, 2.25f)
     }
 
     fun calculateSuggestionBarHeightDp(): Float {
