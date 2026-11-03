@@ -6,7 +6,7 @@
 set -u
 APK="$1"; TAPK="$2"
 PKG=com.wrenboard.keyboard; TPKG=com.wrenboard.imetarget
-LEGS=",${WB_LEGS:-setup,keyboard,period,leftedge,caps,shift,clip,update,toolbar,textedit,skin,symbols,states,emoji,clipboard,settings,panelexit},"
+LEGS=",${WB_LEGS:-setup,keyboard,period,leftedge,caps,shift,clip,update,toolbar,textedit,skin,symbols,states,emoji,clipboard,saveword,settings,panelexit},"
 mkdir -p shots; R=shots/results.txt; : > "$R"
 ADB_BIN=$(type -P adb)
 # a dead emulator must not hang the run: each call is bounded, and once the link is confirmed gone
@@ -1170,6 +1170,51 @@ if leg clipboard; then
     else fail "slow drag did not delete"; fi
     U=$(pos shots/cl5v.txt 'CLIPUNDO'); [ -n "$U" ] && { adb logcat -c; adb shell input tap $U; sleep 1.0; wlog cl5w; grep -q 'CLIP undo restored=1' shots/cl5w.txt && pass "Undo after slow drag" || fail "Undo after slow drag failed"; } || fail "no Undo bar after slow drag"
   else fail "no card position for the slow-drag leg"; fi
+  # Vertical-arbitration legs (1.5 B5): a vertical-dominant gesture on a card is the list's
+  # scroll - it must never paste, never delete, never open the Pin menu, however the UP arrives
+  # (coalesced tail, out-and-back return near the origin). Delivery is evidenced by the
+  # handler's own WBDBG EV accDy samples (slopwatch phase); retained interactions (tap paste,
+  # hold menu, horizontal swipe delete) are covered by cl04/cl05 above.
+  for t in clip_v_06 clip_v_07 clip_v_08 clip_v_09 clip_v_10 clip_v_11 clip_v_12; do dbg "clipset:$t" 0.4; done
+  vchk() { # vchk <logfile> <label> : shared verdicts for the vertical legs; $F/$EV filled by caller
+    local L="$1" lbl="$2"
+    if [ "$EV" -lt 60 ]; then fail "$lbl: vertical gesture was not delivered to the card handler (max |accDy| ${EV}px)"
+    elif [ -n "$F" ]; then fail "$lbl: vertical scroll pasted into the field ('${F:0:40}')"
+    elif grep -q 'CLIP removed=' "$L"; then fail "$lbl: vertical scroll deleted a clip"
+    elif grep -q 'WINDOW CLIPMENU' "$L"; then fail "$lbl: vertical scroll opened the Pin menu"
+    else pass "$lbl: no paste, no delete, no menu"; fi
+  }
+  vev() { grep 'phase=slopwatch' "shots/$1.txt" | grep -o 'accDy=-\?[0-9]*' | sed 's/accDy=//' | awk '{if($1<0)$1=-$1; if($1>m)m=$1} END{print m+0}'; }
+  # v1: device-paced slow vertical drag on a card
+  adb logcat -c; dbg close 0.8; focus_target; clear_field; dbg "open:clipboard_history" 2.0; wlog clv0
+  N=$(grep 'CLIP shown=' shots/clv0.txt | tail -1 | sed 's/.*shown=//'); [ "${N:-0}" -ge 12 ] && pass "12 clips seeded for the scroll legs ($N)" || note "INFO: $N clips seeded"
+  C=$(pos shots/clv0.txt 'CLIPCARD i=1 ')
+  if [ -n "$C" ]; then read -r X Y <<< "$C"
+    adb logcat -c
+    adb shell "input motionevent DOWN $X $Y; sleep 0.15; input motionevent MOVE $X $((Y-250)); sleep 0.15; input motionevent MOVE $X $((Y-500)); sleep 0.15; input motionevent MOVE $X $((Y-700)); sleep 0.15; input motionevent UP $X $((Y-700))"
+    sleep 1.2; wlog clv1; shot cl06v_vertical_scroll
+    EV=$(vev clv1); note "  v1 max |accDy| at handler: ${EV}px"; F=$(field); note "  field after vertical drag: '${F:0:40}'"
+    vchk shots/clv1.txt "vertical drag on a card"
+  else fail "no card position for the vertical-drag leg"; fi
+  # v2: fast fling whose tail coalesces into the UP event
+  adb logcat -c; dbg close 0.8; clear_field; dbg "open:clipboard_history" 2.0; wlog clv2w
+  C=$(pos shots/clv2w.txt 'CLIPCARD i=1 ')
+  if [ -n "$C" ]; then read -r X Y <<< "$C"
+    adb logcat -c; adb shell input swipe $X $Y $X $((Y-700)) 80
+    sleep 1.2; wlog clv2; shot cl06w_coalesced_up_scroll
+    EV=$(vev clv2); note "  v2 max |accDy| at handler: ${EV}px"; F=$(field); note "  field after fling: '${F:0:40}'"
+    vchk shots/clv2.txt "coalesced-UP vertical fling"
+  else fail "no card position for the coalesced-UP leg"; fi
+  # v3: out-and-back scroll returning near the origin (net dy ~ 0, peak ~ 400px)
+  adb logcat -c; dbg close 0.8; clear_field; dbg "open:clipboard_history" 2.0; wlog clv3w
+  C=$(pos shots/clv3w.txt 'CLIPCARD i=1 ')
+  if [ -n "$C" ]; then read -r X Y <<< "$C"
+    adb logcat -c
+    adb shell "input motionevent DOWN $X $Y; sleep 0.15; input motionevent MOVE $X $((Y-200)); sleep 0.15; input motionevent MOVE $X $((Y-400)); sleep 0.15; input motionevent MOVE $X $((Y-200)); sleep 0.15; input motionevent MOVE $X $((Y+10)); sleep 0.1; input motionevent UP $X $((Y+10))"
+    sleep 1.2; wlog clv3; shot cl06x_out_return_scroll
+    EV=$(vev clv3); note "  v3 max |accDy| at handler: ${EV}px (net ~0 by construction)"; F=$(field); note "  field after out-and-back: '${F:0:40}'"
+    vchk shots/clv3.txt "out-and-back scroll returning near origin"
+  else fail "no card position for the out-and-back leg"; fi
   adb logcat -c; dbg close 0.8; dbg "open:clipboard_history" 2.0; wlog cl6
   D=$(pos shots/cl6.txt 'CLIPDOTS i=2 ')
   if [ -n "$D" ]; then adb logcat -c; adb shell input tap $D; sleep 1.0; wlog cl7
@@ -1189,6 +1234,51 @@ if leg clipboard; then
 fi
 
 
+if leg saveword; then
+  note "== SAVE WORD privacy boundary (1.5 B6): selection positive; password / NOLEARN-flag / code-field negatives against the actual UserDictionary provider =="
+  dictq() { adb shell content query --uri content://user_dictionary/words 2>/dev/null | tr -d '\r'; }
+  dictdel() { adb shell content delete --uri content://user_dictionary/words --where "word='$1'" >/dev/null 2>&1; }
+  wait_mode() { local want=$1 i; for i in $(seq 1 12); do [ "$(adb logcat -d -s IMETARGET:I 2>/dev/null | tr -d '\r' | grep -oE 'MODE=[A-Z]+ APPLIED' | tail -1)" = "MODE=$want APPLIED" ] && return 0; sleep 1; done; return 1; }
+  SW1="zqxwjcta"; SW2="zqxwjctb"; SW3="zqxwjctc"; SW4="zqxwjctd"
+  for w in $SW1 $SW2 $SW3 $SW4; do dictdel "$w"; done
+  # positive control: an explicit selection in a normal field IS saved (selection-priority path,
+  # proves the action path itself executes end to end)
+  adb shell am broadcast -a com.wrenboard.imetarget.NOLEARN --ez on false -p "$TPKG" >/dev/null 2>&1; wait_mode NORMAL
+  focus_target; clear_field
+  adb shell input text "$SW1"; sleep 0.8
+  adb shell am broadcast -a com.wrenboard.imetarget.SELECTALL -p "$TPKG" >/dev/null 2>&1; sleep 0.8
+  adb logcat -c; dbg "open:save_word" 1.5; shot sw01_selection_saved
+  dictq | grep -q "$SW1" && pass "save word saves the explicit selection (positive control)" || fail "positive control: the selection was NOT saved to the user dictionary"
+  dictdel "$SW1"
+  # negative 1: password field (broadcast-set inputType, field tap renegotiates the session)
+  adb shell am broadcast -a com.wrenboard.imetarget.PASSWORD --ez on true -p "$TPKG" >/dev/null 2>&1; sleep 1.2; tap_field
+  adb shell input text "$SW2"; sleep 0.8
+  adb logcat -c; dbg "open:save_word" 1.5; shot sw02_password_blocked
+  dictq | grep -q "$SW2" && fail "PASSWORD field: save word wrote to the user dictionary" || pass "password field: save word refuses, no dictionary write"
+  clear_field
+  adb shell am broadcast -a com.wrenboard.imetarget.PASSWORD --ez on false -p "$TPKG" >/dev/null 2>&1; sleep 1.0
+  # negative 2: IME_FLAG_NO_PERSONALIZED_LEARNING field (persisted+recreated fixture mode: the
+  # flag is fresh in the EditorInfo at onStartInput, MODE=NOLEARN APPLIED is the readiness marker)
+  adb shell am broadcast -a com.wrenboard.imetarget.NOLEARN --ez on true -p "$TPKG" >/dev/null 2>&1
+  wait_mode NOLEARN || fail "NOLEARN mode was not applied by the fixture"
+  focus_target; adb shell input text "$SW3"; sleep 0.8
+  adb logcat -c; dbg "open:save_word" 1.5; shot sw03_nolearn_blocked
+  dictq | grep -q "$SW3" && fail "NOLEARN field: save word wrote to the user dictionary" || pass "no-learning flag field: save word refuses, no dictionary write"
+  adb shell am broadcast -a com.wrenboard.imetarget.NOLEARN --ez on false -p "$TPKG" >/dev/null 2>&1; wait_mode NORMAL
+  # negative 3: code-field package classification (com.replit.* fixture variant, plain text field
+  # has no AUTO_CORRECT flag -> the app's own getCodeFieldType classification says code field)
+  if [ -f tools/ime-target-codefield/out/imetarget-codefield.apk ]; then
+    adb install -r tools/ime-target-codefield/out/imetarget-codefield.apk >> "$R" 2>&1 || fail "install code-field fixture"
+    adb shell am start -S -n "com.replit.wbcodefield/com.wrenboard.imetarget.TestInput" >/dev/null 2>&1; sleep 3
+    tap_field
+    adb shell input text "$SW4"; sleep 0.8
+    adb logcat -c; dbg "open:save_word" 1.5; shot sw04_codefield_blocked
+    dictq | grep -q "$SW4" && fail "CODE field (com.replit.*): save word wrote to the user dictionary" || pass "code field (com.replit.*): save word refuses, no dictionary write"
+    adb shell am broadcast -a com.wrenboard.imetarget.CLEAR -p com.replit.wbcodefield >/dev/null 2>&1
+  else fail "code-field fixture apk missing from the checkout"; fi
+  for w in $SW1 $SW2 $SW3 $SW4; do dictdel "$w"; done
+  focus_target
+fi
 if leg update; then
   ensure_ime; focus_target
   note "== UPDATE dialog: Back and Dismiss close it; Update downloads in the app and opens the system installer =="
