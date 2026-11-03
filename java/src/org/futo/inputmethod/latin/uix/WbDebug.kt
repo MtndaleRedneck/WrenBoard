@@ -29,6 +29,20 @@ object WbDebug {
     const val TAG = "WBDBG"
     const val ACTION = "com.wrenboard.keyboard.WBDBG"
 
+    // DEBUG-only live layout providers. Disposed nodes unregister; coordinates are read on demand,
+    // not replayed from old log events. No text/query values are stored.
+    private val windowProviders = linkedMapOf<Any, () -> String?>()
+    fun registerWindow(owner: Any, provider: () -> String?) {
+        if (BuildConfig.DEBUG) windowProviders[owner] = provider
+    }
+    fun unregisterWindow(owner: Any) { windowProviders.remove(owner) }
+    private fun reportWindows(ime: LatinIME, request: String) {
+        if (!BuildConfig.DEBUG) return
+        Log.i(TAG, "SNAPBEGIN request=$request keyboardHidden=${ime.uixManager.isMainKeyboardHidden}")
+        windowProviders.values.toList().forEach { provider -> provider()?.let { logWindow(it) } }
+        Log.i(TAG, "SNAPEND request=$request")
+    }
+
     fun logKeyboard(view: View?, keyboard: Keyboard?) {
         if (!BuildConfig.DEBUG || view == null || keyboard == null) return
         val loc = IntArray(2)
@@ -91,6 +105,7 @@ object WbDebug {
                         }
                         cmd.startsWith("suggreport:") ->
                             ime.uixManager.debugReportSuggestionCount(cmd.removePrefix("suggreport:"))
+                        cmd.startsWith("windows:") -> reportWindows(ime, cmd.removePrefix("windows:"))
                         cmd == "expand" -> ime.uixManager.debugSetActionsExpanded(true)
                         cmd == "collapse" -> ime.uixManager.debugSetActionsExpanded(false)
                         cmd == "close" -> ime.uixManager.closeActionWindow()
