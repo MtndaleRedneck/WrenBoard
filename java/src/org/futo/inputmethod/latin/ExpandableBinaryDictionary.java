@@ -58,6 +58,7 @@ import javax.annotation.Nullable;
  */
 abstract public class ExpandableBinaryDictionary extends Dictionary {
     private static final boolean DEBUG = false;
+    private int mWriteTaskOrdinal = 0;
 
     /** Used for Log actions from this class */
     private static final String TAG = ExpandableBinaryDictionary.class.getSimpleName();
@@ -292,13 +293,16 @@ abstract public class ExpandableBinaryDictionary extends Dictionary {
         final Runnable task = new Runnable() {
             @Override
             public void run() {
-                if (BuildConfig.DEBUG && Dictionary.TYPE_USER_HISTORY.equals(mDictType)) {
-                    Log.i("WBDBG", "STARTER writeTaskStart at "
+                final boolean traceThisDict =
+                        BuildConfig.DEBUG && Dictionary.TYPE_USER_HISTORY.equals(mDictType);
+                final int taskOrdinal = traceThisDict ? ++mWriteTaskOrdinal : 0;
+                if (traceThisDict) {
+                    Log.i("WBDBG", "STARTER writeTaskStart #" + taskOrdinal + " at "
                             + android.os.SystemClock.uptimeMillis());
                 }
                 if (getBinaryDictionary() == null) {
-                    if (BuildConfig.DEBUG && Dictionary.TYPE_USER_HISTORY.equals(mDictType)) {
-                        Log.i("WBDBG", "STARTER writeDropped-nullDict at "
+                    if (traceThisDict) {
+                        Log.i("WBDBG", "STARTER writeDropped-nullDict #" + taskOrdinal + " at "
                                 + android.os.SystemClock.uptimeMillis());
                     }
                     return;
@@ -402,9 +406,8 @@ abstract public class ExpandableBinaryDictionary extends Dictionary {
                         Log.e(TAG, "Cannot update counter. dictionary: " + mDictName);
                     }
                 } else if (BuildConfig.DEBUG && Dictionary.TYPE_USER_HISTORY.equals(mDictType)) {
-                    Log.i("WBDBG", "STARTER stored '"
-                            + org.futo.inputmethod.engine.general.WrenTraceRedact.word(word)
-                            + "' at " + android.os.SystemClock.uptimeMillis());
+                    Log.i("WBDBG", "STARTER stored #" + mWriteTaskOrdinal + " at "
+                            + android.os.SystemClock.uptimeMillis());
                 }
             }
         });
