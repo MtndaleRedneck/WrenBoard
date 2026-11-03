@@ -85,6 +85,7 @@ public class KeyPreviewView extends androidx.appcompat.widget.AppCompatTextView 
             setCompoundDrawables(null, null, null, key.getPreviewIcon(iconsSet));
             mIcon = key.getPreviewIcon(iconsSet);
             currKey = key;
+            mPreviewText = null;
             setText(null);
             return;
         }
@@ -101,20 +102,38 @@ public class KeyPreviewView extends androidx.appcompat.widget.AppCompatTextView 
         currKey = key;
 
         // Item 5b: centre the RENDERED glyph bounds (not the ascent/descent block) at 26% of the
-        // box height. With includeFontPadding=false the first line's baseline sits at
-        // padTop - fm.top, so visible centre = padTop - fm.top + (b.top + b.bottom)/2; solve for
-        // padTop. Font-block centring landed the rendered glyph at 35% on the 420dpi emulator shot.
-        if (getHeight() > 0) {
-            final android.graphics.Paint gp = getPaint();
-            final android.graphics.Paint.FontMetrics gfm = gp.getFontMetrics();
-            final android.graphics.Rect gb = new android.graphics.Rect();
-            final String gt = key.getPreviewLabel();
-            if (gt != null && !gt.isEmpty()) {
-                gp.getTextBounds(gt, 0, gt.length(), gb);
-                final int padTop = (int)(getHeight() * 0.26f + gfm.top - (gb.top + gb.bottom) / 2f);
-                setPadding(getPaddingLeft(), Math.max(0, padTop), getPaddingRight(), 0);
-            }
+        // box height. TOP gravity is required by the padTop math and must be restored here: the
+        // icon branch above switches the view to CENTER and the view is reused across previews.
+        setGravity(Gravity.TOP | Gravity.CENTER_HORIZONTAL);
+        mPreviewText = key.getPreviewLabel();
+        applyGlyphPadTop();
+    }
+
+    // Item 5b: the preview is usually configured before it is laid out, so getHeight() is 0 at
+    // setPreviewVisual() time and any padTop computed there would never be applied (v2 measured
+    // the rendered glyph at 39.3% of box height vs the 26% target on the 420dpi shot for exactly
+    // this reason). Re-apply once the size is known.
+    private String mPreviewText;
+
+    @Override
+    protected void onSizeChanged(final int w, final int h, final int oldw, final int oldh) {
+        super.onSizeChanged(w, h, oldw, oldh);
+        applyGlyphPadTop();
+    }
+
+    // With includeFontPadding=false the first line's baseline sits at padTop - fm.top, so the
+    // visible centre = padTop - fm.top + (b.top + b.bottom)/2; solve for padTop. Font-block
+    // centring landed the rendered glyph at 35% on the 420dpi emulator shot.
+    private void applyGlyphPadTop() {
+        if (mPreviewText == null || mPreviewText.isEmpty() || getHeight() <= 0) {
+            return;
         }
+        final android.graphics.Paint gp = getPaint();
+        final android.graphics.Paint.FontMetrics gfm = gp.getFontMetrics();
+        final android.graphics.Rect gb = new android.graphics.Rect();
+        gp.getTextBounds(mPreviewText, 0, mPreviewText.length(), gb);
+        final int padTop = (int)(getHeight() * 0.26f + gfm.top - (gb.top + gb.bottom) / 2f);
+        setPadding(getPaddingLeft(), Math.max(0, padTop), getPaddingRight(), 0);
     }
 
     private boolean drawFlickKeys(final Canvas canvas) {
