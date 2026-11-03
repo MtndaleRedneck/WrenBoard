@@ -145,6 +145,9 @@ data class LayoutEngine(
 
 
     private val totalRowHeight = params.mId.mHeight.toFloat()
+    private val compactSymbolRows = layoutParams.element.kind == KeyboardLayoutKind.Symbols &&
+            keyboard.id in setOf("symbols", "symbols_shift") &&
+            keyboard.rowHeightMode == RowHeightMode.FillHeight
 
     private val horizontalGapPx = (horizontalGap.value * density)
     private val verticalGapPx = (verticalGap.value * density)
@@ -155,6 +158,7 @@ data class LayoutEngine(
     }
 
     private fun computeRowHeight(): Double {
+        if (compactSymbolRows) return layoutParams.standardRowHeight
         val normalKeyboardHeight = totalRowHeight
 
         // divide by total row height
@@ -496,13 +500,9 @@ data class LayoutEngine(
         val computedRowWithWidths = computedRowWithoutWidths.mapIndexed { i, row ->
             val height = if(rows[i].isBottomRow) {
                 bottomRowHeightPx
-            } else if (layoutParams.element.kind == KeyboardLayoutKind.Symbols &&
-                keyboard.id in setOf("symbols", "symbols_shift") &&
-                keyboard.rowHeightMode == RowHeightMode.FillHeight && rows[i] != ArrowRow) {
-                // Symbol number/main rows share the existing allocated main-row area equally.
-                // Keep the fixed bottom row and shorter arrow row at their existing heights.
-                val mainRows = rows.filter { !it.isBottomRow && it != ArrowRow }
-                mainRows.sumOf { it.rowHeight } * rowHeightPx / mainRows.size
+            } else if (compactSymbolRows && rows[i] != ArrowRow) {
+                // Full, unstretched main caps, including the symbol number row.
+                layoutParams.standardRowHeight
             } else {
                 (rows[i].rowHeight * rowHeightPx)
             }
@@ -833,7 +833,10 @@ data class LayoutEngine(
 
         val rows = computeRows(this.rows)
 
-        val totalKeyboardHeight = addKeys(rows).let { totalRowHeight.roundToInt() } + layoutParams.size.padding.bottom
+        val drawnRowsHeight = addKeys(rows)
+        // Compact symbol pages occupy only their actual rows. Other layouts retain
+        // their existing allocated height; do not leave a blank band above the keys.
+        val totalKeyboardHeight = (if (compactSymbolRows) drawnRowsHeight else totalRowHeight.roundToInt()) + layoutParams.size.padding.bottom
 
         params.mOccupiedHeight = totalKeyboardHeight - verticalGapPx.roundToInt()
         params.mOccupiedWidth = params.mId.mWidth
