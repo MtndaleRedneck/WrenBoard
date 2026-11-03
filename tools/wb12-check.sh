@@ -158,12 +158,14 @@ if leg setup; then
   ensure_ime || note "  could not make WrenBoard the default keyboard"
   adb shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1; sleep 6
   shot s05_settings_active; dumpui s05; T=$(uitext s05)
-  if echo "$T" | grep -q "WrenBoard is turned off\|WrenBoard is not your keyboard"; then
-    note "banner still up after relaunch; default IME is $(adb shell settings get secure default_input_method | tr -d '\r'); waiting 4 s"
+  BTRY=0
+  while echo "$T" | grep -q "WrenBoard is turned off\|WrenBoard is not your keyboard" && [ $BTRY -lt 3 ]; do
+    BTRY=$((BTRY+1))
+    note "banner still up after relaunch (try $BTRY); default IME is $(adb shell settings get secure default_input_method | tr -d '\r'); re-ensuring and waiting"
     sleep 4; adb shell am force-stop "$PKG"; ensure_ime || note "  could not restore WrenBoard after retry force-stop"; adb shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1; sleep 6
     shot s05b_settings_active_retry; dumpui s05; T=$(uitext s05)
-  fi
-  echo "$T" | grep -q "WrenBoard is turned off\|WrenBoard is not your keyboard" && fail "banner still shown when active" || pass "no banner when active"
+  done
+  echo "$T" | grep -q "WrenBoard is turned off\|WrenBoard is not your keyboard" && fail "banner still shown when active (default IME: $(adb shell settings get secure default_input_method | tr -d '\r'))" || pass "no banner when active"
   adb shell input keyevent KEYCODE_HOME
 fi
 
@@ -1075,7 +1077,13 @@ if leg settings; then
   for w in "Languages" "Swipe" "Actions"; do uitext st_futo2 | grep -q "$w" && pass "FUTO page keeps $w" || fail "FUTO page lost $w"; done
   # fix1b: FUTO's Payment row stays exactly as upstream (FUTO's license forbids hiding payment in copies).
   # Fresh install = IS_ALREADY_PAID false, so upstream shows the Payment row; it must be there.
-  shot st08a_wren_futo_top; adb shell input swipe 540 1900 540 600 400; sleep 1.5; shot st08b_wren_futo_scrolled; dumpui st_futo3
+  shot st08a_wren_futo_top
+  # scroll-until-visible: a loaded emulator can swallow a single fling (LazyColumn never moves);
+  # keep scrolling until Credits enters the viewport, max 4 tries. Final check below stays strict.
+  for i in 1 2 3 4; do
+    adb shell input swipe 540 1900 540 600 400; sleep 1.5; shot st08b_wren_futo_scrolled; dumpui st_futo3
+    uitext st_futo3 | grep -q "Credits" && { [ $i -gt 1 ] && note "FUTO Credits visible after $i scrolls"; break; }
+  done
   FU="$(uitext st_futo2)$(uitext st_futo3)"; note "FUTO page (top + scrolled): ${FU:0:500}"
   echo "$FU" | grep -q "Payment" && pass "FUTO page shows FUTO's Payment row (not paid, as upstream)" || fail "FUTO page lost FUTO's Payment row"
   echo "$FU" | grep -q "Help" && echo "$FU" | grep -q "Credits" && pass "FUTO page keeps Help and Credits" || fail "FUTO page lost Help or Credits"
