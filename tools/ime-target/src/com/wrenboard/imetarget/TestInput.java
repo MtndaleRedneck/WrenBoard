@@ -84,6 +84,10 @@ public class TestInput extends Activity {
                     } else if ("com.wrenboard.imetarget.NOCORRECT".equals(a)) {
                         boolean on = intent.getBooleanExtra("on", true);
                         setMode(on ? MODE_NOCORRECT : MODE_NORMAL);
+                    } else if ("com.wrenboard.imetarget.REPORT".equals(a)) {
+                        // On-demand current-content read: FIELD= is otherwise only logged on
+                        // change, so an UNCHANGED field is invisible after a logcat clear.
+                        Log.i("IMETARGET", "FIELD=" + edit.getText().toString());
                     } else if ("com.wrenboard.imetarget.SETCLIP".equals(a)) {
                         ClipboardManager cm =
                                 (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);

@@ -52,6 +52,10 @@ jobs:
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;28.2.13676358"
       - uses: gradle/actions/setup-gradle@v4
       - name: Build stable DEBUG APK (x86_64 only)
+        env:
+          # SCRATCH BRANCH ONLY: keyed GIF evidence runs (bounded, owner-authorized). Empty secret
+          # keeps the keyless placeholder state; wrenboard-1.5 CI stays keyless.
+          KLIPY_APP_KEY: ${{ secrets.KLIPY_APP_KEY }}
         run: ./gradlew --no-daemon assembleStableDebug -Pandroid.injected.build.abi=x86_64 -Pandroid.injected.testOnly=false
       - name: Build ime-target APK
         run: bash tools/ime-target/build.sh
