@@ -7,7 +7,7 @@ rows:
     numRowMode: Hideable
   - letters: "@ # $ & _ - ( ) = %"
   - letters:
-      - "$shift"
+      - {type: shift, attributes: {width: Regular}}
       - "\""
       - "*"
       - "'"
@@ -16,7 +16,7 @@ rows:
       - "!"
       - "?"
       - "+"
-      - "$delete"
+      - {type: delete, attributes: {width: Regular}}
   - bottom:
       - "$alphabet"
       - ","

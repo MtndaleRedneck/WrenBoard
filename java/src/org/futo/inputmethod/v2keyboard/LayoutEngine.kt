@@ -496,6 +496,13 @@ data class LayoutEngine(
         val computedRowWithWidths = computedRowWithoutWidths.mapIndexed { i, row ->
             val height = if(rows[i].isBottomRow) {
                 bottomRowHeightPx
+            } else if (layoutParams.element.kind == KeyboardLayoutKind.Symbols &&
+                keyboard.id in setOf("symbols", "symbols_shift") &&
+                keyboard.rowHeightMode == RowHeightMode.FillHeight && rows[i] != ArrowRow) {
+                // Symbol number/main rows share the existing allocated main-row area equally.
+                // Keep the fixed bottom row and shorter arrow row at their existing heights.
+                val mainRows = rows.filter { !it.isBottomRow && it != ArrowRow }
+                mainRows.sumOf { it.rowHeight } * rowHeightPx / mainRows.size
             } else {
                 (rows[i].rowHeight * rowHeightPx)
             }
