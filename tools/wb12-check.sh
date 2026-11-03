@@ -262,17 +262,22 @@ if leg keyboard; then
   focus_target
   adb shell am broadcast -a com.wrenboard.imetarget.NOCORRECT --ez on true -p "$TPKG" >/dev/null 2>&1
   wait_mode NOCORRECT || fail "neg2: fixture did not apply NOCORRECT mode"
-  adb shell input keyevent 4; sleep 0.8; tap_field
+  focus_target
   adb logcat -c
   for i in 1 2 3; do clear_field; type_word jkqzxv; tapcode 32; sleep 0.8; done
   clear_field
-  settle || note "neg2: marker-settle hit its 8s bound (markers may be incomplete)"
+  # Count-anchored wait: any-marker settle returned on commits 1-2 and raced commit 3's markers
+  # (deterministic enter=2/3 on rev30-32). Wait for the third commit's learnEnter, 10s bound.
+  for i in $(seq 1 10); do [ "$(entercount)" -ge 3 ] && break; sleep 1; done
+  [ "$(entercount)" -ge 3 ] || note "neg2: 10s count-anchored wait expired (markers may be incomplete)"
+  # Raw marker evidence (id + uptime only, content-free) preserved for attribution review.
+  adb logcat -d -s WBDBG:I 2>/dev/null | tr -d '\r' | grep 'STARTER learn' > shots/neg2_markers.txt
   WQ=$(wqcount); PN=$(privnote); SK=$(skipcount autocorrectOff); EN=$(entercount)
   note "neg2 autocorrect-off (3 commits): queued=$WQ enter=$EN skip[autocorrectOff]=$SK markers: $PN"
   [ "$EN" -ge 3 ] && [ "$SK" -ge 3 ] && [ "$WQ" -eq 0 ] && pass "privacy neg2: all 3 commits entered and were skipped reason=autocorrectOff, zero writes queued in-window" || fail "privacy neg2: enter=$EN skip=$SK queued=$WQ (wanted >=3,>=3,0) [$PN]"
   adb shell am broadcast -a com.wrenboard.imetarget.NOCORRECT --ez on false -p "$TPKG" >/dev/null 2>&1
   wait_mode NORMAL || fail "neg2: fixture did not restore NORMAL mode"
-  adb shell input keyevent 4; sleep 0.8; focus_target; sleep 2
+  focus_target; sleep 2
   verify_empty || fail "neg2: field not empty at retrieval read"
   SN=$(sugg)
   [ "$SN" = "n=3" ] && pass "neg2 post-restoration readback: strip is 3-word fallback, token not retrievable ($SN)" || fail "neg2 post-restoration readback: strip '$SN' (wanted n=3)"
@@ -412,7 +417,12 @@ if leg keyboard; then
   # locale tag on the write marker (DEBUG-only). fr is bundled (res-large/raw/main_fr.dict). ---
   dbg "addlang:fr" 1.5; adb shell input keyevent 4; sleep 0.8; focus_target
   wait_layout azerty || fail "fr leg: keyboard did not reach azerty after addlang:fr"
-  adb logcat -c; sleep 1; SFR0=$(sugg); shot k02a_fr_absent_before
+  adb logcat -c; sleep 1; SFR0=$(sugg)
+  # Bounded marker retry: the suggestion broadcast can land after a 1s single read (rev30-32
+  # showed '' while pixels visibly rendered the 3-word fallback). An unparseable read after
+  # the retries still fails - no fallback substitution.
+  for i in 1 2 3 4 5; do [ -n "$SFR0" ] && break; sleep 1.5; SFR0=$(sugg); done
+  shot k02a_fr_absent_before
   [ "$SFR0" = "n=3" ] && pass "fr absent-before: fresh fr field shows 3-word fallback ($SFR0)" || fail "fr absent-before: '$SFR0' (wanted n=3)"
   # actual fr commits: bonjour is in the bundled fr main dict, so fr confidence can rise
   adb logcat -c
@@ -1130,11 +1140,22 @@ if leg clipboard; then
   adb logcat -c; dbg close 0.8; focus_target; clear_field; dbg "open:clipboard_history" 2.0; wlog cl5l
   C=$(pos shots/cl5l.txt 'CLIPCARD i=1 ')
   if [ -n "$C" ]; then read -r X Y <<< "$C"
+    # 6dp HORIZONTAL, density-scaled: strictly between the 3dp hold-cancel and touch slop at the
+    # gate densities (holdCancel=7px/slop=21px @420 observed, 9/24 @480). The old fixed 24px VERTICAL move
+    # crossed slop at 420dpi and was correctly scroll-arbitrated (no paste) - that vertical case
+    # stays covered by the v1-v3 vertical legs; this leg pins the sub-slop hold-cancel case.
+    DENS=$(adb shell wm density 2>/dev/null | tr -d '\r' | grep -o '[0-9]*' | tail -1)
+    MV=$(( ${DENS:-420} * 6 / 160 ))
     adb logcat -c
     adb shell "input motionevent DOWN $X $Y"; sleep 0.1
-    adb shell "input motionevent MOVE $X $((Y-24))"; sleep 0.9; shot cl05n_moved_hold
-    adb shell "input motionevent UP $X $((Y-24))"; sleep 1.2; wlog cl5n
-    if grep -q 'WINDOW CLIPMENU' shots/cl5n.txt; then fail "3dp-cancel: Pin menu opened after a >3dp move (hold timer was not cancelled)"
+    adb shell "input motionevent MOVE $((X+MV)) $Y"; sleep 0.9; shot cl05n_moved_hold
+    adb shell "input motionevent UP $((X+MV)) $Y"; sleep 1.2; wlog cl5n
+    SLOP=$(grep -o 'slop=[0-9]*' shots/cl5n.txt | head -1 | cut -d= -f2)
+    HC=$(grep -o 'holdCancel=[0-9]*' shots/cl5n.txt | head -1 | cut -d= -f2)
+    note "3dp-cancel move: ${MV}px horizontal at density ${DENS:-?} (trace slop=${SLOP:-?} holdCancel=${HC:-?})"
+    if [ -n "$SLOP" ] && [ -n "$HC" ] && { [ "$MV" -le "$HC" ] || [ "$MV" -ge "$SLOP" ]; }; then
+      fail "3dp-cancel precondition: ${MV}px move not strictly between holdCancel=${HC} and slop=${SLOP}"
+    elif grep -q 'WINDOW CLIPMENU' shots/cl5n.txt; then fail "3dp-cancel: Pin menu opened after a >3dp move (hold timer was not cancelled)"
     else F=$(field); note "field after move-hold-lift: ${F:0:80}"
       [ -n "$F" ] && pass "movement >3dp cancels the hold timer; the lift still pastes" || fail "3dp-cancel: the lift after the cancelled hold pasted nothing"; fi
   else fail "no card position for the 3dp-cancel leg"; fi
@@ -1176,9 +1197,9 @@ if leg clipboard; then
   # handler's own WBDBG EV accDy samples (slopwatch phase); retained interactions (tap paste,
   # hold menu, horizontal swipe delete) are covered by cl04/cl05 above.
   for t in clip_v_06 clip_v_07 clip_v_08 clip_v_09 clip_v_10 clip_v_11 clip_v_12; do dbg "clipset:$t" 0.4; done
-  vchk() { # vchk <logfile> <label> : shared verdicts for the vertical legs; $F/$EV filled by caller
-    local L="$1" lbl="$2"
-    if [ "$EV" -lt 60 ]; then fail "$lbl: vertical gesture was not delivered to the card handler (max |accDy| ${EV}px)"
+  vchk() { # vchk <logfile> <label> [floor] : shared verdicts for the vertical legs; $F/$EV filled by caller
+    local L="$1" lbl="$2" floor="${3:-60}"
+    if [ "$EV" -lt "$floor" ]; then fail "$lbl: vertical gesture was not delivered to the card handler (max |accDy| ${EV}px, floor ${floor}px)"
     elif [ -n "$F" ]; then fail "$lbl: vertical scroll pasted into the field ('${F:0:40}')"
     elif grep -q 'CLIP removed=' "$L"; then fail "$lbl: vertical scroll deleted a clip"
     elif grep -q 'WINDOW CLIPMENU' "$L"; then fail "$lbl: vertical scroll opened the Pin menu"
@@ -1202,8 +1223,15 @@ if leg clipboard; then
   if [ -n "$C" ]; then read -r X Y <<< "$C"
     adb logcat -c; adb shell input swipe $X $Y $X $((Y-700)) 80
     sleep 1.2; wlog clv2; shot cl06w_fast_fling_scroll
-    EV=$(vev clv2); note "  v2 fast fling (80ms requested); max |accDy| at handler: ${EV}px"; F=$(field); note "  field after fling: '${F:0:40}'"
-    vchk shots/clv2.txt "fast vertical fling (80ms)"
+    EV=$(vev clv2); F=$(field)
+    # Delivery floor for a coalesced 80ms fling: the handler's own accumulation crossing touch
+    # slop (parsed from its DOWN trace) proves delivery; the 60px device-paced floor cannot fit
+    # a coalesced fast delivery (rev32 observed 43-52px at slop=21, correctly scroll-arbitrated).
+    # This proves delivery + no paste/delete/menu only - not the UP-coalescing path shape.
+    VSLOP=$(grep -o 'slop=[0-9]*' shots/clv2.txt | head -1 | cut -d= -f2)
+    VF=60; [ -n "$VSLOP" ] && VF=$((VSLOP + 1))
+    note "  v2 fast fling (80ms requested); max |accDy| at handler: ${EV}px (trace slop=${VSLOP:-?}, floor=${VF})"; note "  field after fling: '${F:0:40}'"
+    vchk shots/clv2.txt "fast vertical fling (80ms)" "$VF"
   else fail "no card position for the coalesced-UP leg"; fi
   # v3: out-and-back scroll returning near the origin (net dy ~ 0, peak ~ 400px)
   adb logcat -c; dbg close 0.8; clear_field; dbg "open:clipboard_history" 2.0; wlog clv3w
@@ -1264,11 +1292,19 @@ if leg saveword; then
   # with both candidates present; says nothing about composing-vs-selected ordering.
   adb shell am broadcast -a com.wrenboard.imetarget.NOLEARN --ez on false -p "$TPKG" >/dev/null 2>&1; wait_mode NORMAL
   focus_target; clear_field
-  adb shell input text "$SWP $SWT"; sleep 0.8
+  # adb input text needs %s for a literal space; a raw space dropped the second canary on
+  # rev30-32 and made the priority precondition degenerate. Field content verified below.
+  adb shell input text "$SWP%s$SWT"; sleep 0.8
+  F=$(field); [ "$F" = "$SWP $SWT" ] || fail "positive precondition: field holds '${F:0:40}' (wanted both canaries)"
   adb shell am broadcast -a com.wrenboard.imetarget.SELECT --ei start 0 --ei end ${#SWP} -p "$TPKG" >/dev/null 2>&1; sleep 0.8
-  adb logcat -c; dbg "open:save_word" 1.5; shot sw01_selection_saved
+  # Chip lives 1.2s: shoot at ~0.4s to capture the branch verdict, again at 1.5s for the field state.
+  adb logcat -c; dbg "open:save_word" 0.4; shot sw01_chip; sleep 1.1; shot sw01_selection_saved
+  # Raw receiver-side evidence: any "CMD ... failed" exception from the action path lands here.
+  adb logcat -d -s WBDBG:I 2>/dev/null | tr -d '\r' > shots/sw01_wbdbg_raw.txt
   dict_has "$SWP" "positive"; rp=$?
   dict_has "$SWT" "positive"; rt=$?
+  # Raw provider payload (canary tokens only) preserved against row-shape false negatives.
+  adb shell content query --uri content://user_dictionary/words --where "word='$SWP'" > shots/sw01_provider_raw.txt 2>&1
   if [ $rp -eq 0 ] && [ $rt -eq 1 ]; then
     POS_OK=1; pass "save word saves the SELECTED word over the nonempty last-typed word (priority + liveness)"
   elif [ $rt -eq 0 ]; then fail "priority: the LAST-TYPED word was saved over the explicit selection"
