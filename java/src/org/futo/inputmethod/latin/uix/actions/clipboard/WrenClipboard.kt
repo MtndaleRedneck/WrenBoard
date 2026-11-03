@@ -473,6 +473,7 @@ private fun WrenClipCard(w: WrenClipboardWindow, entry: ClipboardEntry, view: Vi
                             w.menuFor.value = entry
                             waitForUpOrCancellation()
                         }
+                        lifted && abs(accum.dx) > slopPx -> { dragX.value = accum.dx; finishSwipe(true) }
                         lifted -> w.paste(entry, view)
                         else -> {
                             // hold timer cancelled by >3dp movement: watch for the horizontal
@@ -497,7 +498,18 @@ private fun WrenClipCard(w: WrenClipboardWindow, entry: ClipboardEntry, view: Vi
                                 // cancellation and the drag always snapped back (cl04/cl05v).
                                 while (true) {
                                     val change = awaitPointerEvent().changes.firstOrNull { it.id == down.id } ?: break
-                                    if (change.changedToUp()) { tr("UP rx=${android.os.SystemClock.uptimeMillis()} ev=${change.uptimeMillis} x=${change.position.x.toInt()} hist=${change.historical.size} accDx=${accum.dx.toInt()} phase=drag"); change.consume(); lifted = true; break }
+                                    if (change.changedToUp()) {
+                                        // The lift is part of the swipe: count the UP event's own
+                                        // samples (its position and any batched history) BEFORE
+                                        // judging. Fast swipes coalesce their tail into the UP
+                                        // event - judging without it truncated a delivered 600px
+                                        // swipe to whatever the last MOVE happened to carry
+                                        // (cl04 flip-flop: pass/fail was delivery weather).
+                                        accum.advance(change.allSamples())
+                                        dragX.value = accum.dx
+                                        tr("UP rx=${android.os.SystemClock.uptimeMillis()} ev=${change.uptimeMillis} x=${change.position.x.toInt()} hist=${change.historical.size} accDx=${accum.dx.toInt()} phase=drag")
+                                        change.consume(); lifted = true; break
+                                    }
                                     if (!change.pressed) { tr("CANCEL rx=${android.os.SystemClock.uptimeMillis()} accDx=${accum.dx.toInt()} phase=drag"); cancelled = true; break }
                                     accum.advance(change.allSamples())
                                     tr("EV rx=${android.os.SystemClock.uptimeMillis()} ev=${change.uptimeMillis} x=${change.position.x.toInt()} hist=${change.historical.size} accDx=${accum.dx.toInt()} phase=drag")
@@ -506,7 +518,9 @@ private fun WrenClipCard(w: WrenClipboardWindow, entry: ClipboardEntry, view: Vi
                                 }
                                 finishSwipe(lifted)
                             } else if (lifted) {
-                                w.paste(entry, view)
+                                // A lift before slop is a tap (paste); a lift after slop is a
+                                // finished or abandoned swipe - judge it, never paste mid-drag.
+                                if (abs(accum.dx) > slopPx) { dragX.value = accum.dx; finishSwipe(true) } else w.paste(entry, view)
                             }
                         }
                     }
