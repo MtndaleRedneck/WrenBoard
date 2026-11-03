@@ -179,7 +179,14 @@ private class TopLineGradientDrawable(
             floatArrayOf(0f, 0.6f, 1f),
             android.graphics.Shader.TileMode.CLAMP
         )
+        // Fade must stay inside the rounded fill, not leave square feet in the gap.
+        val saved = canvas.save()
+        val clip = android.graphics.Path().apply {
+            addRoundRect(android.graphics.RectF(b), radiusPx, radiusPx, android.graphics.Path.Direction.CW)
+        }
+        canvas.clipPath(clip)
         canvas.drawRect(b.left.toFloat(), b.bottom - fadeH, b.right.toFloat(), b.bottom.toFloat(), bottomFadePaint)
+        canvas.restoreToCount(saved)
     }
     private fun drawTopLine(canvas: android.graphics.Canvas, b: android.graphics.Rect) {
         // center lands 3 SwiftKey px from the key's top edge (1px border + 2px gap + half the 1px line)
