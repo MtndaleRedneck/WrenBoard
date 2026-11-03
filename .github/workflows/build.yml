@@ -40,8 +40,13 @@ jobs:
           echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/release.keystore"
           printf 'storeFile=%s\nkeyAlias=wrenboard\nkeyPassword=%s\nstorePassword=%s\n' "$RUNNER_TEMP/release.keystore" "$KEYSTORE_PASSWORD" "$KEYSTORE_PASSWORD" > keystore.properties
       - name: Build stable release APK
+        env:
+          # WrenBoard 1.5 (item 1): KLIPY GIF test key, owner-authorized Nov 3; empty = placeholder state
+          KLIPY_APP_KEY: ${{ secrets.KLIPY_APP_KEY }}
         run: ./gradlew --no-daemon assembleStableRelease
       - name: Build stable DEBUG preview APK (layout screenshots only, never published)
+        env:
+          KLIPY_APP_KEY: ${{ secrets.KLIPY_APP_KEY }}
         run: ./gradlew --no-daemon assembleStableDebug
       - name: Cleanup signing material
         if: always()
