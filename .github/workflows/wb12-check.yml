@@ -25,6 +25,10 @@ on:
         description: "emulator wm density (blank = 420)"
         required: false
         default: ""
+      expect_gif:
+        description: "1 = keyed run: GIF results + fixture commitContent insert are REQUIRED (scratch evidence runs)"
+        required: false
+        default: "0"
       load:
         description: "1 = CPU load on the emulator during the swipe leg (input-backlog experiment)"
         required: false
@@ -80,6 +84,7 @@ jobs:
           WB_SIZE: ${{ inputs.size }}
           WB_DENSITY: ${{ inputs.density }}
           WB_LOAD: ${{ inputs.load }}
+          WB_EXPECT_GIF: ${{ inputs.expect_gif }}
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 34

@@ -25,6 +25,30 @@ import android.widget.LinearLayout;
 // White full-size EditText + control buttons + broadcast control + logcat text mirror.
 // Not part of the released app.
 public class TestInput extends Activity {
+
+    // EditText that accepts committed content (image/gif): logs the handoff and drains the
+    // provider stream so the sender's fetch path is fully exercised (commitContent, not text).
+    public static class GifEditText extends EditText {
+        public GifEditText(android.content.Context context) { super(context); }
+        @Override public android.view.inputmethod.InputConnection onCreateInputConnection(android.view.inputmethod.EditorInfo outAttrs) {
+            android.view.inputmethod.InputConnection base = super.onCreateInputConnection(outAttrs);
+            outAttrs.contentMimeTypes = new String[] {"image/gif"};
+            return new android.view.inputmethod.InputConnectionWrapper(base, true) {
+                @Override public boolean commitContent(android.view.inputmethod.InputContentInfo info, int flags, android.os.Bundle opts) {
+                    String mime = "-"; long n = -1;
+                    try {
+                        mime = info.getDescription().getMimeType(0);
+                        info.requestPermission();
+                        java.io.InputStream in = getContext().getContentResolver().openInputStream(info.getContentUri());
+                        n = 0; byte[] buf = new byte[8192]; int r; while ((r = in.read(buf)) != -1) n += r; in.close();
+                        info.releasePermission();
+                    } catch (Exception e) { Log.i("IMETARGET", "CONTENT= error=" + e); return false; }
+                    Log.i("IMETARGET", "CONTENT= mime=" + mime + " bytes=" + n);
+                    return true;
+                }
+            };
+        }
+    }
     private static final String PREFS = "fixture";
     private static final String KEY_MODE = "mode";
     private static final String MODE_NORMAL = "NORMAL";
@@ -106,7 +130,7 @@ public class TestInput extends Activity {
         root.setOrientation(LinearLayout.VERTICAL);
         root.setBackgroundColor(Color.WHITE);
 
-        edit = new EditText(this);
+        edit = new GifEditText(this);
         edit.setBackgroundColor(Color.WHITE);
         edit.setTextColor(Color.BLACK);
         edit.setMinLines(10);
