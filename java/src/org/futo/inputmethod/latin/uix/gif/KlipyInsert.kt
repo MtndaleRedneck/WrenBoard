@@ -18,15 +18,17 @@ import org.futo.inputmethod.latin.uix.KeyboardManagerForAction
 val WrenStickersEnabled = SettingsKey(booleanPreferencesKey("wren_stickers_enabled"), false)
 
 object KlipyInsert {
+    // ignoreConnectionOverride = true: capability and insertion always target the HOST
+    // editor, never the panel's own local search field while its input override is active.
     fun canOffer(manager: KeyboardManagerForAction): Boolean =
-        manager.appSupportsImageInsertion("image/gif", false)
+        manager.appSupportsImageInsertion("image/gif", true)
 
     fun insert(manager: KeyboardManagerForAction, appKey: String, gif: KlipyClient.KlipyGif): Boolean {
         val variant = gif.fullGif() ?: return false
         if (!KlipyGifPipe.isAllowedUrl(variant.url)) return false
         if (!canOffer(manager)) return false
         val uri = KlipyGifPipe.register(variant.url)
-        val inserted = manager.typeUri(uri, listOf("image/gif"))
+        val inserted = manager.typeUri(uri, listOf("image/gif"), ignoreConnectionOverride = true)
         if (inserted && appKey.isNotEmpty()) {
             manager.getLifecycleScope().launch { KlipyClient.registerShare(appKey, gif.slug) }
         }

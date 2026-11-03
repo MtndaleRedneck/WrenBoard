@@ -33,6 +33,7 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
@@ -77,9 +78,7 @@ import coil.request.ImageRequest
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.debounce
 import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.text.TextStyle
 import org.futo.inputmethod.latin.uix.gif.KlipyClient
 import org.futo.inputmethod.latin.uix.gif.KlipyClient.KlipyGif
 import org.futo.inputmethod.latin.uix.gif.klipyCustomerId
@@ -156,13 +155,28 @@ class WrenEmojiWindow(val manager: KeyboardManagerForAction) : ActionWindow() {
     val tab = mutableStateOf(if (EmojiPanelRequest.openOnGifTab) 1 else 0)
     val searching = mutableStateOf(false)
     val searchText = mutableStateOf("")
+    // B2: GIF search state lives here so the top search row and the GIF panel share it,
+    // and close() clears it (no stale local capture across editors).
+    val gifQuery = mutableStateOf("")
+    // "trending" (default), "recents", or "search" (query drives results)
+    val gifMode = mutableStateOf("trending")
 
-    init { EmojiPanelRequest.openOnGifTab = false }
+    // SwiftKey-matching GIF layout (owner reference, Nov 3): the grid fills the whole panel
+    // with no letters keyboard below; tapping the search field raises the keyboard, the
+    // round arrow dismisses it. gifSearching tracks that focused state.
+    val gifSearching = mutableStateOf(false)
+
+    init {
+        EmojiPanelRequest.openOnGifTab = false
+    }
 
     override val showTitleBar: Boolean get() = false
     override val positionIsUserManagable: Boolean get() = false
     override val showCloseButton: Boolean get() = false
-    override val fixedWindowHeight: Dp get() = if (searching.value) 104.dp else WrenEmojiPanelHeight
+    // Typing state contains only tab/search rows; suggestions and full letters are below.
+    // Results replace letters after the arrow. Runtime pixels determine host visibility.
+    override val fixedWindowHeight: Dp
+        get() = if (searching.value) 104.dp else if (gifSearching.value) 93.dp else WrenEmojiPanelHeight
 
     @Composable
     override fun windowName(): String = stringResource(R.string.action_emoji_title)
@@ -175,6 +189,10 @@ class WrenEmojiWindow(val manager: KeyboardManagerForAction) : ActionWindow() {
     override fun close(): CloseResult {
         searching.value = false
         searchText.value = ""
+        gifQuery.value = ""
+        gifMode.value = "trending"
+        gifSearching.value = false
+        manager.forceActionWindowAboveKeyboard(false)
         return CloseResult.Default
     }
 
@@ -248,9 +266,9 @@ fun WrenEmojiPanel(w: WrenEmojiWindow) {
                 w.manager.performHapticAndAudioFeedback(Constants.CODE_SWITCH_ALPHA_SYMBOL, view)
             }, contentAlignment = Alignment.Center) { Ic(R.drawable.wren_ic_arrow_back_ios_new, EmojiColors.Orange, 18.dp, desc = stringResource(R.string.wren_cd_back)) }
             WrenTopTab(w.tab.value == 0, R.drawable.wren_ic_sentiment_satisfied_fill, R.drawable.wren_ic_sentiment_satisfied,
-                stringResource(R.string.wren_emoji_tab), Modifier) { w.tab.value = 0 }
+                stringResource(R.string.wren_emoji_tab), Modifier.wbPos("EMOJITAB")) { w.tab.value = 0; w.manager.forceActionWindowAboveKeyboard(false) }
             WrenTopTab(w.tab.value == 1, R.drawable.wren_ic_gif_box_fill, R.drawable.wren_ic_gif_box,
-                stringResource(R.string.wren_gif_tab), Modifier.wbPos("EMOJIGIFTAB")) { w.tab.value = 1 }
+                stringResource(R.string.wren_gif_tab), Modifier.wbPos("EMOJIGIFTAB")) { w.tab.value = 1; w.gifSearching.value = false; w.manager.forceActionWindowAboveKeyboard(false) }
         }
 
         // Search row: field 945 x 98 px, round arrow 96 px.
@@ -258,20 +276,46 @@ fun WrenEmojiPanel(w: WrenEmojiWindow) {
             Row(
                 Modifier.weight(1f).height(37.dp).clip(RoundedCornerShape(6.dp))
                     .background(EmojiColors.Field).border(1.dp, EmojiColors.FieldBorder, RoundedCornerShape(6.dp))
-                    .clickable { if (w.tab.value == 0) w.searching.value = true }
+                    .clickable {
+                        if (w.tab.value == 0) w.searching.value = true
+                        else { w.gifSearching.value = true; w.manager.forceActionWindowAboveKeyboard(true) }
+                    }
                     .padding(horizontal = 7.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Ic(R.drawable.wren_ic_search, EmojiColors.OrangeMuted, 19.dp)
                 Spacer(Modifier.width(8.dp))
-                Text(stringResource(if (w.tab.value == 0) R.string.wren_search_emojis else R.string.wren_search_gifs), color = EmojiColors.OrangeText, fontSize = 16.sp)
+                if (w.tab.value == 0) {
+                    Text(stringResource(R.string.wren_search_emojis), color = EmojiColors.OrangeText, fontSize = 16.sp)
+                } else if (w.gifSearching.value) {
+                    // Typable GIF search field (same action-editor mechanism as emoji/clipboard
+                    // search). Shown while the search row has focus; the letters keyboard is
+                    // raised for it and dismissed by the round arrow.
+                    Box(Modifier.weight(1f).wbPos("GIFSEARCHFIELD")) {
+                        ActionTextEditor(text = w.gifQuery, autofocus = true, autocorrect = true, noPersonalizedLearning = true, textSize = 16.sp, placeholder = stringResource(R.string.wren_search_gifs))
+                    }
+                } else {
+                    Box(Modifier.weight(1f).wbPos("GIFSEARCHFIELD")) {
+                        Text(if (w.gifQuery.value.isEmpty()) stringResource(R.string.wren_search_gifs) else w.gifQuery.value,
+                            color = EmojiColors.OrangeText, fontSize = 16.sp)
+                    }
+                }
             }
             Spacer(Modifier.width(5.dp))
-            Box(Modifier.size(36.dp).clip(CircleShape).background(EmojiColors.Arrow).clickable {
-                w.manager.sendCodePointEvent(Constants.CODE_ENTER)
-            }, contentAlignment = Alignment.Center) { Ic(R.drawable.wren_ic_arrow_forward, Color(0xFF333333), 21.dp, desc = stringResource(R.string.wren_cd_enter)) }
+            // B2: this button used to send a raw ENTER to the host app - in any messaging
+            // field with enter=send that sent the user's drafted message. It now only drives
+            // local behavior: emoji tab opens the emoji search UI, GIF tab dismisses the
+            // search keyboard (results load on a debounce while typing).
+            Box(Modifier.size(36.dp).clip(CircleShape).background(EmojiColors.Arrow).wbPos("EMOJISEARCHGO").clickable {
+                if (w.tab.value == 0) w.searching.value = true
+                else { w.gifSearching.value = false; w.manager.forceActionWindowAboveKeyboard(false) }
+            }, contentAlignment = Alignment.Center) { Ic(R.drawable.wren_ic_arrow_forward, Color(0xFF333333), 21.dp, desc = stringResource(if (w.tab.value == 0) R.string.wren_search_emojis else R.string.wren_cd_back)) }
         }
         Box(Modifier.fillMaxWidth().height(2.7.dp).background(EmojiColors.Sep))
+
+        // Typing reference: tab/search rows directly above suggestions + full keyboard.
+        // Results/status/categories only belong to the post-search panel, not this state.
+        if (w.tab.value == 1 && w.gifSearching.value) return@Column
 
         if (w.tab.value == 1) {
             WrenGifPlaceholder(w, view, Modifier.weight(1f))
@@ -538,10 +582,7 @@ private fun WrenEmojiSearch(w: WrenEmojiWindow, emojis: List<EmojiItem>, view: V
     }
 }
 
-/**
- * GIF tab. No free GIF source is wired in (every GIF service needs an account key), so the tab shows its
- * search field and mood chips with an empty grid. Flagged as open in the 1.2 report.
- */
+/** GIF tab: KLIPY-backed grid. Search field lives in the shared top row (B2). */
 @OptIn(FlowPreview::class)
 @Composable
 private fun WrenGifPlaceholder(w: WrenEmojiWindow, view: View, modifier: Modifier) {
@@ -550,12 +591,13 @@ private fun WrenGifPlaceholder(w: WrenEmojiWindow, view: View, modifier: Modifie
     val appKey = org.futo.inputmethod.latin.BuildConfig.KLIPY_APP_KEY
     val hasKey = appKey.isNotBlank()
     val customerId = remember { if (hasKey) klipyCustomerId(context) else "" }
-    val query = remember { mutableStateOf("") }
+    val query = w.gifQuery
+    val mode = w.gifMode
     val gifs = remember { mutableStateOf<List<KlipyGif>>(emptyList()) }
     val loading = remember { mutableStateOf(false) }
     val failed = remember { mutableStateOf(false) }
-    // "trending" (default), "recents", or "search" (query drives results)
-    val mode = remember { mutableStateOf("trending") }
+    // Typing a query switches to search results (the old field did this in onValueChange).
+    LaunchedEffect(query.value) { if (query.value.isNotEmpty()) mode.value = "search" }
 
     val canInsert = remember { KlipyInsert.canOffer(w.manager) }
 
@@ -587,44 +629,24 @@ private fun WrenGifPlaceholder(w: WrenEmojiWindow, view: View, modifier: Modifie
             }
             return@Column
         }
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp), contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)) {
-            item {
-                Box(Modifier.clip(RoundedCornerShape(8.dp)).background(EmojiColors.Chip.copy(alpha = 0.5f)).clickable { w.tab.value = 0 }.padding(horizontal = 12.dp, vertical = 6.dp)) {
-                    Text("\u2190 emoji", color = EmojiColors.OrangeMuted, fontSize = 13.sp)
-                }
-            }
-            items(listOf("Recents", "Trending", "happy", "sad", "laugh", "love")) { label ->
-                Box(Modifier.clip(RoundedCornerShape(8.dp)).background(EmojiColors.Chip).clickable {
-                    when (label) {
-                        "Recents" -> { mode.value = "recents"; query.value = "" }
-                        "Trending" -> { mode.value = "trending"; query.value = "" }
-                        else -> { mode.value = "search"; query.value = label }
-                    }
-                }.padding(horizontal = 12.dp, vertical = 6.dp)) {
-                    Text(label, color = EmojiColors.OrangeMuted, fontSize = 13.sp)
-                }
-            }
-        }
-        Box(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp).clip(RoundedCornerShape(8.dp)).background(EmojiColors.Chip).padding(horizontal = 12.dp, vertical = 9.dp)) {
-            if (query.value.isEmpty()) Text("Search KLIPY", color = EmojiColors.OrangeMuted, fontSize = 14.sp)
-            BasicTextField(value = query.value,
-                onValueChange = { query.value = it; if (it.isNotEmpty()) mode.value = "search" },
-                textStyle = TextStyle(color = EmojiColors.Orange, fontSize = 14.sp),
-                singleLine = true, modifier = Modifier.fillMaxWidth())
-        }
-        LazyVerticalGrid(columns = GridCells.Fixed(3), modifier = Modifier.weight(1f),
+        // SwiftKey reference layout (owner screenshots, Nov 3): two-column varied-height grid
+        // filling the panel; no letters keyboard below; bottom bar = abc / categories / backspace.
+        LazyVerticalGrid(columns = GridCells.Fixed(2), modifier = Modifier.weight(1f).wbPos("GIFGRID"),
             contentPadding = PaddingValues(6.dp),
             horizontalArrangement = Arrangement.spacedBy(6.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            items(gifs.value, key = { it.id }) { gif ->
+            itemsIndexed(gifs.value, key = { _, g -> g.id }) { idx, gif ->
+                val preview = gif.gridPreview()
+                val ratio = if (preview != null && preview.width > 0 && preview.height > 0)
+                    preview.width.toFloat() / preview.height.toFloat() else 1f
                 AsyncImage(
-                    model = ImageRequest.Builder(context).data(gif.gridPreview()?.url)
+                    model = ImageRequest.Builder(context).data(preview?.url)
                         .apply { if (Build.VERSION.SDK_INT >= 28) decoderFactory(ImageDecoderDecoder.Factory()) }
                         .build(),
                     contentDescription = gif.title,
                     contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(8.dp))
-                        .background(EmojiColors.Field).clickable {
+                    modifier = Modifier.fillMaxWidth().aspectRatio(ratio).clip(RoundedCornerShape(8.dp))
+                        .background(EmojiColors.Field).wbPos("GIFCELL i=$idx").clickable {
                             KlipyInsert.insert(w.manager, appKey, gif)
                         })
             }
@@ -635,9 +657,39 @@ private fun WrenGifPlaceholder(w: WrenEmojiWindow, view: View, modifier: Modifie
             failed.value -> "Couldn't load GIFs - check connection"
             gifs.value.isEmpty() && mode.value == "recents" -> "No recent GIFs yet"
             gifs.value.isEmpty() -> "No GIFs found"
-            else -> "Powered by KLIPY"
+            else -> ""
         }
-        Text(status, color = EmojiColors.OrangeMuted, fontSize = 10.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp))
+        if (status.isNotEmpty()) Text(status, color = EmojiColors.OrangeMuted, fontSize = 10.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp))
+        // Bottom bar: abc (back to letters) / Recents + category labels / backspace (edits the
+        // GIF query only - it can never touch the host field).
+        Row(Modifier.fillMaxWidth().height(44.dp).background(EmojiColors.Bar), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.width(52.dp).fillMaxHeight().wbPos("GIFABC").clickable { w.manager.closeActionWindow() }, contentAlignment = Alignment.Center) {
+                Text("abc", color = EmojiColors.Orange, fontSize = 16.sp, fontWeight = FontWeight.Medium)
+            }
+            LazyRow(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(16.dp), contentPadding = PaddingValues(horizontal = 4.dp)) {
+                items(listOf("Recents", "Trending", "happy", "sad", "laugh", "love")) { label ->
+                    val active = (label == "Recents" && mode.value == "recents") ||
+                        (label == "Trending" && mode.value == "trending") ||
+                        (mode.value == "search" && query.value == label)
+                    Column(Modifier.wbPos("GIFCAT name=$label").clickable {
+                        when (label) {
+                            "Recents" -> { mode.value = "recents"; query.value = "" }
+                            "Trending" -> { mode.value = "trending"; query.value = "" }
+                            else -> { mode.value = "search"; query.value = label }
+                        }
+                    }.padding(vertical = 4.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(label, color = if (active) EmojiColors.Orange else EmojiColors.OrangeMuted, fontSize = 15.sp,
+                            fontWeight = if (active) FontWeight.Medium else FontWeight.Normal)
+                        if (active) Box(Modifier.width(28.dp).height(2.dp).background(EmojiColors.Orange))
+                    }
+                }
+            }
+            Box(Modifier.width(52.dp).fillMaxHeight().wbPos("GIFBS").clickable {
+                if (w.gifQuery.value.isNotEmpty()) w.gifQuery.value = w.gifQuery.value.dropLast(1)
+            }, contentAlignment = Alignment.Center) {
+                Ic(R.drawable.wren_ic_backspace_fill, EmojiColors.Orange, 26.dp, desc = stringResource(R.string.wren_cd_backspace))
+            }
+        }
     }
 }
 

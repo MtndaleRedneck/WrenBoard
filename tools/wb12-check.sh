@@ -6,7 +6,7 @@
 set -u
 APK="$1"; TAPK="$2"
 PKG=com.wrenboard.keyboard; TPKG=com.wrenboard.imetarget
-LEGS=",${WB_LEGS:-setup,keyboard,period,leftedge,caps,shift,clip,update,toolbar,textedit,skin,symbols,states,emoji,clipboard,saveword,settings,panelexit},"
+LEGS=",${WB_LEGS:-setup,keyboard,period,leftedge,caps,shift,clip,update,toolbar,textedit,skin,symbols,states,emoji,gifsearch,clipboard,saveword,settings,panelexit},"
 mkdir -p shots; R=shots/results.txt; : > "$R"
 ADB_BIN=$(type -P adb)
 # a dead emulator must not hang the run: each call is bounded, and once the link is confirmed gone
@@ -32,6 +32,13 @@ adb() {
 opensettings() { # opensettings [navDest] [sleep]: open WrenBoard Settings (optionally at a page) straight from the shell
   adb shell am start -n "$PKG/org.futo.inputmethod.latin.uix.settings.SettingsActivity" -f 0x34000000 ${1:+--es navDest "$1"} >/dev/null 2>&1; sleep "${2:-3}"
 }
+# Reject misspelled dispatch selectors before a preamble-only green can hide a missing leg.
+KNOWN_LEGS=$(sed -n 's/^if leg \([a-zA-Z0-9_]*\); then.*/\1/p' "$0" | tr '\n' ' ')
+for requested in $(printf '%s' "${WB_LEGS:-}" | tr ',' ' '); do
+  case " $KNOWN_LEGS " in *" $requested "*) ;;
+    *) echo "Unknown WB_LEGS selector: $requested" >&2; exit 2 ;;
+  esac
+done
 FAILS=0
 note() { echo "$*" | tee -a "$R"; }
 pass() { note "PASS: $*"; }
@@ -68,6 +75,9 @@ tapcode() { local xy; xy=$(kxy code "$1") || { fail "no key with code $1 in geom
 type_word() { local w="$1" i; for ((i=0;i<${#w};i++)); do tapk "${w:$i:1}" || return 1; done; }
 field() { sleep 0.4; adb logcat -d -s IMETARGET:I 2>/dev/null | tr -d '\r' | grep 'FIELD=\|CLEARED' | tail -1 | sed -n 's/.*IMETARGET: FIELD=//p'; }
 clear_field() { adb shell am broadcast -a com.wrenboard.imetarget.CLEAR -p "$TPKG" >/dev/null 2>&1; sleep 0.8; }
+# On-demand current-content read (fixture REPORT): field() alone reads the last CHANGE marker,
+# which an unchanged field does not emit after a logcat clear (b2-check 41680568216 false FAILs).
+field_now() { adb shell am broadcast -a com.wrenboard.imetarget.REPORT -p "$TPKG" >/dev/null 2>&1; sleep 0.5; adb logcat -d -s IMETARGET:I 2>/dev/null | tr -d '\r' | grep 'FIELD=' | tail -1 | sed -n 's/.*IMETARGET: FIELD=//p'; }
 sugg() { adb logcat -d -s WBDBG:I | tr -d '\r' > shots/_s.txt; python3 tools/wb12_kv.py shots/_s.txt sugg; }
 elem() { geom "$1" keep >/dev/null; python3 tools/wb12_kv.py shots/geom_$1.txt kbd elementId; }
 focus_target() {
@@ -1055,6 +1065,169 @@ if leg extras; then
   clear_field; type_word zqxwv; sleep 1.0; shot x05_strip_no_suggestion
   S2=$(sugg); note "strip with 'zqxwv': $S2"
   clear_field
+fi
+
+if leg gifsearch; then
+  note "== B2 GIF search routing (keyless): local capture, no host ENTER, close restores =="
+  snapshot() {
+    local name=$1 req="${1}_$(date +%s)"
+    : > "shots/$name.txt"
+    adb logcat -c; dbg "windows:$req" 0.5
+    adb logcat -d -s WBDBG:I | tr -d '\r' > "shots/${name}_raw.txt"
+    grep -q "SNAPBEGIN request=$req " "shots/${name}_raw.txt" &&
+      grep -q "SNAPEND request=$req" "shots/${name}_raw.txt" || { fail "B2 snapshot $name incomplete"; return 1; }
+    sed -n "/SNAPBEGIN request=$req /,/SNAPEND request=$req/p" "shots/${name}_raw.txt" > "shots/$name.txt"
+    # An attached duplicate tag is ambiguous. Do not choose the last provider silently.
+    DUP=$(grep 'WINDOW ' "shots/$name.txt" | sed -E 's/.*WINDOW (.*) cx=.*/\1/' | sort | uniq -d)
+    [ -z "$DUP" ] || { : > "shots/$name.txt"; fail "B2 snapshot $name duplicate layout tag: $DUP"; return 1; }
+  }
+  focus_target; clear_field
+  type_word hostok; sleep 0.5
+  F0=$(field); note "host field baseline: '$F0'"
+  [ "$F0" = "hostok" ] && pass "B2 setup: host field typed" || fail "B2 setup: host field '$F0'"
+  adb logcat -c; dbg "open:emoji" 2.0
+  GT=""; for i in $(seq 1 10); do sleep 0.5; adb logcat -d -s WBDBG:I | tr -d '\r' > shots/gb0.txt; GT=$(pos shots/gb0.txt 'EMOJIGIFTAB'); [ -n "$GT" ] && break; done
+  if [ -n "$GT" ]; then adb shell input tap $GT; sleep 1.5; else fail "B2: no GIF tab"; fi
+  snapshot gb1
+  GA=$(pos shots/gb1.txt 'EMOJISEARCHGO'); note "gif arrow pos: '$GA'"
+  GF=$(pos shots/gb1.txt 'GIFSEARCHFIELD'); note "gif search field pos: '$GF'"
+  shot gb1_gif_tab_open
+  # SwiftKey reference layout (owner screenshots, Nov 3): the GIF tab is a full-panel grid
+  # with NO letters keyboard below; tapping the search field raises it.
+  if ! grep -q 'keyboardHidden=true' shots/gb1.txt; then fail "B2: letters keyboard visible on the GIF tab (reference: grid fills the panel)"; else pass "B2: GIF tab opens as a full panel grid, no letters keyboard"; fi
+  if [ -n "$GF" ]; then
+    adb logcat -c; adb shell input tap $GF; sleep 1.2
+    geom gb1k keep >/dev/null
+    snapshot gb1active
+    if grep -q 'keyboardHidden=false' shots/gb1active.txt; then pass "B2: tapping the GIF search field raises the letters keyboard"; else fail "B2: search field tap raised no keyboard - field untypable"; fi
+  else fail "B2: no GIFSEARCHFIELD marker"; fi
+  # check 1+2: typing lands in the local GIF query; host field stays byte-unchanged
+  for ch in c a t; do XY=$(python3 tools/wb12_kv.py shots/geom_gb1k.txt xy KEY label "$ch") && adb shell input tap $XY; sleep 0.3; done
+  sleep 1.0
+  F1=$(field_now); note "host field after GIF-search typing: '$F1'"
+  [ "$F1" = "$F0" ] && pass "B2: typing in GIF search leaves host field byte-unchanged ('$F0')" || fail "B2: host field changed while typing in GIF search ('$F0' -> '$F1')"
+  shot gb2_gif_query_typed
+  # active-arrow path: with the search keyboard raised, the round arrow must dismiss it and
+  # deliver NO host editor action (the post-tab arrow below only exercises the idle arrow).
+  # Re-acquire coords from a FRESH dump (post-expansion geometry); a missing marker is a leg failure, not a skip.
+  GA=""; snapshot gb2a && GA=$(pos shots/gb2a.txt 'EMOJISEARCHGO')
+  if [ -n "$GA" ]; then
+    adb logcat -c; adb shell input tap $GA; sleep 1.2
+    # Preserve host action evidence BEFORE snapshot() clears logcat.
+    adb logcat -d -s IMETARGET:I | tr -d '\r' > shots/gb2d_action_raw.txt
+    snapshot gb2d
+    shot gb2d_post_dismiss
+    if ! grep -q 'keyboardHidden=true' shots/gb2d.txt; then fail "B2: active arrow did not dismiss the search keyboard"; else pass "B2: active arrow dismisses the search keyboard"; fi
+    F1a=$(field_now)
+    [ "$F1a" = "$F0" ] && pass "B2: active arrow leaves host field unchanged ('$F0')" || fail "B2: active arrow changed host field ('$F0' -> '$F1a')"
+    A1=$(grep 'ACTION=' shots/gb2d_action_raw.txt | tail -3)
+    [ -z "$A1" ] && pass "B2: active arrow delivered NO host editor action (no ACTION= marker)" || fail "B2: active arrow delivered host editor action: $A1"
+    # Keep search dismissed for populated full-grid evidence and visible clipped-cell tap.
+  else fail "B2: no EMOJISEARCHGO marker for the active arrow - leg not executed"; fi
+  # Keyed evidence against the configured test API: real results render; one tap must
+  # deliver image/gif into the CONTROLLED fixture via commitContent (CONTENT= marker), and the
+  # host TEXT stays byte-unchanged. Keyless builds: results/insert are not exercisable (INFO).
+  GC=""; for i in $(seq 1 8); do sleep 1.5; GC=""; snapshot gb2c && GC=$(pos shots/gb2c.txt 'GIFCELL i=0 '); [ -n "$GC" ] && break; done
+  if [ -n "$GC" ]; then
+    shot gb2r_gif_results
+    adb logcat -c; adb shell input tap $GC; sleep 3.0
+    CM=$(adb logcat -d -s IMETARGET:I 2>/dev/null | tr -d '\r' | grep 'CONTENT= mime=' | tail -1)
+    F1b=$(field_now)
+    CB=$(echo "$CM" | sed -n 's/.*bytes=\([0-9]*\).*/\1/p')
+    CS=$(echo "$CM" | sed -n 's/.*sig=\([A-Za-z0-9]*\).*/\1/p')
+    if echo "$CM" | grep -q 'mime=image/gif' && [ "${CB:-0}" -gt 0 ] && [ "$CS" = "GIF" ]; then pass "B2 keyed: GIF insert delivered image/gif to the fixture via commitContent ($CM)"
+    elif [ "${WB_EXPECT_GIF:-0}" = "1" ]; then fail "B2 keyed: grid tap delivered no verified GIF commitContent (marker: '${CM:-none}')"
+    else note "INFO: GIF results rendered but no verified commitContent marker"; fi
+    [ "$F1b" = "$F0" ] && pass "B2 keyed: GIF insert left host TEXT unchanged ('$F0')" || fail "B2 keyed: host text changed on GIF insert ('$F0' -> '$F1b')"
+  elif [ "${WB_EXPECT_GIF:-0}" = "1" ]; then fail "B2 keyed: no GIF results within 12s on a keyed build"
+  else note "INFO: no GIF results within 12s (keyless build) - results/insert not exercisable"; fi
+  # check 2b: tab switch GIF->emoji releases the local capture - an emoji tap must reach the HOST
+  ET=""; snapshot gb2tabs && ET=$(pos shots/gb2tabs.txt 'EMOJITAB')
+  if [ -n "$ET" ]; then
+    adb shell input tap $ET; sleep 1.5
+    snapshot gb2w
+    G=$(grep 'WINDOW EMOJIGRID' shots/gb2w.txt | tail -1)
+    GX=$(echo "$G" | sed -n 's/.*cx=\([0-9]*\).*/\1/p'); GY=$(echo "$G" | sed -n 's/.*cy=\([0-9]*\).*/\1/p')
+    GW=$(echo "$G" | sed -n 's/.* w=\([0-9]*\).*/\1/p'); GH=$(echo "$G" | sed -n 's/.* h=\([0-9]*\).*/\1/p')
+    if [ -n "$GW" ]; then
+      adb shell input tap $((GX-GW/2+GW/16)) $((GY-GH/2+503*${WB_DENSITY:-420}/1600/2)); sleep 0.8
+      FT=$(field_now); note "host field after emoji tap post-tab-switch: '$FT'"
+      case "$FT" in "$F0"?*) pass "B2: tab switch GIF->emoji releases local capture (emoji reached host)";; *) fail "B2: after tab switch host field is '$FT' (wanted '$F0'+emoji)";; esac
+      F0="$FT"   # re-baseline: the host field now holds the emoji-appended text
+    else fail "B2: no EMOJIGRID after tab switch"; fi
+    # back to the GIF tab for the arrow check; re-acquire coords after the layout round-trip
+    GT2=$(pos shots/gb2w.txt 'EMOJIGIFTAB'); [ -n "$GT2" ] && { adb shell input tap $GT2; sleep 1.2; GA=""; snapshot gb2x && GA=$(pos shots/gb2x.txt 'EMOJISEARCHGO'); }
+  else fail "B2: no EMOJITAB marker"; fi
+  # check 3: the round arrow must not deliver ENTER to the host (dismisses the search keyboard only)
+  if [ -n "$GA" ]; then
+    adb logcat -c; adb shell input tap $GA; sleep 1.2
+    F2=$(field_now); note "host field after arrow: '$F2'"
+    [ "$F2" = "$F0" ] && pass "B2: round arrow leaves host field unchanged ('$F0')" || fail "B2: round arrow changed host field ('$F0' -> '$F2')"
+    A2=$(adb logcat -d -s IMETARGET:I 2>/dev/null | tr -d '\r' | grep 'ACTION=' | tail -3)
+    if [ -z "$A2" ]; then pass "B2: round arrow delivered NO host editor action (no ACTION= marker)"
+    else fail "B2: round arrow delivered host editor action: $A2"; fi
+    shot gb3_after_arrow
+  else fail "B2: no EMOJISEARCHGO marker for the round arrow"; fi
+  # check 4: after the panel is closed, host typing works again (no stuck local capture)
+  dbg "close" 1.0
+  type_word zz; sleep 0.5
+  F3=$(field); note "host field after close+typing: '$F3'"
+  [ "$F3" = "${F0}zz" ] && pass "B2: close restores host typing, no stuck capture ('$F3')" || fail "B2: host typing after close is '$F3' (wanted '${F0}zz')"
+  shot gb4_after_close
+fi
+
+if leg gifprivacy; then
+  note "== GIF query learning boundary: executed noLearning skips, zero queue, host live control =="
+  dbg "prefbool:pref_key_use_personalized_dicts=true" 0.8
+  dbg "prefbool:pref_key_auto_correction=true" 0.8
+  focus_target; clear_field
+  dbg "open:gif" 1.5
+  adb logcat -c; dbg "windows:gifprivacy_open" 0.5
+  adb logcat -d -s WBDBG:I | tr -d '\r' > shots/gp_open_raw.txt
+  GP=$(pos shots/gp_open_raw.txt GIFSEARCHFIELD)
+  if [ -n "$GP" ]; then
+    adb shell input tap $GP; sleep 1
+    : > shots/geom_gp_active.txt
+    geom gp_active keep >/dev/null
+    adb logcat -c; dbg "windows:gifprivacy_active" 0.5
+    adb logcat -d -s WBDBG:I | tr -d '\r' > shots/gp_active_window_raw.txt
+    shot gp_before_query
+    if ! grep -q 'KEY ' shots/geom_gp_active.txt ||
+       ! grep -q 'keyboardHidden=false' shots/gp_active_window_raw.txt ||
+       ! grep -q 'WINDOW GIFSEARCHFIELD' shots/gp_active_window_raw.txt; then
+      fail "GIF privacy current active-query geometry/window missing; no taps or credit"
+    else
+    cp shots/geom_gp_active.txt shots/geom.txt
+    adb logcat -c
+    for i in 1 2 3; do type_word zebra; tapcode 32; sleep 0.7; done
+    sleep 2
+    adb logcat -d -s WBDBG:I | tr -d '\r' > shots/gp_query_learning_raw.txt
+    GP_EN=$(grep -c 'STARTER learnEnter' shots/gp_query_learning_raw.txt)
+    GP_SK=$(grep -c 'STARTER learnSkip id=[0-9]* reason=noLearning' shots/gp_query_learning_raw.txt)
+    GP_DISTINCT=$(python3 - <<'GPCOUNT'
+import re
+s=open('shots/gp_query_learning_raw.txt').read()
+e=set(re.findall(r'STARTER learnEnter id=(\d+)',s))
+k=set(re.findall(r'STARTER learnSkip id=(\d+) reason=noLearning',s))
+print(len(e & k))
+GPCOUNT
+)
+    GP_WQ=$(grep -c 'STARTER writeQueued' shots/gp_query_learning_raw.txt)
+    note "GIF query learning window: entered=$GP_EN noLearning=$GP_SK distinctSkipped=$GP_DISTINCT queued=$GP_WQ"
+    [ "$GP_DISTINCT" -ge 3 ] && [ "$GP_WQ" -eq 0 ] && pass "GIF query commits execute noLearning skip and queue zero writes" || fail "GIF query privacy control not established: enter=$GP_EN skip=$GP_SK queued=$GP_WQ"
+    shot gp_query_suggestions
+    dbg close 1
+    focus_target; clear_field; geom gp_host keep >/dev/null; cp shots/geom_gp_host.txt shots/geom.txt
+    adb logcat -c
+    for i in 1 2 3; do type_word zebra; tapcode 32; sleep 0.7; done
+    sleep 2
+    adb logcat -d -s WBDBG:I | tr -d '\r' > shots/gp_host_learning_raw.txt
+    GP_WQ=$(grep -c 'STARTER writeQueued' shots/gp_host_learning_raw.txt)
+    GP_DROP=$(grep -c 'STARTER drop id=' shots/gp_host_learning_raw.txt)
+    [ "$GP_WQ" -ge 3 ] && [ "$GP_DROP" -eq 0 ] && pass "GIF privacy live host control queues three writes with zero drops" || fail "GIF privacy live host control failed: queued=$GP_WQ drops=$GP_DROP"
+    shot gp_host_control
+    fi
+  else fail "GIF privacy local search field not observed; no privacy credit"; fi
 fi
 
 if leg clipboard; then
