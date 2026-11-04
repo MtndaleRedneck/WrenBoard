@@ -1631,6 +1631,43 @@ FIXTUREBLOCK
   fi
   # Raw provider payload (canary tokens only) preserved against row-shape false negatives.
   adb shell content query --uri content://user_dictionary/words --where "word='$SWP'" > shots/sw01_provider_raw.txt 2>&1
+  # --- SHELL-VISIBILITY DIAGNOSTICS (scratch branch only; strictly READ-ONLY stage 1) ---
+  # The app's own positive requery through the real provider says PRESENT while the shell's
+  # content query reports an empty set. Read-only probes only: no insert, no root, no DB pull,
+  # no trap changes, no mutation of any kind. Strictly diagnostic: this run never counts, and
+  # no probe result closes the original shell contradiction. Pre-probe evidence
+  # (sw01_provider_raw.txt, sw01_wbdbg_raw.txt, fixture raws) is already captured above and is
+  # not modified. If the comparison is inconclusive, that is reported before any next probe is
+  # designed.
+  swdiag() {
+    probe() { # <tag> <single remote command string>; records exact on-device command, rc, raw output
+      local tag=$1 cmd=$2 out rc
+      out=$(adb shell "$cmd" 2>&1); rc=$?
+      printf 'PROBE %s rc=%s remote-cmd=[%s]\n%s\n' "$tag" "$rc" "$cmd" "$out" | head -80 > "shots/swdiag_${tag}.txt"
+      note "PROBE $tag rc=$rc first-line: $(printf '%s' "$out" | head -1 | cut -c1-160)"
+    }
+    # D1: unfiltered table dump right after the app save. May contain non-canary rows seeded
+    # by earlier legs - disposable-emulator inventory, not a canary-only claim.
+    probe d1-dump 'content query --uri content://user_dictionary/words'
+    # D3a vs D3b: the SAME app-written token queried two ways - the argv form dict_has itself
+    # uses (host argv joined by adb, then remote-parsed; the remote shell may strip the single
+    # quotes, so --where may arrive as word=token with the token parsed as an SQL identifier)
+    # and an explicitly remote-quoted single-string form (double quotes inside the remote
+    # string, so the single quotes survive to the content CLI). Host-side quoting alone is not
+    # proof the quotes reached the content CLI intact; disagreement here localizes a shell
+    # quoting/parser defect.
+    probe d3a-apptok-argv "content query --uri content://user_dictionary/words --where word='$SWP'"
+    probe d3b-apptok-rquoted "content query --uri content://user_dictionary/words --where \"word='$SWP'\""
+    # D3c: dict_has itself, diagnostic rc only - the helper is not weakened and a raw
+    # substring match here is NOT qualification of anything.
+    dict_has "$SWP" "D3c app-token re-query"; note "D3c dict_has rc=$? (diagnostic only)"
+    local fa=0 fb=0
+    { head -1 shots/swdiag_d3a-apptok-argv.txt | grep -q 'rc=0' && grep -q "word=$SWP" shots/swdiag_d3a-apptok-argv.txt; } && fa=1
+    { head -1 shots/swdiag_d3b-apptok-rquoted.txt | grep -q 'rc=0' && grep -q "word=$SWP" shots/swdiag_d3b-apptok-rquoted.txt; } && fb=1
+    note "stage1 argv-found=$fa remotequoted-found=$fb (diagnostic only; disagreement localizes shell quoting/parser, agreement is inconclusive and reported as such)"
+  }
+  swdiag
+  # --- END SHELL-VISIBILITY DIAGNOSTICS ---
   if [ "$PRE0" != 1 ]; then
     note "INFO: saveword positive/priority UNQUALIFIED - two-canary precondition failed above"
   else
