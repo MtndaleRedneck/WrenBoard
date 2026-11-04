@@ -1865,6 +1865,9 @@ if leg settings; then
   dumpui st00
   # the update leg left a seeded 99.0.0 behind; a person would answer the prompt, so skip that version here
   if uitext st00 | grep -q "Update available"; then XY=$(node_center st00 "Skip this version"); [ -n "$XY" ] && { adb shell input tap $XY; sleep 2; note "  skipped the seeded update prompt"; }; dumpui st00; fi
+  # a completed check with nothing newer shows an "Up-to-date" card instead; dismiss it too, otherwise
+  # the pre-scroll home dump catches only the card and the first swipe scrolls the top rows out of view
+  if uitext st00 | grep -q "Up-to-date"; then XY=$(node_center st00 "Dismiss"); [ -n "$XY" ] && { adb shell input tap $XY; sleep 2; note "  dismissed the up-to-date card"; }; dumpui st00; fi
   uitext st00 | grep -q "Personal dictionary" && fail "Settings opened on the Personal dictionary page"
   shot st01_settings_home; dumpui st01; T=$(uitext st01)
   # scroll-until-visible: a loaded emulator can swallow a single fling (run 41600879995 lost the
@@ -1905,11 +1908,17 @@ if leg settings; then
     [ -n "$TWANT" ] && { echo "$P" | grep -q "$TWANT" && pass "$d shows expected title ($TWANT)" || fail "$d lacks expected title ($TWANT)"; }
     n=$((n+1))
   done
+  # Reviewer-required coverage (01:04): the old FUTO-page Actions entry lives in the 1.5 structure as
+  # Appearance > Toolbar buttons (navigateTo actions); assert it where it lives now, fail closed.
+  uitext st_wren_appearance | grep -q "Toolbar buttons" && pass "Appearance keeps the Toolbar buttons (Actions) entry" || fail "Appearance lost the Toolbar buttons (Actions) entry"
   # The old single Keyboard page's LOOK/LAYOUT/FEEL cards are superseded by the 1.5
   # Appearance/Layout pages; their rows are covered by the per-destination checks above.
   # FUTO page must still reach FUTO's own screens
   opensettings "" 2; opensettings wren_futo 3.5; dumpui st_futo2
-  for w in "Languages" "Swipe" "Actions"; do uitext st_futo2 | grep -q "$w" && pass "FUTO page keeps $w" || fail "FUTO page lost $w"; done
+  # 1.5 structure (owner-previewed 80da0858e; combined settings files byte-identical to it): the FUTO page
+  # is payment-only. Languages/Swipe/Actions live as Home groups (home-row check above); Help & Feedback and
+  # Credits moved to About and are checked there below.
+  uitext st_futo2 | grep -q "FUTO license &amp; payment" && pass "FUTO page shows its 1.5 title" || fail "FUTO page lost its 1.5 title"
   # fix1b: FUTO's Payment row stays exactly as upstream (FUTO's license forbids hiding payment in copies).
   # Fresh install = IS_ALREADY_PAID false, so upstream shows the Payment row; it must be there.
   shot st08a_wren_futo_top
@@ -1921,7 +1930,12 @@ if leg settings; then
   done
   FU="$(uitext st_futo2)$(uitext st_futo3)"; note "FUTO page (top + scrolled): ${FU:0:500}"
   echo "$FU" | grep -q "Payment" && pass "FUTO page shows FUTO's Payment row (not paid, as upstream)" || fail "FUTO page lost FUTO's Payment row"
-  echo "$FU" | grep -q "Help" && echo "$FU" | grep -q "Credits" && pass "FUTO page keeps Help and Credits" || fail "FUTO page lost Help or Credits"
+  # Help & Feedback and Credits moved from the old FUTO page to About in the 1.5 structure (both rows are
+  # on the About page in the owner-previewed build); check them where they live now, not on the FUTO page.
+  opensettings about 3.5; dumpui st_about_rows
+  AB="$(uitext st_about_rows)"
+  echo "$AB" | grep -q "Help &amp; Feedback" && pass "About keeps Help & Feedback (moved from the FUTO page)" || fail "About lost Help & Feedback"
+  echo "$AB" | grep -q "Credits" && pass "About keeps Credits (moved from the FUTO page)" || fail "About lost Credits"
   # Personal dictionary is still in Settings (1.5 Dictionary page) and opens
   opensettings wren_dict 3.5; FOUND=""
   for i in 1 2 3; do dumpui st_ty$i; XY=$(node_center st_ty$i "Personal dictionary"); [ -n "$XY" ] && { FOUND=1; break; }; adb shell input swipe 540 1900 540 700 400; sleep 1.5; done
