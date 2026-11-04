@@ -3,7 +3,7 @@ package org.futo.inputmethod.latin.uix.settings
 import androidx.annotation.DrawableRes
 import androidx.annotation.StringRes
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -159,7 +159,7 @@ fun UserSettingsMenuScreen(menu: UserSettingsMenu) {
                         WrenCard {
                             Spacer(Modifier.height(8.dp))
                             shown.forEach { setting ->
-                                Box(Modifier.padding(vertical = 8.dp)) { setting.component() }
+                                Column(Modifier.padding(vertical = 8.dp)) { setting.component() }
                             }
                             Spacer(Modifier.height(8.dp))
                         }
