@@ -320,16 +320,32 @@ class SwipeDecoderDictionary(val context: Context, val locale: Locale) : Diction
 
     var decoder: SwipeDecoder? = null
 
-    // WrenBoard: never crash the keyboard if a build ships without the FUTO Swipe weights.
-    // When the encoder asset is missing, getSuggestions() returns null and the caller falls
-    // back to the legacy gesture path instead of throwing FileNotFoundException.
+    // WrenBoard: never crash the keyboard if a build ships without (or with broken) FUTO Swipe
+    // weights. When the encoder is missing, empty, an LFS pointer, or fails to load, swipe quietly
+    // disables: getSuggestions() returns null and the caller falls back to the legacy gesture path.
     private val modelAvailable: Boolean by lazy {
-        try {
-            context.assets.open(SWIPE_MODEL).use { true }
-        } catch (e: Exception) {
-            Log.e("SwipeDecoderDictionary", "Swipe model asset missing ($SWIPE_MODEL); using legacy swipe", e)
-            false
-        }
+        val ok = SwipeModelGate.allUsable(
+            { name -> context.assets.open(name) },
+            listOf(SWIPE_MODEL to SwipeModelGate.MIN_MODEL_BYTES, metadataFor(SWIPE_MODEL) to 2)
+        )
+        if(!ok) Log.e("SwipeDecoderDictionary", "Swipe model not usable ($SWIPE_MODEL); swipe model disabled")
+        ok
+    }
+
+    @Volatile private var modelFailed = false
+
+    private fun disableModel(where: String, e: Throwable) {
+        Log.e("SwipeDecoderDictionary", "Swipe model failed in $where; swipe model disabled", e)
+        modelFailed = true
+        decoder = null
+        pendingLayoutInfo = null
+    }
+
+    /** Optional assets (layout decoder, context LM, vocab): an unusable one is skipped, not fatal. */
+    private fun optionalAssetPath(assetName: String, minBytes: Int): String {
+        if(assetName.isEmpty()) return ""
+        if(!SwipeModelGate.isUsable({ name -> context.assets.open(name) }, assetName, minBytes)) return ""
+        return try { getFilePath(context, assetName) } catch (e: Exception) { "" }
     }
 
     object BeamValues {
@@ -403,7 +419,24 @@ class SwipeDecoderDictionary(val context: Context, val locale: Locale) : Diction
         trieWeights: FloatArray
     ): ArrayList<SuggestedWords.SuggestedWordInfo>? {
         if(context.getSetting(LegacySwipeSetting) == true) return null
-        if(!modelAvailable) return null
+        if(modelFailed || !modelAvailable) return null
+        return try {
+            getModelSuggestions(composedData, ngramContext, useHighBeam, trieWeights)
+        } catch (e: Exception) {
+            disableModel("getSuggestions", e)
+            null
+        } catch (e: UnsatisfiedLinkError) {
+            disableModel("getSuggestions", e)
+            null
+        }
+    }
+
+    private fun getModelSuggestions(
+        composedData: ComposedData,
+        ngramContext: NgramContext?,
+        useHighBeam: Boolean,
+        trieWeights: FloatArray
+    ): ArrayList<SuggestedWords.SuggestedWordInfo>? {
 
         if(!composedData.mIsBatchMode && composedData.mInputPointers.pointerSize == 0 && composedData.mTypedWord.isEmpty()) {
             return getPredictions(
@@ -536,23 +569,31 @@ class SwipeDecoderDictionary(val context: Context, val locale: Locale) : Diction
     data class PendingLayoutInfo(val layout: LayoutInfoForModel, val tries: List<Long>)
     private var pendingLayoutInfo: PendingLayoutInfo? = null
     private fun applyPendingLayoutInfo() {
-        decoder?.let { d ->
-            pendingLayoutInfo?.let { pend ->
-                //Log.d("SwipeDecoderDictionary", "Applying layout info: $pend")
-                d.setMode(
-                    letters=pend.layout.letters,
-                    cx=pend.layout.xs.toFloatArray(),
-                    cy=pend.layout.ys.toFloatArray(),
-                    tries=pend.tries.toLongArray(),
-                    decoderPath=getFilePath(context, pend.layout.decoder),
-                    lmModelPath=getFilePath(context, pend.layout.lm),
-                    lmVocabPath=getFilePath(context, vocabFor(pend.layout.lm))
-                )
-                appliedScoring.value = d.scoring
-                appliedLayoutInfo = pend.layout
-                appliedTries = pend.tries.toLongArray()
+        if(modelFailed) { pendingLayoutInfo = null; return }
+        try {
+            decoder?.let { d ->
+                pendingLayoutInfo?.let { pend ->
+                    //Log.d("SwipeDecoderDictionary", "Applying layout info: $pend")
+                    d.setMode(
+                        letters=pend.layout.letters,
+                        cx=pend.layout.xs.toFloatArray(),
+                        cy=pend.layout.ys.toFloatArray(),
+                        tries=pend.tries.toLongArray(),
+                        decoderPath=optionalAssetPath(pend.layout.decoder, SwipeModelGate.MIN_MODEL_BYTES),
+                        lmModelPath=optionalAssetPath(pend.layout.lm, SwipeModelGate.MIN_MODEL_BYTES),
+                        lmVocabPath=optionalAssetPath(vocabFor(pend.layout.lm), 2)
+                    )
+                    appliedScoring.value = d.scoring
+                    appliedLayoutInfo = pend.layout
+                    appliedTries = pend.tries.toLongArray()
+                }
+                pendingLayoutInfo = null
             }
-            pendingLayoutInfo = null
+        } catch (e: Exception) {
+            // Runs inside the dictionary-update coroutine: an escaped IOException here used to crash the IME.
+            disableModel("applyPendingLayoutInfo", e)
+        } catch (e: UnsatisfiedLinkError) {
+            disableModel("applyPendingLayoutInfo", e)
         }
     }
 
@@ -567,7 +608,11 @@ class SwipeDecoderDictionary(val context: Context, val locale: Locale) : Diction
 
     fun invalidateTries() {
         if(appliedTries?.isEmpty() != false) return
-        decoder?.setMode(tries = emptyList<Long>().toLongArray())
+        try {
+            decoder?.setMode(tries = emptyList<Long>().toLongArray())
+        } catch (e: Exception) {
+            disableModel("invalidateTries", e)
+        }
         appliedTries = null
     }
 }

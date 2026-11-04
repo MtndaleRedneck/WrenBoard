@@ -36,6 +36,7 @@ jobs:
             sz=$(stat -c%s "$f"); echo "$f $sz bytes"
             if [ "$sz" -lt 100000 ]; then echo "swipe model $f is an LFS pointer, not the weights"; exit 1; fi
           done
+          echo "725242bab5d14345e96ff214e8de2bfbc1f962c232d320df9c24cb82ffd1fbaf  honorable_sturgeon/model_fp32.pte" | sha256sum -c -
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
