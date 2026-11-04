@@ -231,7 +231,19 @@ if leg keyboard; then
   dropcount() { adb logcat -d -s WBDBG:I 2>/dev/null | tr -d '\r' | grep -c "STARTER drop id="; }
   # Bounded wait for the fixture to apply a persisted mode (it recreates itself so the IME
   # renegotiates with fresh attributes; live setImeOptions never renegotiated - rev29 neg4).
-  wait_mode() { local want=$1 i; for i in $(seq 1 12); do [ "$(adb logcat -d -s IMETARGET:I 2>/dev/null | tr -d '\r' | grep -oE 'MODE=[A-Z]+ APPLIED' | tail -1)" = "MODE=$want APPLIED" ] && return 0; sleep 1; done; return 1; }
+  wait_mode() { local want=$1 i
+    for i in $(seq 1 12); do
+      if [ "$(adb logcat -d -s IMETARGET:I 2>/dev/null | tr -d '\r' | grep -oE 'MODE=[A-Z]+ APPLIED' | tail -1)" = "MODE=$want APPLIED" ]; then
+        # The fixture persists+recreates on a mode set; a recreated instance whose persisted
+        # mode was lost logs a later contradictory APPLIED marker (480 run: NORMAL after
+        # NOLEARN, and the save then proceeded against a NORMAL field). Confirm the marker
+        # is stable across the recreation window before the caller acts on it.
+        sleep 3
+        [ "$(adb logcat -d -s IMETARGET:I 2>/dev/null | tr -d '\r' | grep -oE 'MODE=[A-Z]+ APPLIED' | tail -1)" = "MODE=$want APPLIED" ] && return 0
+      fi
+      sleep 1
+    done
+    return 1; }
   # Bounded wait for the app's OWN keyboard dump to report the expected layout, then promote
   # that dump to the shared tap geometry. Anchors post-addlang legs to app-visible layout state:
   # kills both pre-reload suggestion reads (rev29 fr absent-before '') and stale-geometry taps
@@ -1540,7 +1552,19 @@ if leg saveword; then
     return 1
   }
   dictdel() { adb shell content delete --uri content://user_dictionary/words --where "word='$1'" >/dev/null 2>&1; }
-  wait_mode() { local want=$1 i; for i in $(seq 1 12); do [ "$(adb logcat -d -s IMETARGET:I 2>/dev/null | tr -d '\r' | grep -oE 'MODE=[A-Z]+ APPLIED' | tail -1)" = "MODE=$want APPLIED" ] && return 0; sleep 1; done; return 1; }
+  wait_mode() { local want=$1 i
+    for i in $(seq 1 12); do
+      if [ "$(adb logcat -d -s IMETARGET:I 2>/dev/null | tr -d '\r' | grep -oE 'MODE=[A-Z]+ APPLIED' | tail -1)" = "MODE=$want APPLIED" ]; then
+        # The fixture persists+recreates on a mode set; a recreated instance whose persisted
+        # mode was lost logs a later contradictory APPLIED marker (480 run: NORMAL after
+        # NOLEARN, and the save then proceeded against a NORMAL field). Confirm the marker
+        # is stable across the recreation window before the caller acts on it.
+        sleep 3
+        [ "$(adb logcat -d -s IMETARGET:I 2>/dev/null | tr -d '\r' | grep -oE 'MODE=[A-Z]+ APPLIED' | tail -1)" = "MODE=$want APPLIED" ] && return 0
+      fi
+      sleep 1
+    done
+    return 1; }
   SWP="zqxwjpos"; SWT="zqxwjtail"; SW2="zqxwjctb"; SW3="zqxwjctc"; SW4="zqxwjctd"
   for w in $SWP $SWT $SW2 $SW3 $SW4 zqxwvisible; do dictdel "$w"; done
   for w in $SWP $SWT $SW2 $SW3 $SW4 zqxwvisible; do
@@ -1679,8 +1703,16 @@ FIXTUREBLOCK
     focus_target; adb shell input text "$SW3"; sleep 0.8
     F=$(field); if [ "$F" = "$SW3" ]; then PRE2=1; else fail "NOLEARN negative precondition: canary not observed in the fixture field ('${F:0:40}')"; fi
   else fail "NOLEARN mode was not applied by the fixture"; fi
-  adb logcat -c; dbg "open:save_word" 1.5; shot sw03_nolearn_blocked
-  negcheck "$SW3" "no-learning flag field" $PRE2
+  # Fixture-state provenance immediately before the persisting action: if a late recreation
+  # reverted the field to NORMAL, the action/shot/negcheck are skipped entirely (fail() only
+  # logs, it does not abort) and the negative stays UNQUALIFIED as a harness defect - a save
+  # into a NORMAL field is not product privacy evidence either way.
+  if [ "$(adb logcat -d -s IMETARGET:I 2>/dev/null | tr -d '\r' | grep -oE 'MODE=[A-Z]+ APPLIED' | tail -1)" = "MODE=NOLEARN APPLIED" ] && [ "$PRE2" = 1 ]; then
+    adb logcat -c; dbg "open:save_word" 1.5; shot sw03_nolearn_blocked
+    negcheck "$SW3" "no-learning flag field" $PRE2
+  else
+    fail "UNQUALIFIED: no-learning flag field negative not executed - NOLEARN fixture provenance/precondition absent before the persisting action (harness defect); save not attempted"
+  fi
   adb shell am broadcast -a com.wrenboard.imetarget.NOLEARN --ez on false -p "$TPKG" >/dev/null 2>&1; wait_mode NORMAL
   # negative 3: code-field package classification (com.replit.wbcodefield fixture variant; a plain
   # text field has no AUTO_CORRECT flag -> the app's own getCodeFieldType says code field). The
