@@ -320,6 +320,18 @@ class SwipeDecoderDictionary(val context: Context, val locale: Locale) : Diction
 
     var decoder: SwipeDecoder? = null
 
+    // WrenBoard: never crash the keyboard if a build ships without the FUTO Swipe weights.
+    // When the encoder asset is missing, getSuggestions() returns null and the caller falls
+    // back to the legacy gesture path instead of throwing FileNotFoundException.
+    private val modelAvailable: Boolean by lazy {
+        try {
+            context.assets.open(SWIPE_MODEL).use { true }
+        } catch (e: Exception) {
+            Log.e("SwipeDecoderDictionary", "Swipe model asset missing ($SWIPE_MODEL); using legacy swipe", e)
+            false
+        }
+    }
+
     object BeamValues {
         const val shortBeam = 32
         const val midBeam = 64
@@ -391,6 +403,7 @@ class SwipeDecoderDictionary(val context: Context, val locale: Locale) : Diction
         trieWeights: FloatArray
     ): ArrayList<SuggestedWords.SuggestedWordInfo>? {
         if(context.getSetting(LegacySwipeSetting) == true) return null
+        if(!modelAvailable) return null
 
         if(!composedData.mIsBatchMode && composedData.mInputPointers.pointerSize == 0 && composedData.mTypedWord.isEmpty()) {
             return getPredictions(
