@@ -12,7 +12,8 @@ enum class License {
     GPL_V2,
     Proprietary,
     PublicDomain,
-    PublicDomainClearflow
+    PublicDomainClearflow,
+    FUTOModelWeights1_0
 }
 
 @Suppress("HardCodedStringLiteral")
@@ -1145,6 +1146,13 @@ Public License instead of this License.
 """
 
     License.Proprietary -> "All rights reserved. Used with authorization"
+
+    // The FUTO Swipe weights ship their own license file in the APK (assets/futo-swipe/LICENSE.md).
+    License.FUTOModelWeights1_0 -> try {
+        context.assets.open("futo-swipe/LICENSE.md").bufferedReader().use { it.readText() }
+    } catch (e: Exception) {
+        "FUTO Model Weights License 1.0: https://huggingface.co/futo-org/futo-swipe/blob/main/LICENSE.md"
+    }
 
     License.PublicDomain -> """This work has been released into the public domain by the copyright holder. This applies worldwide.
 

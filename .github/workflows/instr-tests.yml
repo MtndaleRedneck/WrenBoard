@@ -19,6 +19,19 @@ jobs:
       - uses: actions/checkout@v4
       - name: Init build submodules
         run: git submodule update --init java/assets/themes java/res-large libs translations voiceinput-shared/src/main/ml
+      - name: Init swipe model submodule (FUTO Swipe weights, FUTO Model Weights License 1.0; notice in Settings > Credits)
+        run: |
+          set -e
+          git lfs install
+          GIT_LFS_SKIP_SMUDGE=1 git submodule update --init java/assets/futo-swipe
+          cd java/assets/futo-swipe
+          git lfs pull --include="honorable_sturgeon/*,hungry_jellyfish/*,magic_macaw/*"
+          # demo animation and model card are not app assets; LICENSE.md stays (shown in Credits)
+          rm -rf animations README.md .gitattributes
+          for f in honorable_sturgeon/model_fp32.pte magic_macaw/model_fp32.pte hungry_jellyfish/context_lm.pte; do
+            sz=$(stat -c%s "$f"); echo "$f $sz bytes"
+            if [ "$sz" -lt 100000 ]; then echo "swipe model $f is an LFS pointer, not the weights"; exit 1; fi
+          done
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
