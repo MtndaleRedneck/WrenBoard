@@ -1716,10 +1716,33 @@ FIXTUREBLOCK
   if [ -f tools/ime-target-codefield/out/imetarget-codefield.apk ]; then
     if adb install -r tools/ime-target-codefield/out/imetarget-codefield.apk >> "$R" 2>&1; then
       if adb shell am start -S -n "com.replit.wbcodefield/com.wrenboard.imetarget.TestInput" >> "$R" 2>&1; then
-        sleep 3; tap_field
-        FOCUS=$(adb shell dumpsys window 2>/dev/null | grep -m1 'mCurrentFocus')
-        if echo "$FOCUS" | grep -q 'com.replit.wbcodefield'; then
+        # Iteration-bounded focus poll instead of one fixed 3s read (run 41771836977: fixture
+        # Displayed +2.1s, IME shown +6.8s, and the single fixed-window focus read raced the
+        # slow settle; no crash/finish/start failure). Iteration-bounded, not wall-clock
+        # bounded - dumpsys latency varies. Match the EXACT activity component - the splash
+        # window title carries only the bare package name and must not count. Still fails
+        # closed if the fixture never holds focus.
+        CFCOMP='com.replit.wbcodefield/com.wrenboard.imetarget.TestInput'
+        FOCUS=""; for i in $(seq 1 15); do
+          FOCUS=$(adb shell dumpsys window 2>/dev/null | grep -m1 'mCurrentFocus')
+          echo "$FOCUS" | grep -q "$CFCOMP" && break
+          sleep 1
+        done
+        if echo "$FOCUS" | grep -q "$CFCOMP"; then
+          tap_field
+          # the tap can land during the resume transition; poll focus again (bounded,
+          # 10x1s cadence - waits readiness, never retries the negative) and type only once
+          FOCUS=""; for j in $(seq 1 10); do
+            FOCUS=$(adb shell dumpsys window 2>/dev/null | grep -m1 'mCurrentFocus')
+            echo "$FOCUS" | grep -q "$CFCOMP" && break
+            sleep 1
+          done
+        fi
+        if echo "$FOCUS" | grep -q "$CFCOMP"; then
           adb shell input text "$SW4"; sleep 0.8
+          # last-CHANGE log line readback: field_now is hardwired to the main package's REPORT
+          # action and the code fixture does not implement REPORT; SW4 is unique, CHANGE lines
+          # are per keystroke, and this block's logcat is fresh, so last-CHANGE is unambiguous
           F=$(field); if [ "$F" = "$SW4" ]; then PRE3=1; else fail "code-field negative precondition: canary not observed in the fixture field ('${F:0:40}')"; fi
         else fail "code-field fixture is NOT the focused window: ${FOCUS:0:140}"; fi
       else fail "code-field fixture failed to start"; fi
