@@ -1,0 +1,102 @@
+name: tab2-check
+# Tab 2 branch check: JVM unit tests for the parity fixes, a DEBUG x86_64 build (no secrets), and an
+# emulator pass (1080x2400 @ 480 dpi) with the same teardown driver used for the SwiftKey comparison.
+# Nothing is published, tagged or signed with release keys here.
+on:
+  push:
+    branches: ['tab2/**']
+    paths: ['.github/workflows/tab2-check.yml', 'tools/tab2/**']
+  workflow_dispatch:
+    inputs:
+      legs:
+        default: "s_typing,s_clipboard_toolbar,s_extras"
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      VERSION_NAME: 1.5.0-tab2
+      VERSION_CODE: "6"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Init build submodules
+        run: git submodule update --init java/assets/themes java/res-large libs translations voiceinput-shared/src/main/ml
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Install NDK
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;28.2.13676358"
+      - uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4.4.3
+      - name: Unit tests (parity fixes + existing Wren tests)
+        continue-on-error: true
+        run: |
+          ./gradlew --no-daemon testStableDebugUnitTest -Pandroid.injected.build.abi=x86_64 \
+            --tests 'org.futo.inputmethod.latin.utils.TranspositionCorrectionTest' \
+            --tests 'org.futo.inputmethod.latin.uix.actions.clipboard.WrenClipPolicyTest' \
+            --tests 'org.futo.inputmethod.latin.inputlogic.WrenAbandonedCommitLearningTest' \
+            --tests 'org.futo.inputmethod.engine.general.WrenStarterWordsTest'
+      - name: Collect unit test results
+        if: always()
+        run: |
+          mkdir -p shots/unit-tests
+          cp build/test-results/testStableDebugUnitTest/*.xml shots/unit-tests/ 2>/dev/null || true
+          python3 - <<'PY' | tee shots/unit-tests/summary.txt
+          import glob, xml.etree.ElementTree as ET
+          t = f = e = 0
+          for p in glob.glob("shots/unit-tests/*.xml"):
+              r = ET.parse(p).getroot()
+              t += int(r.get("tests", 0)); f += int(r.get("failures", 0)); e += int(r.get("errors", 0))
+              for c in r.iter("testcase"):
+                  bad = c.find("failure") is not None or c.find("error") is not None
+                  print(("FAIL" if bad else "PASS") + ": " + c.get("classname", "") + "." + c.get("name", ""))
+          print(f"UNIT TESTS: {t} run, {f} failed, {e} errors")
+          PY
+      - name: Build stable DEBUG APK (x86_64 only, no secrets)
+        run: ./gradlew --no-daemon assembleStableDebug -Pandroid.injected.build.abi=x86_64 -Pandroid.injected.testOnly=false
+      - name: Stage APKs
+        run: |
+          APK=$(find build/outputs/apk build/intermediates -name '*.apk' 2>/dev/null | grep -i debug | grep -v -i androidTest | head -1)
+          [ -n "$APK" ] || { echo "::error::no debug APK found"; exit 1; }
+          mkdir -p "$RUNNER_TEMP/wb" apk-out
+          cp "$APK" "$RUNNER_TEMP/wb/WrenBoard-1.5.apk"; cp "$APK" apk-out/WrenBoard-tab2-debug-x86_64.apk
+          sha256sum apk-out/*.apk | tee shots/apk-sha256.txt
+          bash tools/tab2/ime-target/build.sh
+          mkdir -p tools/ime-target/out && cp tools/tab2/ime-target/out/imetarget.apk tools/ime-target/out/imetarget.apk
+          python3 -m pip install --quiet --break-system-packages pillow numpy || true
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tab2-debug-apk
+          path: apk-out/
+          retention-days: 7
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Emulator pass
+        timeout-minutes: 45
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          ram-size: 4096M
+          heap-size: 576M
+          emulator-options: -no-window -gpu swangle_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none
+          disable-animations: true
+          script: KB=wren PART=kb LEGS="${{ inputs.legs || 's_typing,s_clipboard_toolbar,s_extras' }}" python3 -u tools/tab2/td/teardown.py
+      - name: No APK in shots
+        if: always()
+        run: find shots -iname '*.apk' -print -delete || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: tab2-check-shots
+          path: shots/
+          retention-days: 7
