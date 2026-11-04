@@ -3,8 +3,9 @@
 # Test-only runtime proof for the ALREADY-ACCEPTED SIGNED candidate binary.
 # Installs the given signed APK and the local ime-target fixture on the local
 # emulator and exercises the visible GIF search -> insert flow with NO debug
-# hooks: WBDBG and wbPos markers are stripped from this binary, so navigation is
-# uiautomator-dump only (harness dump/focus/field primitives). Assertions are
+# hooks: WBDBG and wbPos markers are stripped from this binary, and the IME window
+# is absent from uiautomator dumps on this setup, so navigation is screenshot-guided
+# fixed-geometry pixel taps; uiautomator dumps drive the fixture only. Assertions are
 # fixture-side only: IMETARGET CONTENT= mime/bytes/signature on insert and host
 # text unchanged. The fixture is local (no real contact, no external message).
 set -uo pipefail
@@ -56,6 +57,11 @@ adb shell input text hostok; sleep 1
 F=$(field_now); note "field after host typing: [$F]"
 echo "$F" | grep -q 'hostok' || fail "host text baseline not in fixture field"
 
+note "starting screen recording (KLIPY production-application video prep; local fixture only,"
+note "no real contact; recording the already-qualified flow, not a new qualification run)"
+adb shell screenrecord --size 1080x2316 --bit-rate 4000000 --time-limit 120 /sdcard/gifproof.mp4 &
+REC_PID=$!
+sleep 1
 note "pixel navigation: IME window is absent from uiautomator dumps on this setup (verified"
 note "in run 41839936532: dumps contain only com.wrenboard.imetarget nodes while the keyboard"
 note "visibly renders), so controls are tapped by measured coordinates. Coordinates are from"
@@ -122,5 +128,12 @@ echo "$L" | grep -q 'sig=GIF' || fail "inserted bytes lack GIF signature"
 F2=$(field_now); note "field after insert: [$F2]"
 [ "$F2" = "hostok" ] || fail "host text changed by insert (expected hostok)"
 dumpui 08_final
+sleep 2
+note "stopping screen recording and pulling the video"
+kill -INT $REC_PID 2>/dev/null || true
+adb shell pkill -INT screenrecord 2>/dev/null || true
+sleep 3
+adb pull /sdcard/gifproof.mp4 "$SHOTS/gifproof.mp4" >/dev/null 2>&1 || note "recording pull failed (video prep only; assertions already passed)"
+ls -la "$SHOTS/gifproof.mp4" 2>/dev/null || true
 note "RESULT: 0 mime=image/gif bytes=$B2 sig=GIF host=unchanged"
 exit 0
