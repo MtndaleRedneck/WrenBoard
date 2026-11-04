@@ -1983,31 +1983,44 @@ if leg settingspreview; then
     shot "sp_${d}_top"; dumpui "sp_$d"
     P=$(uitext "sp_$d"); [ -n "$P" ] && pass "preview $d has visible UI text" || fail "preview $d empty UI"
     adb shell input swipe 540 1800 540 600 400; sleep 1; shot "sp_${d}_bottom"
-    # Capture-only deterministic Typing tail sweep (run 41785476101: Typing rows below Emoji
-    # Suggestions uncaptured - Auto-capitalization down to the Sound Volume slider). The final
-    # Sound Volume slider only composes when the shared pref sound_on is set (default false),
-    # so enable it via the existing prefbool WBDBG hook first and REMOVE it afterwards
-    # (sprm restores the fresh-install UNSET state; no test state leaks into later evidence).
-    # Bottom signal: stop when the UI dump is byte-stable across two scrolls AND the dump
-    # contains "Sound Volume" (the tail slider row); a stable dump WITHOUT it is a swallowed
-    # swipe, so retry. Bounded at 6 tries. Screenshots + dumps + INFO notes only; no pass/fail,
+    # Capture-only deterministic Typing tail sweep (run 41785476101: rows below Emoji
+    # Suggestions uncaptured). Bottom signal: stop when the UI dump is byte-stable across two
+    # scrolls AND the dump contains "Caps lock" - the 1.5 Typing page's actual last row
+    # (qualified run 41790510269: page ends at Caps lock; popup/vibrate/sound rows live on
+    # Sound & vibration - the earlier "Sound Volume on Typing" marker was an unattainable
+    # premise, not a coverage failure). A stable dump WITHOUT the row is a swallowed swipe,
+    # so retry. Bounded at 6 tries. Screenshots + dumps + INFO notes only; no pass/fail,
     # gate semantics unchanged.
     if [ "$d" = wren_typing ]; then
-      dbg "prefbool:sound_on=true" 1.0
       PREV=""
       for i in 1 2 3 4 5 6; do
         adb shell input swipe 540 1800 540 600 400; sleep 1
         shot "sp_wren_typing_tail$i"; dumpui "sp_wren_typing_tail$i"
         CUR=$(cat "shots/sp_wren_typing_tail$i.xml")
         if [ -n "$PREV" ] && [ "$CUR" = "$PREV" ]; then
-          if echo "$CUR" | grep -q "Sound Volume"; then
-            note "typing tail: bottom reached (dump stable, Sound Volume slider present) at scroll $i"; break
+          if echo "$CUR" | grep -q "Caps lock"; then
+            note "typing tail: bottom reached (dump stable, Caps lock row present) at scroll $i"; break
           fi
-          note "INFO: typing tail scroll $i did not advance before the Sound Volume row (swallowed swipe?) - retrying"
+          note "INFO: typing tail scroll $i did not advance before the Caps lock row (swallowed swipe?) - retrying"
         fi
         PREV="$CUR"
       done
-      echo "${CUR:-}" | grep -q "Sound Volume" || note "INFO: typing tail coverage incomplete after bounded sweep"
+      echo "${CUR:-}" | grep -q "Caps lock" || note "INFO: typing tail coverage incomplete after bounded sweep"
+    fi
+    # Capture-only conditional-row capture: the Sound Volume slider on Sound & vibration
+    # composes only when shared pref sound_on is set (default false; the one 1.5 settings
+    # element never pixel-captured). Enable via the existing prefbool WBDBG hook (delivery
+    # proven in run 41790510269 logcat), capture the page top + one scroll, then sprm to
+    # restore fresh-install UNSET state. INFO note only; no pass/fail.
+    if [ "$d" = wren_soundfeel ]; then
+      # page is one-swipe down after the generic bottom capture; drag back to top first
+      adb shell input swipe 540 600 540 1800 400; sleep 1
+      dbg "prefbool:sound_on=true" 1.5
+      shot sp_wren_soundfeel_sv_top; dumpui sp_wren_soundfeel_sv_top
+      adb shell input swipe 540 1800 540 600 400; sleep 1
+      shot sp_wren_soundfeel_sv_bottom; dumpui sp_wren_soundfeel_sv_bottom
+      SV="$(uitext sp_wren_soundfeel_sv_top)$(uitext sp_wren_soundfeel_sv_bottom)"
+      echo "$SV" | grep -q "Sound Volume" && note "Sound Volume slider composed and captured on Sound & vibration" || note "INFO: Sound Volume slider not composed after prefbool - captures show actual state"
       dbg "sprm:sound_on" 1.0
     fi
   done
