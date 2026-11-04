@@ -22,8 +22,15 @@ import org.futo.inputmethod.latin.uix.SettingsExporter.ExportingMenu
 import org.futo.inputmethod.latin.uix.actions.AllActions
 import org.futo.inputmethod.latin.uix.settings.pages.ActionEditorScreen
 import org.futo.inputmethod.latin.uix.settings.pages.ActionsScreen
+import org.futo.inputmethod.latin.uix.settings.pages.WrenLicenseMenu
 import org.futo.inputmethod.latin.uix.settings.pages.WrenAboutMenu
-import org.futo.inputmethod.latin.uix.settings.pages.WrenKeyboardMenu
+import org.futo.inputmethod.latin.uix.settings.pages.WrenAppearanceMenu
+import org.futo.inputmethod.latin.uix.settings.pages.WrenLayoutMenu
+import org.futo.inputmethod.latin.uix.settings.pages.WrenSwipeMenu
+import org.futo.inputmethod.latin.uix.settings.pages.WrenDictionaryMenu
+import org.futo.inputmethod.latin.uix.settings.pages.WrenSoundMenu
+import org.futo.inputmethod.latin.uix.settings.pages.WrenVoiceMenu
+import org.futo.inputmethod.latin.uix.settings.pages.WrenAdvancedMenu
 import org.futo.inputmethod.latin.uix.settings.pages.WrenTypingMenu
 import org.futo.inputmethod.latin.uix.settings.pages.WrenClipEmojiMenu
 import org.futo.inputmethod.latin.uix.settings.pages.WrenBackupMenu
@@ -118,7 +125,14 @@ val SettingsMenus = listOf(
     CreditsScreenLite,
     IMESettingsMenu,
     WrenAboutMenu,
-    WrenKeyboardMenu,
+    WrenLicenseMenu,
+    WrenAppearanceMenu,
+    WrenLayoutMenu,
+    WrenSwipeMenu,
+    WrenDictionaryMenu,
+    WrenSoundMenu,
+    WrenVoiceMenu,
+    WrenAdvancedMenu,
     WrenTypingMenu,
     WrenClipEmojiMenu,
     WrenBackupMenu,
