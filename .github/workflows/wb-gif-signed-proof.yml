@@ -1,0 +1,76 @@
+# WB-GIF-SIGNED-PROOF - test-only runtime proof of the ALREADY-ACCEPTED signed
+# candidate binary. No product/build/config change and no rebuild: this workflow
+# downloads the exact accepted signed artifact from run 41804694420, binds it to
+# the accepted SHA-256 (fail-closed), installs it on a local emulator next to the
+# existing local ime-target fixture, and exercises the visible GIF search -> insert
+# flow with NO debug hooks (WBDBG and wbPos markers are stripped from this binary
+# by the accepted final cleanup; navigation is uiautomator-dump only, reusing the
+# harness's dump/focus/field primitives). Assertions are fixture-side only:
+# IMETARGET CONTENT= mime/bytes/signature and host text unchanged. This is not a
+# release, not a tag, and not a rebuild of the shipping artifact.
+name: WB-GIF-SIGNED-PROOF
+on:
+  workflow_dispatch:
+    inputs: {}
+  # SCRATCH ONLY: workflow_dispatch can only fire a workflow present on the default
+  # branch, so this dedicated scratch branch trigger exists solely to run the proof.
+  # REMOVE this push trigger before any merge toward a shipping branch.
+  push:
+    branches:
+      - wrenboard-gif-signed-proof-scratch
+permissions:
+  contents: read
+  actions: read
+env:
+  SIGNED_RUN_ID: '41804694420'
+  SIGNED_ARTIFACT: 'WrenBoard-baseline-apk'
+  SIGNED_APK_NAME: 'WrenBoard-stable-release.apk'
+  SIGNED_SHA256: '2b6cb34a8a6193a6a4f9acae7170f664ead08374a5675285ab6e9591f394d404'
+  SIGNED_BYTES: '129403471'
+jobs:
+  proof:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: wrenboard-1.5-final-composition
+      - name: Download the exact accepted signed artifact (no rebuild)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh run download "$SIGNED_RUN_ID" -n "$SIGNED_ARTIFACT" -D signed/
+          ls -la signed/
+          test -f "signed/$SIGNED_APK_NAME" || { echo "signed APK missing from artifact"; exit 1; }
+      - name: Bind the downloaded binary to the accepted candidate (fail-closed)
+        run: |
+          echo "$SIGNED_SHA256  signed/$SIGNED_APK_NAME" | sha256sum -c -
+          BYTES=$(stat -c%s "signed/$SIGNED_APK_NAME")
+          [ "$BYTES" = "$SIGNED_BYTES" ] || { echo "size mismatch $BYTES != $SIGNED_BYTES"; exit 1; }
+          echo "binary bound to accepted candidate: sha256=$SIGNED_SHA256 bytes=$BYTES"
+      - name: Build the local ime-target fixture (unchanged, SDK-tools only)
+        run: bash tools/ime-target/build.sh
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Signed-binary GIF flow proof (local fixture, no debug hooks)
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          target: google_apis
+          arch: x86_64
+          profile: Nexus 6
+          ram-size: 4096M
+          heap-size: 576M
+          emulator-options: -no-window -gpu swangle_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none
+          disable-animations: true
+          script: bash tools/ime-target/signed-gif-proof.sh "signed/$SIGNED_APK_NAME" tools/ime-target/out/imetarget.apk
+      - name: Upload proof captures (dumps, screenshots, assertions)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: signed-gif-proof
+          path: tools/ime-target/proof-shots/
+          retention-days: 3
