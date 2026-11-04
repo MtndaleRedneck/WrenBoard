@@ -1962,19 +1962,18 @@ if leg settingspreview; then
   note "== 1.5 settings candidate pixel preview; not full acceptance =="
   ensure_ime
   adb shell input keyevent KEYCODE_HOME; sleep 1
-  opensettings "" 5
-  # Home readback precondition: opensettings uses CLEAR_TOP, which reuses the Settings
-  # activity, so the in-app nav back stack survives - after the settings leg's dictionary
-  # drill-in an empty-dest open lands on Personal dictionary (sp01/sp02 misrouted in
-  # combined runs 41779405941, 41781634835, 41783371396). Back out until the home title
-  # node is present, bounded; never capture a mislabeled home.
+  # Explicit Home, never BACK-walking: opensettings navigates without popping, so the in-app
+  # nav back stack accumulates EVERY settings-leg destination (17+ deep by the preview leg).
+  # Run 41788471355: v2's 4 BACKs walked only PersonalDict > Dictionary > About > FUTO and
+  # the readback failed; sp01 captured the FUTO page. The paid-fixture section already uses
+  # opensettings home for the same reason (Empty navDest only resumes the current page).
+  opensettings home 5
+  # Home scroll position persists across legs and the title node only composes at the top
+  # (v1 readback missed a scrolled home, run 41786461933): drag to top, bounded, then check.
   for i in 1 2 3 4; do
-    # home's scroll position persists from the settings leg, and the title node only
-    # composes at the top (run 41786461933 readback missed a scrolled home): drag to top first
     adb shell input swipe 540 600 540 1800 400; sleep 1
     dumpui sp_home_readback
     grep -q 'text="WrenBoard Settings"' shots/sp_home_readback.xml && break
-    adb shell input keyevent KEYCODE_BACK; sleep 1
   done
   grep -q 'text="WrenBoard Settings"' shots/sp_home_readback.xml || fail "settingspreview could not navigate back to the Settings home"
   shot sp01_home_top
