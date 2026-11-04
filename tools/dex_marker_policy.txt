@@ -1,0 +1,49 @@
+# DEX marker policy for the WrenBoard 1.5 final optimized exact-head exclusion proof.
+# Semantics:
+#   EXCLUDED_HOOK   - hook markers introduced for 1.5 diagnostics, removed by the accepted
+#                     88-deletion cleanup delta (926c3676). CONTROL mode: every marker MUST be
+#                     detected (proves scanner detection on the hooked build). FINAL mode:
+#                     every marker MUST be ABSENT from all DEX strings and decoded code.
+#   EXCLUDED_LEGACY - rev32 zero-list. FINAL mode only: MUST be ABSENT. Not asserted in
+#                     CONTROL (they are zero even on hooked builds).
+#   RETAINED        - the nine intentionally retained voice-WBDBG baseline SITES observed on
+#                     the preserved rev32 DEX. Site = distinct (dex, method, instruction
+#                     offset) loading const-string "WBDBG". Context match: the method
+#                     containing the site must also decode the given literal; '|' separates
+#                     alternative literals of a MERGED context (R8 merged both PILL/CHEVRON
+#                     geometry literals into one synthetic method with ONE WBDBG load), which
+#                     still counts as ONE site. Exactly 9 distinct sites, every site matched
+#                     by a retained context and every retained context matched by a site;
+#                     count alone is not proof.
+EXCLUDED_HOOK	SAVEFIXTURE
+EXCLUDED_HOOK	SAVEWORD_RESULT
+EXCLUDED_HOOK	SAVEWORD blocked
+EXCLUDED_HOOK	SNAPBEGIN
+EXCLUDED_HOOK	SNAPEND
+EXCLUDED_HOOK	SUGGREPORT
+EXCLUDED_HOOK	suggreport:
+EXCLUDED_HOOK	savefixture:query
+EXCLUDED_HOOK	savefixture:reset
+EXCLUDED_HOOK	windows:
+EXCLUDED_HOOK	zqxwjctb
+EXCLUDED_HOOK	zqxwjctc
+EXCLUDED_HOOK	zqxwjctd
+EXCLUDED_HOOK	zqxwjpos
+EXCLUDED_HOOK	zqxwjtail
+EXCLUDED_HOOK	zqxwvisible
+EXCLUDED_LEGACY	STARTER
+EXCLUDED_LEGACY	SUGG [
+EXCLUDED_LEGACY	WbDebug
+EXCLUDED_LEGACY	WrenLearnTrace
+EXCLUDED_LEGACY	synthetictrace
+EXCLUDED_LEGACY	addlang:
+EXCLUDED_LEGACY	ADDLANG
+RETAINED	WINDOW VOICEBARCHEVRONTAP stopped=
+RETAINED	WINDOW VOICEBARPILLTAP mode=
+RETAINED	WINDOW VOICEBAR state=
+RETAINED	WINDOW VOICE capture cancelled wasFinished=
+RETAINED	WINDOW VOICEBAR closed
+RETAINED	WINDOW VOICEDEVPILL cx=
+RETAINED	WINDOW VOICE capture finished blank=
+RETAINED	WINDOW VOICE capture started
+RETAINED	WINDOW VOICEBARCHEVRON cx=|WINDOW VOICEBARPILL cx=
