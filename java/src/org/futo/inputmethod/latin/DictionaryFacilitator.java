@@ -179,6 +179,16 @@ public interface DictionaryFacilitator {
 
     boolean isValidSuggestionWord(final String word);
 
+    /** WrenBoard: a real word for auto-correction purposes (main or personal dictionary, not learned history). */
+    default boolean isKnownCorrectionWord(final String word) {
+        return isValidSpellingWord(word);
+    }
+
+    /** WrenBoard: main-dictionary frequency of [word], or Dictionary.NOT_A_PROBABILITY. */
+    default int getMainDictionaryFrequency(final String word) {
+        return Dictionary.NOT_A_PROBABILITY;
+    }
+
     boolean clearUserHistoryDictionary(final Context context);
 
     void flushUserHistoryDictionaries();
