@@ -4,8 +4,10 @@
 # the accepted SHA-256 (fail-closed), installs it on a local emulator next to the
 # existing local ime-target fixture, and exercises the visible GIF search -> insert
 # flow with NO debug hooks (WBDBG and wbPos markers are stripped from this binary
-# by the accepted final cleanup; navigation is uiautomator-dump only, reusing the
-# harness's dump/focus/field primitives). Assertions are fixture-side only:
+# by the accepted final cleanup; the IME window is absent from uiautomator dumps
+# on this setup, so navigation is screenshot-guided fixed-geometry pixel taps with
+# per-transition captures, reusing the harness's dump/focus/field primitives for
+# the fixture only). Assertions are fixture-side only:
 # IMETARGET CONTENT= mime/bytes/signature and host text unchanged. This is not a
 # release, not a tag, and not a rebuild of the shipping artifact.
 name: WB-GIF-SIGNED-PROOF
