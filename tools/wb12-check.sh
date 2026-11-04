@@ -1537,21 +1537,20 @@ fi
 
 
 if leg saveword; then
-  note "== SAVE WORD privacy boundary (1.5 B6): selection-priority positive; password / NOLEARN-flag / code-field negatives against the actual UserDictionary provider =="
-  # Fail-closed provider access: `content` can print an Error/SecurityException payload with
-  # exit code 0, so BOTH the exit code and the payload shape are validated. Token checks use an
-  # exact --where word='...' filter plus the row shape word=<token>, never a substring grep.
-  dict_has() { # <token> <label> -> 0 present, 1 absent, 2 query failed
-    local tok="$1" lbl="$2" rows rc
-    rows=$(adb shell content query --uri content://user_dictionary/words --where "word='$tok'" 2>&1); rc=$?
-    if [ $rc -ne 0 ] || echo "$rows" | head -3 | grep -qi 'error\|exception\|denied'; then
-      fail "$lbl: user_dictionary query FAILED: $(echo "$rows" | head -1 | cut -c1-120)"; return 2
-    fi
-    if echo "$rows" | grep -q "word=$tok,"; then return 0; fi
-    # a present row must match the exact row shape; anything else is an empty (no-result) set
-    return 1
-  }
-  dictdel() { adb shell content delete --uri content://user_dictionary/words --where "word='$1'" >/dev/null 2>&1; }
+  note "== SAVE WORD privacy boundary (1.5 B6): selection-priority positive; password / NOLEARN-flag / code-field negatives, same-app provider-verified =="
+  # AOSP caller gate (packages/providers/UserDictionaryProvider/UserDictionaryProvider.java,
+  # android-14.0.0_r1): query() L152-158 serves only callers passing
+  # canCallerAccessUserDictionary() L316-350 - system/root/self, the ENABLED IME (uid+package
+  # match), or an enabled spell checker; every other caller gets getEmptyCursorOrThrow()
+  # L352-367, an EMPTY MatrixCursor ("No result found.") for ANY query, and delete removes 0
+  # rows. The adb shell (uid 2000) is always denied, so shell queries/deletes are
+  # uninformative BY DESIGN and prove neither presence nor absence. All qualification in this
+  # leg is same-app provider-verified through the enabled-IME fixture over real resolver IPC;
+  # pass labels say so explicitly. No shell-visibility claim is made anywhere.
+  # Informational runtime-image context only (no privilege, no assertion):
+  note "image fingerprint=$(adb shell getprop ro.build.fingerprint 2>/dev/null | tr -d '\r') sdk=$(adb shell getprop ro.build.version.sdk 2>/dev/null | tr -d '\r')"
+  note "provider package=$(adb shell dumpsys package com.android.providers.userdictionary 2>/dev/null | grep -m1 'versionCode\|versionName' | tr -d '\r')"
+  note "users=$(adb shell pm list users 2>/dev/null | tr -d '\r' | tr '\n' ';')"
   wait_mode() { local want=$1 i
     for i in $(seq 1 12); do
       if [ "$(adb logcat -d -s IMETARGET:I 2>/dev/null | tr -d '\r' | grep -oE 'MODE=[A-Z]+ APPLIED' | tail -1)" = "MODE=$want APPLIED" ]; then
@@ -1566,12 +1565,6 @@ if leg saveword; then
     done
     return 1; }
   SWP="zqxwjpos"; SWT="zqxwjtail"; SW2="zqxwjctb"; SW3="zqxwjctc"; SW4="zqxwjctd"
-  for w in $SWP $SWT $SW2 $SW3 $SW4 zqxwvisible; do dictdel "$w"; done
-  for w in $SWP $SWT $SW2 $SW3 $SW4 zqxwvisible; do
-    dict_has "$w" "baseline"; b=$?
-    [ $b -eq 0 ] && { dictdel "$w"; dict_has "$w" "baseline"; b=$?; }
-    [ $b -eq 0 ] && fail "baseline: canary $w could not be cleared from the user dictionary"
-  done
   APP_POS=0; APP_BASELINE=0
   APP_LAST_ID=0; APP_RESET_OK=0
   app_fixture() { # consume one fresh complete six-case command, never mixed async output
@@ -1605,7 +1598,6 @@ FIXTUREBLOCK
     APP_BASELINE=1; APP_RESET_OK=1; pass "fixed same-app fixture baseline: six synthetic cases absent after reset"
   else fail "fixed same-app reset/baseline failed; stopping saveword leg to avoid reset racing action"; fi
   if [ "$APP_RESET_OK" = 1 ]; then
-  POS_OK=0
   # positive + priority: two different words; the SELECTED one (first) must be saved, the word
   # before the cursor (last typed, nonempty) must NOT. Proves the selected-over-lastTyped branch
   # with both candidates present; says nothing about composing-vs-selected ordering.
@@ -1620,46 +1612,49 @@ FIXTUREBLOCK
   adb logcat -c; dbg "open:save_word" 0.4; shot sw01_chip; sleep 1.1; shot sw01_selection_saved
   # Raw receiver-side evidence: any "CMD ... failed" exception from the action path lands here.
   adb logcat -d -s WBDBG:I 2>/dev/null | tr -d '\r' > shots/sw01_wbdbg_raw.txt
-  # Actual action result: independent of the shell's provider/user visibility. This proves
-  # only the selected word's same-app absent -> write-returned -> present transition in
-  # the same current editor/request. It does NOT qualify shell negatives or tail absence.
+  # Actual action result over the real provider IPC: the selected word's same-app
+  # absent -> write-returned -> present transition in the same current editor/request.
   if [ "$PRE0" = 1 ] && grep -qE '^.*SAVEWORD_RESULT request=[0-9]+ before=ABSENT after=PRESENT writeReturned=true selected=true currentEditor=true currentRequest=true persisted=true$' shots/sw01_wbdbg_raw.txt; then
     APP_POS=1
-    pass "selected word persisted and re-queried present in the actual app/current editor/request (bounded same-app control only)"
+    pass "selected word persisted and re-queried present in the actual app/current editor/request (same-app provider-verified)"
   else
     fail "same-app selected-word persistence control not established (inspect content-free action result)"
   fi
-  # Raw provider payload (canary tokens only) preserved against row-shape false negatives.
+  # Informational only: under the AOSP caller gate above, the denied shell's raw response
+  # (expected empty) is preserved to document the channel, never as presence/absence evidence.
   adb shell content query --uri content://user_dictionary/words --where "word='$SWP'" > shots/sw01_provider_raw.txt 2>&1
-  if [ "$PRE0" != 1 ]; then
-    note "INFO: saveword positive/priority UNQUALIFIED - two-canary precondition failed above"
-  else
-  dict_has "$SWP" "positive"; rp=$?
-  dict_has "$SWT" "positive"; rt=$?
-  if [ $rp -eq 0 ] && [ $rt -eq 1 ]; then
-    POS_OK=1; pass "save word saves the SELECTED word over the nonempty last-typed word (priority + liveness)"
-  elif [ $rt -eq 0 ]; then fail "priority: the LAST-TYPED word was saved over the explicit selection"
-  elif [ $rp -eq 1 ]; then fail "shell provider did not expose the selected word; shell-negative controls unqualified (not evidence the app action is dead)"; fi
-  fi
-  if app_fixture sw_after_positive query && [ "$APP_BASELINE" = 1 ] && [ "$APP_POS" = 1 ] &&
+  # Positive qualification, same-app provider-verified ONLY: two-canary precondition (PRE0),
+  # the action's own absent->write-returned->present control (APP_POS), and a fresh complete
+  # post-positive fixture with selected case0 PRESENT, last-typed tail case1 ABSENT, current
+  # editor/request flags true. Anything less leaves the positive UNQUALIFIED.
+  if [ "$PRE0" = 1 ] && [ "$APP_POS" = 1 ] && app_fixture sw_after_positive query &&
      grep -q 'case=0 result=PRESENT currentEditor=true currentRequest=true$' shots/sw_after_positive_app_raw.txt &&
      grep -q 'case=1 result=ABSENT currentEditor=true currentRequest=true$' shots/sw_after_positive_app_raw.txt; then
-    pass "same-app fixed fixture: selected case present, different tail case absent"
-  else fail "same-app selected/tail fixture not established"; fi
-  dictdel "$SWP"; dictdel "$SWT"
+    pass "positive: save word saves the SELECTED word over the nonempty last-typed word (same-app provider-verified; fresh fixture case0 present, case1 absent)"
+  else fail "positive UNQUALIFIED: precondition/control/post-positive fixture incomplete (PRE0=$PRE0 APP_POS=$APP_POS; inspect sw_after_positive raws)"; fi
   negcheck() { # <token> <label> <precondition 0/1>
     local tok="$1" lbl="$2" pre="$3"
     [ "$pre" = 1 ] || { note "INFO: $lbl negative not executed (honest-execution precondition failed above)"; return 1; }
     local caseid
     case "$tok" in zqxwjctb) caseid=2;; zqxwjctc) caseid=3;; zqxwjctd) caseid=4;; zqxwvisible) caseid=5;; *) fail "unknown fixed fixture case"; return 1;; esac
-    if app_fixture "sw_negative_$caseid" query && [ "$APP_BASELINE" = 1 ] && [ "$APP_POS" = 1 ] && grep -q "case=$caseid result=ABSENT currentEditor=true currentRequest=true$" "shots/sw_negative_${caseid}_app_raw.txt"; then
-      pass "$lbl: same-app fixed synthetic case remains absent after attempted action (bounded fixture only)"
-    else fail "$lbl: same-app negative fixture unqualified/present/error"; fi
-    dict_has "$tok" "$lbl"; local r=$?
-    if [ $r -eq 0 ]; then fail "$lbl: save word WROTE the token to the user dictionary"; return 1
-    elif [ $r -eq 2 ]; then return 1
-    elif [ "$POS_OK" = 1 ]; then pass "$lbl: save word refuses, no dictionary write"
-    else note "INFO: $lbl refused, but UNQUALIFIED - positive liveness failed above"; return 1; fi
+    # Negative qualification, same-app provider-verified ONLY: a fresh complete fixture with
+    # the case ABSENT qualifies only with baseline and positive liveness established;
+    # ABSENT without them stays UNQUALIFIED; PRESENT is a FAIL (product wrote the token).
+    if ! app_fixture "sw_negative_$caseid" query; then
+      fail "$lbl: fresh complete same-app negative fixture unavailable/error/stale"; return 1
+    fi
+    if grep -q "case=$caseid result=PRESENT" "shots/sw_negative_${caseid}_app_raw.txt"; then
+      fail "$lbl: save word WROTE the token (same-app provider-verified: fresh fixture case PRESENT)"; return 1
+    fi
+    if grep -q "case=$caseid result=ABSENT currentEditor=true currentRequest=true$" "shots/sw_negative_${caseid}_app_raw.txt"; then
+      if [ "$APP_BASELINE" = 1 ] && [ "$APP_POS" = 1 ]; then
+        pass "$lbl: save word refuses, no dictionary write (same-app provider-verified)"
+      else
+        note "INFO: $lbl fixture ABSENT but UNQUALIFIED - baseline/positive liveness not established above"; return 1
+      fi
+    else
+      fail "$lbl: fresh fixture case row missing/malformed"; return 1
+    fi
   }
   # negative 1: password field (broadcast-set inputType, field tap renegotiates the session)
   PRE1=0
@@ -1733,7 +1728,7 @@ FIXTUREBLOCK
   adb logcat -c; dbg "open:save_word" 1.5; shot sw04_codefield_blocked
   negcheck "$SW4" "code field (com.replit.*)" $PRE3
   adb shell am broadcast -a com.wrenboard.imetarget.CLEAR -p com.replit.wbcodefield >/dev/null 2>&1
-  for w in $SWP $SWT $SW2 $SW3 $SW4 zqxwvisible; do dictdel "$w"; done
+  # All prior evidence is already captured under shots/ before this cleanup reset runs.
   if app_fixture sw_cleanup reset && [ "$(grep -c 'result=ABSENT currentEditor=true currentRequest=true$' shots/sw_cleanup_app_raw.txt)" -eq 6 ]; then
     pass "fixed same-app synthetic fixture cleanup verified absent"
   else fail "fixed same-app synthetic fixture cleanup unverified"; fi
