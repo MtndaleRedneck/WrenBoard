@@ -97,8 +97,8 @@ val ArrowRow = Row(
         repeatableEnabled = true
     ),
     splittable = false,
-    // WrenBoard 1.4 SwiftKey parity (item 2): arrow row is 0.75 of the letter-row pitch (110px vs 149px at 480dpi).
-    rowHeight = 0.75
+    // SwiftKey parity (spec v1.1 item 15): 38.8 dp arrow keys + 2.5 dp gap, as a fraction of the letter pitch.
+    rowHeight = ArrowRowHeight
 )
 
 data class LayoutParams(
