@@ -1969,6 +1969,9 @@ if leg settingspreview; then
   # combined runs 41779405941, 41781634835, 41783371396). Back out until the home title
   # node is present, bounded; never capture a mislabeled home.
   for i in 1 2 3 4; do
+    # home's scroll position persists from the settings leg, and the title node only
+    # composes at the top (run 41786461933 readback missed a scrolled home): drag to top first
+    adb shell input swipe 540 600 540 1800 400; sleep 1
     dumpui sp_home_readback
     grep -q 'text="WrenBoard Settings"' shots/sp_home_readback.xml && break
     adb shell input keyevent KEYCODE_BACK; sleep 1
