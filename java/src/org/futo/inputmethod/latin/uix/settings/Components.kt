@@ -45,6 +45,7 @@ import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.RadioButton
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Slider
@@ -478,6 +479,8 @@ fun<T> SettingRadio(
     }
 }
 
+// WrenBoard 1.5: the Wren slider branch uses the custom-thumb Slider overload, which is experimental.
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun<T: Number> SettingSliderForDataStoreItem(
     title: String,
