@@ -116,6 +116,9 @@ sleep 2
 shot 09_results
 note "tapping first result cell (274,1251; 156px into the grid, inside cell 0 for any cell height)"
 adb shell input tap 274 1251; sleep 3
+# Deterministic visible beat: the fixture shows the received GIF's first frame and hides the
+# keyboard on receipt; hold so the recording clearly captures the picker-to-receiver transition.
+sleep 3
 shot 10_after_insert
 
 note "asserting fixture-side commit (mime/bytes/signature) and host text unchanged"
@@ -127,6 +130,7 @@ B2=$(echo "$L" | sed -n 's/.*bytes=\([0-9]*\).*/\1/p'); [ -n "$B2" ] && [ "$B2" 
 echo "$L" | grep -q 'sig=GIF' || fail "inserted bytes lack GIF signature"
 F2=$(field_now); note "field after insert: [$F2]"
 [ "$F2" = "hostok" ] || fail "host text changed by insert (expected hostok)"
+adb logcat -d -s IMETARGET:I 2>/dev/null | tr -d '\r' | grep -q 'CONTENT_PREVIEW=shown' || fail "fixture did not render the received GIF preview"
 dumpui 08_final
 sleep 2
 note "stopping screen recording and pulling the video"

@@ -28,7 +28,10 @@ public class TestInput extends Activity {
 
     // EditText that accepts committed content (image/gif): logs the handoff and drains the
     // provider stream so the sender's fetch path is fully exercised (commitContent, not text).
+    public interface ContentListener { void onContent(byte[] data); }
+
     public static class GifEditText extends EditText {
+        public static ContentListener contentListener;
         public GifEditText(android.content.Context context) { super(context); }
         @Override public android.view.inputmethod.InputConnection onCreateInputConnection(android.view.inputmethod.EditorInfo outAttrs) {
             android.view.inputmethod.InputConnection base = super.onCreateInputConnection(outAttrs);
@@ -36,19 +39,30 @@ public class TestInput extends Activity {
             return new android.view.inputmethod.InputConnectionWrapper(base, true) {
                 @Override public boolean commitContent(android.view.inputmethod.InputContentInfo info, int flags, android.os.Bundle opts) {
                     String mime = "-"; long n = 0; String sig = "";
+                    byte[] data = null;
                     try {
                         mime = info.getDescription().getMimeType(0);
                         info.requestPermission();
                         java.io.InputStream in = getContext().getContentResolver().openInputStream(info.getContentUri());
+                        java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
                         byte[] buf = new byte[8192]; int r; boolean first = true;
                         while ((r = in.read(buf)) != -1) {
                             if (first && r >= 3) { sig = new String(buf, 0, 3, "US-ASCII"); first = false; }
+                            bos.write(buf, 0, r);
                             n += r;
                         }
                         in.close();
                         info.releasePermission();
+                        data = bos.toByteArray();
                     } catch (Exception e) { Log.i("IMETARGET", "CONTENT= error=" + e); return false; }
                     Log.i("IMETARGET", "CONTENT= mime=" + mime + " bytes=" + n + " sig=" + sig);
+                    // Fixture-only visibility: hand the received bytes to the activity so captures
+                    // show the GIF arriving on the receiving side. Delivery path unchanged.
+                    final byte[] received = data;
+                    final ContentListener cl = contentListener;
+                    if (received != null && cl != null) {
+                        post(new Runnable() { public void run() { cl.onContent(received); } });
+                    }
                     return true;
                 }
             };
@@ -61,6 +75,7 @@ public class TestInput extends Activity {
     private static final String MODE_NOCORRECT = "NOCORRECT";
 
     private EditText edit;
+    private android.widget.ImageView preview;
     private final Handler main = new Handler(Looper.getMainLooper());
 
     // Mode changes persist and RECREATE the activity: a live setImeOptions on a focused
@@ -80,6 +95,7 @@ public class TestInput extends Activity {
                 public void run() {
                     if ("com.wrenboard.imetarget.CLEAR".equals(a)) {
                         edit.setText("");
+                        if (preview != null) { preview.setImageDrawable(null); preview.setVisibility(View.GONE); }
                         Log.i("IMETARGET", "CLEARED");
                     } else if ("com.wrenboard.imetarget.CAPSENT".equals(a)) {
                         boolean on = intent.getBooleanExtra("on", true);
@@ -166,6 +182,27 @@ public class TestInput extends Activity {
         });
         root.addView(edit, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+
+        // Received-content preview (fixture visibility for captures): hidden until the IME
+        // commits a GIF, then shows its first frame and hides the keyboard so the received
+        // image is honestly visible on the receiving side. Not part of the released app.
+        preview = new android.widget.ImageView(this);
+        preview.setVisibility(View.GONE);
+        preview.setAdjustViewBounds(true);
+        preview.setScaleType(android.widget.ImageView.ScaleType.FIT_CENTER);
+        root.addView(preview, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+        GifEditText.contentListener = new ContentListener() {
+            public void onContent(byte[] data) {
+                android.graphics.Bitmap bmp = android.graphics.BitmapFactory.decodeByteArray(data, 0, data.length);
+                if (bmp == null) { Log.i("IMETARGET", "CONTENT_PREVIEW=decode-failed"); return; }
+                preview.setImageBitmap(bmp);
+                preview.setVisibility(View.VISIBLE);
+                ((android.view.inputmethod.InputMethodManager) getSystemService(INPUT_METHOD_SERVICE))
+                        .hideSoftInputFromWindow(edit.getWindowToken(), 0);
+                Log.i("IMETARGET", "CONTENT_PREVIEW=shown");
+            }
+        };
 
         LinearLayout bar = new LinearLayout(this);
         bar.setOrientation(LinearLayout.HORIZONTAL);
