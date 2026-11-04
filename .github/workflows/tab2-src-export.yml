@@ -1,0 +1,31 @@
+name: tab2-src-export
+# Tab 2 helper: exports source text of this branch as an artifact so it can be read off-box. No secrets, no signing, no publishing.
+on:
+  push:
+    branches: ['tab2/**']
+    paths: ['.github/workflows/tab2-src-export.yml', '.github/tab2-export-trigger']
+permissions:
+  contents: read
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Pack source (text files under 1 MB, no submodules)
+        run: |
+          mkdir -p out
+          git log --oneline -n 60 > out/gitlog.txt
+          git log --oneline -n 300 > out/gitlog300.txt
+          cat .github/workflows/build.yml > out/build.yml.txt
+          git ls-files > out/ls-files.txt
+          python3 -c "import subprocess,os; fs=subprocess.check_output(['git','ls-files']).decode().splitlines(); print('\\n'.join(f for f in fs if os.path.isfile(f) and os.path.getsize(f)<1000000))" > out/pack-list.txt
+          wc -l out/pack-list.txt
+          tar czf out/src.tgz -T out/pack-list.txt
+          ls -la out
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tab2-src
+          path: out/
+          retention-days: 3
