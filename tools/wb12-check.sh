@@ -148,8 +148,13 @@ if leg setup; then
   adb shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1; sleep 6
   dumpui s01; sleep 2; shot s01_settings_not_enabled; dumpui s01; T=$(uitext s01); note "texts: ${T:0:400}"
   # fix1: the 1.x first-entry Personal dictionary step is gone; the first open is the Settings home
-  echo "$T" | grep -q "Personal dictionary" && fail "first Settings open still lands on the Personal dictionary page" || pass "first Settings open goes straight to the Settings home (no dictionary page)"
-  echo "$T" | grep -q "Typing" && echo "$T" | grep -q "Backup" && pass "first Settings open shows the Settings home list" || fail "first Settings open is not the Settings home"
+  # Match actual root nodes, not a subtitle containing "Personal dictionary" or an
+  # old six-group row that is now below the first viewport (1.5 settings structure).
+  grep -q 'text="Personal dictionary"' shots/s01.xml && fail "first Settings open lands on dictionary title" || pass "first Settings open is not dictionary title"
+  grep -q 'text="WrenBoard Settings"' shots/s01.xml &&
+    grep -q 'text="Appearance"' shots/s01.xml &&
+    grep -q 'text="Languages &amp; layouts"' shots/s01.xml &&
+    pass "first Settings open shows actual 1.5 Home root nodes" || fail "first Settings open lacks actual 1.5 Home root nodes"
   echo "$T" | grep -q "WrenBoard is turned off" && pass "banner when not enabled" || fail "banner when not enabled"
   echo "$T" | grep -q "Step 1\|Step 2\|Open Input Method Settings" && fail "old setup wall still shown" || pass "no setup wall (not enabled)"
   echo "$T" | grep -q "Keyboard\|Typing" && pass "settings items reachable while not enabled" || fail "settings items not visible while not enabled"
@@ -231,7 +236,19 @@ if leg keyboard; then
   dropcount() { adb logcat -d -s WBDBG:I 2>/dev/null | tr -d '\r' | grep -c "STARTER drop id="; }
   # Bounded wait for the fixture to apply a persisted mode (it recreates itself so the IME
   # renegotiates with fresh attributes; live setImeOptions never renegotiated - rev29 neg4).
-  wait_mode() { local want=$1 i; for i in $(seq 1 12); do [ "$(adb logcat -d -s IMETARGET:I 2>/dev/null | tr -d '\r' | grep -oE 'MODE=[A-Z]+ APPLIED' | tail -1)" = "MODE=$want APPLIED" ] && return 0; sleep 1; done; return 1; }
+  wait_mode() { local want=$1 i
+    for i in $(seq 1 12); do
+      if [ "$(adb logcat -d -s IMETARGET:I 2>/dev/null | tr -d '\r' | grep -oE 'MODE=[A-Z]+ APPLIED' | tail -1)" = "MODE=$want APPLIED" ]; then
+        # The fixture persists+recreates on a mode set; a recreated instance whose persisted
+        # mode was lost logs a later contradictory APPLIED marker (480 run: NORMAL after
+        # NOLEARN, and the save then proceeded against a NORMAL field). Confirm the marker
+        # is stable across the recreation window before the caller acts on it.
+        sleep 3
+        [ "$(adb logcat -d -s IMETARGET:I 2>/dev/null | tr -d '\r' | grep -oE 'MODE=[A-Z]+ APPLIED' | tail -1)" = "MODE=$want APPLIED" ] && return 0
+      fi
+      sleep 1
+    done
+    return 1; }
   # Bounded wait for the app's OWN keyboard dump to report the expected layout, then promote
   # that dump to the shared tap geometry. Anchors post-addlang legs to app-visible layout state:
   # kills both pre-reload suggestion reads (rev29 fr absent-before '') and stale-geometry taps
@@ -826,29 +843,6 @@ pos() { # pos <file> <tag regex> -> "cx cy" of the last WINDOW line matching
 }
 wlog() { adb logcat -d -s WBDBG:I | tr -d '\r' > "shots/$1.txt"; }
 
-
-if leg symbolspacing; then
-  ensure_ime; focus_target; clear_field
-  geom symbolspacing_letters >/dev/null; shot symbolspacing_letters
-  tapcode -3 >/dev/null; sleep 1
-  geom symbolspacing_page1 >/dev/null; shot symbolspacing_page1
-  tapcode -1 >/dev/null; sleep 1
-  geom symbolspacing_page2 >/dev/null; shot symbolspacing_page2
-  tapcode -1 >/dev/null; sleep 0.5
-  tapcode -3 >/dev/null; sleep 0.5
-fi
-
-if leg symbols; then
-  note "== SYMBOLS: 123 page shot (no checks, screenshot for review) =="
-  focus_target
-  geom letters
-  tapcode -3 || true
-  sleep 1.2
-  geom symbols keep
-  shot k15_symbols_page
-  tapcode -3 || true
-  sleep 1
-fi
 
 if leg voiceaudio; then
   note "== VOICEAUDIO: real app start and cancellation, output captured externally =="
@@ -1525,29 +1519,34 @@ fi
 
 
 if leg saveword; then
-  note "== SAVE WORD privacy boundary (1.5 B6): selection-priority positive; password / NOLEARN-flag / code-field negatives against the actual UserDictionary provider =="
-  # Fail-closed provider access: `content` can print an Error/SecurityException payload with
-  # exit code 0, so BOTH the exit code and the payload shape are validated. Token checks use an
-  # exact --where word='...' filter plus the row shape word=<token>, never a substring grep.
-  dict_has() { # <token> <label> -> 0 present, 1 absent, 2 query failed
-    local tok="$1" lbl="$2" rows rc
-    rows=$(adb shell content query --uri content://user_dictionary/words --where "word='$tok'" 2>&1); rc=$?
-    if [ $rc -ne 0 ] || echo "$rows" | head -3 | grep -qi 'error\|exception\|denied'; then
-      fail "$lbl: user_dictionary query FAILED: $(echo "$rows" | head -1 | cut -c1-120)"; return 2
-    fi
-    if echo "$rows" | grep -q "word=$tok,"; then return 0; fi
-    # a present row must match the exact row shape; anything else is an empty (no-result) set
-    return 1
-  }
-  dictdel() { adb shell content delete --uri content://user_dictionary/words --where "word='$1'" >/dev/null 2>&1; }
-  wait_mode() { local want=$1 i; for i in $(seq 1 12); do [ "$(adb logcat -d -s IMETARGET:I 2>/dev/null | tr -d '\r' | grep -oE 'MODE=[A-Z]+ APPLIED' | tail -1)" = "MODE=$want APPLIED" ] && return 0; sleep 1; done; return 1; }
+  note "== SAVE WORD privacy boundary (1.5 B6): selection-priority positive; password / NOLEARN-flag / code-field negatives, same-app provider-verified =="
+  # AOSP caller gate (packages/providers/UserDictionaryProvider/UserDictionaryProvider.java,
+  # android-14.0.0_r1): query() L152-158 serves only callers passing
+  # canCallerAccessUserDictionary() L316-350 - system/root/self, the ENABLED IME (uid+package
+  # match), or an enabled spell checker; every other caller gets getEmptyCursorOrThrow()
+  # L352-367, an EMPTY MatrixCursor ("No result found.") for ANY query, and delete removes 0
+  # rows. The adb shell (uid 2000) is always denied, so shell queries/deletes are
+  # uninformative BY DESIGN and prove neither presence nor absence. All qualification in this
+  # leg is same-app provider-verified through the enabled-IME fixture over real resolver IPC;
+  # pass labels say so explicitly. No shell-visibility claim is made anywhere.
+  # Informational runtime-image context only (no privilege, no assertion):
+  note "image fingerprint=$(adb shell getprop ro.build.fingerprint 2>/dev/null | tr -d '\r') sdk=$(adb shell getprop ro.build.version.sdk 2>/dev/null | tr -d '\r')"
+  note "provider package=$(adb shell dumpsys package com.android.providers.userdictionary 2>/dev/null | grep -m1 'versionCode\|versionName' | tr -d '\r')"
+  note "users=$(adb shell pm list users 2>/dev/null | tr -d '\r' | tr '\n' ';')"
+  wait_mode() { local want=$1 i
+    for i in $(seq 1 12); do
+      if [ "$(adb logcat -d -s IMETARGET:I 2>/dev/null | tr -d '\r' | grep -oE 'MODE=[A-Z]+ APPLIED' | tail -1)" = "MODE=$want APPLIED" ]; then
+        # The fixture persists+recreates on a mode set; a recreated instance whose persisted
+        # mode was lost logs a later contradictory APPLIED marker (480 run: NORMAL after
+        # NOLEARN, and the save then proceeded against a NORMAL field). Confirm the marker
+        # is stable across the recreation window before the caller acts on it.
+        sleep 3
+        [ "$(adb logcat -d -s IMETARGET:I 2>/dev/null | tr -d '\r' | grep -oE 'MODE=[A-Z]+ APPLIED' | tail -1)" = "MODE=$want APPLIED" ] && return 0
+      fi
+      sleep 1
+    done
+    return 1; }
   SWP="zqxwjpos"; SWT="zqxwjtail"; SW2="zqxwjctb"; SW3="zqxwjctc"; SW4="zqxwjctd"
-  for w in $SWP $SWT $SW2 $SW3 $SW4 zqxwvisible; do dictdel "$w"; done
-  for w in $SWP $SWT $SW2 $SW3 $SW4 zqxwvisible; do
-    dict_has "$w" "baseline"; b=$?
-    [ $b -eq 0 ] && { dictdel "$w"; dict_has "$w" "baseline"; b=$?; }
-    [ $b -eq 0 ] && fail "baseline: canary $w could not be cleared from the user dictionary"
-  done
   APP_POS=0; APP_BASELINE=0
   APP_LAST_ID=0; APP_RESET_OK=0
   app_fixture() { # consume one fresh complete six-case command, never mixed async output
@@ -1581,7 +1580,6 @@ FIXTUREBLOCK
     APP_BASELINE=1; APP_RESET_OK=1; pass "fixed same-app fixture baseline: six synthetic cases absent after reset"
   else fail "fixed same-app reset/baseline failed; stopping saveword leg to avoid reset racing action"; fi
   if [ "$APP_RESET_OK" = 1 ]; then
-  POS_OK=0
   # positive + priority: two different words; the SELECTED one (first) must be saved, the word
   # before the cursor (last typed, nonempty) must NOT. Proves the selected-over-lastTyped branch
   # with both candidates present; says nothing about composing-vs-selected ordering.
@@ -1596,46 +1594,49 @@ FIXTUREBLOCK
   adb logcat -c; dbg "open:save_word" 0.4; shot sw01_chip; sleep 1.1; shot sw01_selection_saved
   # Raw receiver-side evidence: any "CMD ... failed" exception from the action path lands here.
   adb logcat -d -s WBDBG:I 2>/dev/null | tr -d '\r' > shots/sw01_wbdbg_raw.txt
-  # Actual action result: independent of the shell's provider/user visibility. This proves
-  # only the selected word's same-app absent -> write-returned -> present transition in
-  # the same current editor/request. It does NOT qualify shell negatives or tail absence.
+  # Actual action result over the real provider IPC: the selected word's same-app
+  # absent -> write-returned -> present transition in the same current editor/request.
   if [ "$PRE0" = 1 ] && grep -qE '^.*SAVEWORD_RESULT request=[0-9]+ before=ABSENT after=PRESENT writeReturned=true selected=true currentEditor=true currentRequest=true persisted=true$' shots/sw01_wbdbg_raw.txt; then
     APP_POS=1
-    pass "selected word persisted and re-queried present in the actual app/current editor/request (bounded same-app control only)"
+    pass "selected word persisted and re-queried present in the actual app/current editor/request (same-app provider-verified)"
   else
     fail "same-app selected-word persistence control not established (inspect content-free action result)"
   fi
-  # Raw provider payload (canary tokens only) preserved against row-shape false negatives.
+  # Informational only: under the AOSP caller gate above, the denied shell's raw response
+  # (expected empty) is preserved to document the channel, never as presence/absence evidence.
   adb shell content query --uri content://user_dictionary/words --where "word='$SWP'" > shots/sw01_provider_raw.txt 2>&1
-  if [ "$PRE0" != 1 ]; then
-    note "INFO: saveword positive/priority UNQUALIFIED - two-canary precondition failed above"
-  else
-  dict_has "$SWP" "positive"; rp=$?
-  dict_has "$SWT" "positive"; rt=$?
-  if [ $rp -eq 0 ] && [ $rt -eq 1 ]; then
-    POS_OK=1; pass "save word saves the SELECTED word over the nonempty last-typed word (priority + liveness)"
-  elif [ $rt -eq 0 ]; then fail "priority: the LAST-TYPED word was saved over the explicit selection"
-  elif [ $rp -eq 1 ]; then fail "shell provider did not expose the selected word; shell-negative controls unqualified (not evidence the app action is dead)"; fi
-  fi
-  if app_fixture sw_after_positive query && [ "$APP_BASELINE" = 1 ] && [ "$APP_POS" = 1 ] &&
+  # Positive qualification, same-app provider-verified ONLY: two-canary precondition (PRE0),
+  # the action's own absent->write-returned->present control (APP_POS), and a fresh complete
+  # post-positive fixture with selected case0 PRESENT, last-typed tail case1 ABSENT, current
+  # editor/request flags true. Anything less leaves the positive UNQUALIFIED.
+  if [ "$PRE0" = 1 ] && [ "$APP_POS" = 1 ] && app_fixture sw_after_positive query &&
      grep -q 'case=0 result=PRESENT currentEditor=true currentRequest=true$' shots/sw_after_positive_app_raw.txt &&
      grep -q 'case=1 result=ABSENT currentEditor=true currentRequest=true$' shots/sw_after_positive_app_raw.txt; then
-    pass "same-app fixed fixture: selected case present, different tail case absent"
-  else fail "same-app selected/tail fixture not established"; fi
-  dictdel "$SWP"; dictdel "$SWT"
+    pass "positive: save word saves the SELECTED word over the nonempty last-typed word (same-app provider-verified; fresh fixture case0 present, case1 absent)"
+  else fail "positive UNQUALIFIED: precondition/control/post-positive fixture incomplete (PRE0=$PRE0 APP_POS=$APP_POS; inspect sw_after_positive raws)"; fi
   negcheck() { # <token> <label> <precondition 0/1>
     local tok="$1" lbl="$2" pre="$3"
     [ "$pre" = 1 ] || { note "INFO: $lbl negative not executed (honest-execution precondition failed above)"; return 1; }
     local caseid
     case "$tok" in zqxwjctb) caseid=2;; zqxwjctc) caseid=3;; zqxwjctd) caseid=4;; zqxwvisible) caseid=5;; *) fail "unknown fixed fixture case"; return 1;; esac
-    if app_fixture "sw_negative_$caseid" query && [ "$APP_BASELINE" = 1 ] && [ "$APP_POS" = 1 ] && grep -q "case=$caseid result=ABSENT currentEditor=true currentRequest=true$" "shots/sw_negative_${caseid}_app_raw.txt"; then
-      pass "$lbl: same-app fixed synthetic case remains absent after attempted action (bounded fixture only)"
-    else fail "$lbl: same-app negative fixture unqualified/present/error"; fi
-    dict_has "$tok" "$lbl"; local r=$?
-    if [ $r -eq 0 ]; then fail "$lbl: save word WROTE the token to the user dictionary"; return 1
-    elif [ $r -eq 2 ]; then return 1
-    elif [ "$POS_OK" = 1 ]; then pass "$lbl: save word refuses, no dictionary write"
-    else note "INFO: $lbl refused, but UNQUALIFIED - positive liveness failed above"; return 1; fi
+    # Negative qualification, same-app provider-verified ONLY: a fresh complete fixture with
+    # the case ABSENT qualifies only with baseline and positive liveness established;
+    # ABSENT without them stays UNQUALIFIED; PRESENT is a FAIL (product wrote the token).
+    if ! app_fixture "sw_negative_$caseid" query; then
+      fail "$lbl: fresh complete same-app negative fixture unavailable/error/stale"; return 1
+    fi
+    if grep -q "case=$caseid result=PRESENT" "shots/sw_negative_${caseid}_app_raw.txt"; then
+      fail "$lbl: save word WROTE the token (same-app provider-verified: fresh fixture case PRESENT)"; return 1
+    fi
+    if grep -q "case=$caseid result=ABSENT currentEditor=true currentRequest=true$" "shots/sw_negative_${caseid}_app_raw.txt"; then
+      if [ "$APP_BASELINE" = 1 ] && [ "$APP_POS" = 1 ]; then
+        pass "$lbl: save word refuses, no dictionary write (same-app provider-verified)"
+      else
+        note "INFO: $lbl fixture ABSENT but UNQUALIFIED - baseline/positive liveness not established above"; return 1
+      fi
+    else
+      fail "$lbl: fresh fixture case row missing/malformed"; return 1
+    fi
   }
   # negative 1: password field (broadcast-set inputType, field tap renegotiates the session)
   PRE1=0
@@ -1679,8 +1680,16 @@ FIXTUREBLOCK
     focus_target; adb shell input text "$SW3"; sleep 0.8
     F=$(field); if [ "$F" = "$SW3" ]; then PRE2=1; else fail "NOLEARN negative precondition: canary not observed in the fixture field ('${F:0:40}')"; fi
   else fail "NOLEARN mode was not applied by the fixture"; fi
-  adb logcat -c; dbg "open:save_word" 1.5; shot sw03_nolearn_blocked
-  negcheck "$SW3" "no-learning flag field" $PRE2
+  # Fixture-state provenance immediately before the persisting action: if a late recreation
+  # reverted the field to NORMAL, the action/shot/negcheck are skipped entirely (fail() only
+  # logs, it does not abort) and the negative stays UNQUALIFIED as a harness defect - a save
+  # into a NORMAL field is not product privacy evidence either way.
+  if [ "$(adb logcat -d -s IMETARGET:I 2>/dev/null | tr -d '\r' | grep -oE 'MODE=[A-Z]+ APPLIED' | tail -1)" = "MODE=NOLEARN APPLIED" ] && [ "$PRE2" = 1 ]; then
+    adb logcat -c; dbg "open:save_word" 1.5; shot sw03_nolearn_blocked
+    negcheck "$SW3" "no-learning flag field" $PRE2
+  else
+    fail "UNQUALIFIED: no-learning flag field negative not executed - NOLEARN fixture provenance/precondition absent before the persisting action (harness defect); save not attempted"
+  fi
   adb shell am broadcast -a com.wrenboard.imetarget.NOLEARN --ez on false -p "$TPKG" >/dev/null 2>&1; wait_mode NORMAL
   # negative 3: code-field package classification (com.replit.wbcodefield fixture variant; a plain
   # text field has no AUTO_CORRECT flag -> the app's own getCodeFieldType says code field). The
@@ -1689,10 +1698,33 @@ FIXTUREBLOCK
   if [ -f tools/ime-target-codefield/out/imetarget-codefield.apk ]; then
     if adb install -r tools/ime-target-codefield/out/imetarget-codefield.apk >> "$R" 2>&1; then
       if adb shell am start -S -n "com.replit.wbcodefield/com.wrenboard.imetarget.TestInput" >> "$R" 2>&1; then
-        sleep 3; tap_field
-        FOCUS=$(adb shell dumpsys window 2>/dev/null | grep -m1 'mCurrentFocus')
-        if echo "$FOCUS" | grep -q 'com.replit.wbcodefield'; then
+        # Iteration-bounded focus poll instead of one fixed 3s read (run 41771836977: fixture
+        # Displayed +2.1s, IME shown +6.8s, and the single fixed-window focus read raced the
+        # slow settle; no crash/finish/start failure). Iteration-bounded, not wall-clock
+        # bounded - dumpsys latency varies. Match the EXACT activity component - the splash
+        # window title carries only the bare package name and must not count. Still fails
+        # closed if the fixture never holds focus.
+        CFCOMP='com.replit.wbcodefield/com.wrenboard.imetarget.TestInput'
+        FOCUS=""; for i in $(seq 1 15); do
+          FOCUS=$(adb shell dumpsys window 2>/dev/null | grep -m1 'mCurrentFocus')
+          echo "$FOCUS" | grep -q "$CFCOMP" && break
+          sleep 1
+        done
+        if echo "$FOCUS" | grep -q "$CFCOMP"; then
+          tap_field
+          # the tap can land during the resume transition; poll focus again (bounded,
+          # 10x1s cadence - waits readiness, never retries the negative) and type only once
+          FOCUS=""; for j in $(seq 1 10); do
+            FOCUS=$(adb shell dumpsys window 2>/dev/null | grep -m1 'mCurrentFocus')
+            echo "$FOCUS" | grep -q "$CFCOMP" && break
+            sleep 1
+          done
+        fi
+        if echo "$FOCUS" | grep -q "$CFCOMP"; then
           adb shell input text "$SW4"; sleep 0.8
+          # last-CHANGE log line readback: field_now is hardwired to the main package's REPORT
+          # action and the code fixture does not implement REPORT; SW4 is unique, CHANGE lines
+          # are per keystroke, and this block's logcat is fresh, so last-CHANGE is unambiguous
           F=$(field); if [ "$F" = "$SW4" ]; then PRE3=1; else fail "code-field negative precondition: canary not observed in the fixture field ('${F:0:40}')"; fi
         else fail "code-field fixture is NOT the focused window: ${FOCUS:0:140}"; fi
       else fail "code-field fixture failed to start"; fi
@@ -1701,7 +1733,7 @@ FIXTUREBLOCK
   adb logcat -c; dbg "open:save_word" 1.5; shot sw04_codefield_blocked
   negcheck "$SW4" "code field (com.replit.*)" $PRE3
   adb shell am broadcast -a com.wrenboard.imetarget.CLEAR -p com.replit.wbcodefield >/dev/null 2>&1
-  for w in $SWP $SWT $SW2 $SW3 $SW4 zqxwvisible; do dictdel "$w"; done
+  # All prior evidence is already captured under shots/ before this cleanup reset runs.
   if app_fixture sw_cleanup reset && [ "$(grep -c 'result=ABSENT currentEditor=true currentRequest=true$' shots/sw_cleanup_app_raw.txt)" -eq 6 ]; then
     pass "fixed same-app synthetic fixture cleanup verified absent"
   else fail "fixed same-app synthetic fixture cleanup unverified"; fi
@@ -1825,7 +1857,7 @@ if leg update; then
 fi
 
 if leg settings; then
-  note "== SETTINGS tree (CP4): six groups + FUTO, each page opens =="
+  note "== SETTINGS tree (1.5 structure): home rows + each page opens =="
   ensure_ime; note "default IME: $(adb shell settings get secure default_input_method | tr -d '\r')"
   adb shell input keyevent KEYCODE_HOME; sleep 1
   opensettings "" 6
@@ -1843,27 +1875,38 @@ if leg settings; then
   done
   T="$T$(uitext st01b)"
   note "home: ${T:0:700}"
-  ok=1; for w in "Keyboard" "Typing" "Voice" "Clipboard &amp; emoji" "Backup" "About" "FUTO"; do echo "$T" | grep -q "$w" || { ok=0; note "missing on home: $w"; }; done
-  [ $ok = 1 ] && pass "home shows the six groups and FUTO" || fail "home is missing groups"
+  ok=1; for w in "Appearance" "Languages &amp; layouts" "Layout" "Typing &amp; autocorrect" "Swipe &amp; gestures" "Dictionary" "Sound &amp; vibration" "Voice" "Clipboard &amp; emoji" "Backup" "About" "Advanced" "FUTO license &amp; payment"; do echo "$T" | grep -q "$w" || { ok=0; note "missing on home: $w"; }; done
+  [ $ok = 1 ] && pass "home shows the 1.5 settings rows" || fail "home is missing 1.5 rows"
   echo "$T" | grep -qi "swiftkey" && fail "the word SwiftKey appears in Settings" || pass "no SwiftKey text on the home"
   n=2
-  for d in wren_keyboard wren_typing voiceInput wren_clipemoji wren_backup about wren_futo; do
+  # 1.5 destinations; expected titles grounded in the preview run's actual UI dumps (run 41712377055)
+  for d in languages wren_appearance wren_layout wren_typing wren_swipe wren_dict wren_soundfeel wren_voice wren_clipemoji wren_backup about wren_license wren_advanced payment wren_futo; do
     opensettings "$d" 3.5
     shot "st0${n}_$d"; dumpui "st_$d"; P=$(uitext "st_$d"); note "$d: ${P:0:400}"
     echo "$P" | grep -qi "swiftkey" && fail "SwiftKey text on $d"
     [ -n "$P" ] && pass "$d opens" || fail "$d shows nothing"
+    TWANT=""
+    case "$d" in
+      languages) TWANT='Languages &amp; Models';;
+      wren_appearance) TWANT='Appearance';;
+      wren_layout) TWANT='Layout';;
+      wren_typing) TWANT='Typing &amp; autocorrect';;
+      wren_swipe) TWANT='Swipe &amp; gestures';;
+      wren_dict) TWANT='Dictionary';;
+      wren_soundfeel) TWANT='Sound &amp; vibration';;
+      wren_voice) TWANT='Voice';;
+      wren_clipemoji) TWANT='Clipboard &amp; emoji';;
+      wren_backup) TWANT='Backup';;
+      about) TWANT='About WrenBoard';;
+      wren_license) TWANT='FUTO Source First License';;
+      wren_advanced) TWANT='Advanced';;
+      payment) TWANT='Payment';;
+    esac
+    [ -n "$TWANT" ] && { echo "$P" | grep -q "$TWANT" && pass "$d shows expected title ($TWANT)" || fail "$d lacks expected title ($TWANT)"; }
     n=$((n+1))
   done
-  opensettings wren_keyboard 3.5; adb shell input swipe 540 1900 540 500 400; sleep 1.5; adb shell input swipe 540 1900 540 500 400; sleep 1.5
-  shot st02b_wren_keyboard_scrolled; dumpui st_kb2; KB="$(uitext st_wren_keyboard)$(uitext st_kb2)"
-  # The item-42 FAB bottom inset (72dp) shortens the page viewport, so at high
-  # densities the two fixed swipes can stop short of the FEEL card. Scroll on
-  # until all section cards have been seen (bounded).
-  for i in 1 2 3; do
-    echo "$KB" | grep -q "LOOK" && echo "$KB" | grep -q "LAYOUT" && echo "$KB" | grep -q "FEEL" && break
-    adb shell input swipe 540 1900 540 500 400; sleep 1.5; dumpui "st_kb_extra$i"; KB="$KB$(uitext st_kb_extra$i)"
-  done
-  for w in LOOK LAYOUT FEEL; do echo "$KB" | grep -q "$w" && pass "Keyboard page has the $w card" || fail "Keyboard page lacks the $w card"; done
+  # The old single Keyboard page's LOOK/LAYOUT/FEEL cards are superseded by the 1.5
+  # Appearance/Layout pages; their rows are covered by the per-destination checks above.
   # FUTO page must still reach FUTO's own screens
   opensettings "" 2; opensettings wren_futo 3.5; dumpui st_futo2
   for w in "Languages" "Swipe" "Actions"; do uitext st_futo2 | grep -q "$w" && pass "FUTO page keeps $w" || fail "FUTO page lost $w"; done
@@ -1879,8 +1922,8 @@ if leg settings; then
   FU="$(uitext st_futo2)$(uitext st_futo3)"; note "FUTO page (top + scrolled): ${FU:0:500}"
   echo "$FU" | grep -q "Payment" && pass "FUTO page shows FUTO's Payment row (not paid, as upstream)" || fail "FUTO page lost FUTO's Payment row"
   echo "$FU" | grep -q "Help" && echo "$FU" | grep -q "Credits" && pass "FUTO page keeps Help and Credits" || fail "FUTO page lost Help or Credits"
-  # Personal dictionary is still in Settings (Typing page, Words card) and opens
-  opensettings wren_typing 3.5; FOUND=""
+  # Personal dictionary is still in Settings (1.5 Dictionary page) and opens
+  opensettings wren_dict 3.5; FOUND=""
   for i in 1 2 3; do dumpui st_ty$i; XY=$(node_center st_ty$i "Personal dictionary"); [ -n "$XY" ] && { FOUND=1; break; }; adb shell input swipe 540 1900 540 700 400; sleep 1.5; done
   if [ -n "$FOUND" ]; then shot st09_typing_personal_dictionary_row; adb shell input tap $XY; sleep 2.5; dumpui st_pd; shot st10_personal_dictionary_page; note "personal dictionary page: $(uitext st_pd | cut -c1-200)"
     uitext st_pd | grep -q "Personal dictionary" && pass "Personal dictionary row in Typing opens its page" || fail "Personal dictionary row did not open its page"
@@ -1897,6 +1940,97 @@ if leg settings; then
   focus_target; dbg "dsbool:force_show_notice=false" 1.0; dbg "dsbool:wren_settings_style=true" 1.0
   adb shell input keyevent KEYCODE_HOME
 fi
+
+if leg settingspreview; then
+  note "== 1.5 settings candidate pixel preview; not full acceptance =="
+  ensure_ime
+  adb shell input keyevent KEYCODE_HOME; sleep 1
+  opensettings "" 5
+  shot sp01_home_top
+  adb shell input swipe 540 1800 540 600 400; sleep 1.2; shot sp02_home_bottom
+  for d in languages wren_appearance wren_layout wren_typing wren_swipe wren_dict wren_soundfeel wren_voice wren_clipemoji wren_backup about wren_license wren_advanced payment; do
+    opensettings "$d" 3
+    shot "sp_${d}_top"; dumpui "sp_$d"
+    P=$(uitext "sp_$d"); [ -n "$P" ] && pass "preview $d has visible UI text" || fail "preview $d empty UI"
+    adb shell input swipe 540 1800 540 600 400; sleep 1; shot "sp_${d}_bottom"
+  done
+  # Exercise the actual About row, not only a debug navigation destination.
+  opensettings about 2
+  dumpui sp_about_license_route
+  XY=$(node_center sp_about_license_route "FUTO Source First License")
+  if [ -n "$XY" ]; then
+    adb shell input tap $XY; sleep 1
+    dumpui sp_license_opened; shot sp_license_via_about_top
+    python3 - shots/sp_license_opened.xml <<'LICENSEXML' && pass "About license row opens exact bundled license title/text" || fail "About license row did not open exact license"
+import sys, xml.etree.ElementTree as E
+text='\n'.join(n.get('text','') for n in E.parse(sys.argv[1]).iter('node'))
+assert 'FUTO Source First License 1.1-kb' in text
+LICENSEXML
+    # Accessibility exposes the complete Text node even when it extends below viewport.
+    # Never infer scroll position from a body substring. Capture the bounded scroll end
+    # for actual-pixel inspection of the final clause, and keep XML as document identity only.
+    for i in $(seq 1 16); do adb shell input swipe 540 1800 540 450 400; sleep 0.3; done
+    dumpui sp_license_scrolled
+    shot sp_license_via_about_bottom
+    note "INFO: license scroll-end pixels require visual inspection of final Definitions/Trademark clause; XML body is not viewport proof"
+
+  else fail "About license row missing from actual UI"; fi
+  # Paid-notice preservation is exercised on this disposable emulator only, never a user's account.
+  dbg "dsbool:already_paid=true" 0.8
+  # Empty navDest only resumes the current page. Explicit Home is required after
+  # the inventory loop's Advanced/payment pages, before notice assertions.
+  opensettings home 3
+  dumpui sp_paid_transition
+  if grep -q 'text="Thank you"' shots/sp_paid_transition.xml; then
+    XY=$(node_center sp_paid_transition "Continue")
+    [ -n "$XY" ] && { adb shell input tap $XY; sleep 1.5; }
+    opensettings home 2
+  fi
+  dumpui sp_paid_root
+  grep -q 'text="WrenBoard Settings"' shots/sp_paid_root.xml || fail "paid fixture did not return to actual Home root"
+  for i in 1 2 3; do adb shell input swipe 540 1800 540 500 400; sleep 0.5; done
+  shot sp_paid_notice_home; dumpui sp_paid_notice_home
+  uitext sp_paid_notice_home | grep -q "paid version" && pass "paid notice visible on Home" || fail "paid notice absent from Home in paid fixture state"
+  dbg "dsbool:already_paid=false" 0.8
+  adb logcat -d -s WBDBG:I > shots/sp_paid_reset_raw.txt
+  grep -q 'DSBOOL already_paid=false' shots/sp_paid_reset_raw.txt || fail "disposable paid fixture reset not acknowledged"
+  opensettings home 2
+  for i in 1 2 3; do adb shell input swipe 540 1800 540 500 400; sleep 0.5; done
+  dumpui sp_unpaid_restored; shot sp_unpaid_restored
+  # Require current Home identity before absence can qualify.
+  grep -q 'text="FUTO license &amp; payment"' shots/sp_unpaid_restored.xml &&
+    grep -q 'text="Advanced"' shots/sp_unpaid_restored.xml || fail "restored unpaid capture lacks expected current Home nodes"
+  if grep -q 'text="FUTO license &amp; payment"' shots/sp_unpaid_restored.xml && grep -q 'text="Advanced"' shots/sp_unpaid_restored.xml; then
+    uitext sp_unpaid_restored | grep -q "paid version" && fail "paid notice remains after disposable fixture reset" || pass "paid notice absent after disposable fixture reset on confirmed Home"
+  else note "INFO: unpaid notice absence unqualified - Home precondition failed"; fi
+
+fi
+
+
+if leg symbolspacing; then
+  ensure_ime; focus_target; clear_field
+  geom symbolspacing_letters >/dev/null; shot symbolspacing_letters
+  tapcode -3 >/dev/null; sleep 1
+  geom symbolspacing_page1 >/dev/null; shot symbolspacing_page1
+  tapcode -1 >/dev/null; sleep 1
+  geom symbolspacing_page2 >/dev/null; shot symbolspacing_page2
+  tapcode -1 >/dev/null; sleep 0.5
+  tapcode -3 >/dev/null; sleep 0.5
+fi
+
+
+if leg symbols; then
+  note "== SYMBOLS: 123 page shot (no checks, screenshot for review) =="
+  focus_target
+  geom letters
+  tapcode -3 || true
+  sleep 1.2
+  geom symbols keep
+  shot k15_symbols_page
+  tapcode -3 || true
+  sleep 1
+fi
+
 
 note "== logcat crashes =="
 adb logcat -d -b crash > shots/crash.txt 2>&1
