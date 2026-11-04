@@ -38,7 +38,16 @@ public class TestInput extends Activity {
     // LEARNING flag was never seen). Persisted + applied in onCreate, the EditorInfo is
     // fresh at onStartInput. MODE=... APPLIED is the harness readiness marker.
     private void setMode(String mode) {
-        getSharedPreferences(PREFS, MODE_PRIVATE).edit().putString(KEY_MODE, mode).apply();
+        // Persist synchronously and check it. Observed failure this guards: the 480 run
+        // showed the recreated instance logging MODE=NORMAL 2.1s after the pre-recreation
+        // MODE=NOLEARN marker, and the harness then acted on a NORMAL field; apply() only
+        // queues the disk write, so a process restart around recreation can read a stale
+        // mode. On persist failure, refuse to recreate: no APPLIED marker for the requested
+        // mode is logged and the harness fails the leg instead of acting on a wrong field.
+        if (!getSharedPreferences(PREFS, MODE_PRIVATE).edit().putString(KEY_MODE, mode).commit()) {
+            Log.i("IMETARGET", "MODE=" + mode + " PERSIST_FAILED");
+            return;
+        }
         Log.i("IMETARGET", "MODE_SET=" + mode);
         recreate();
     }
