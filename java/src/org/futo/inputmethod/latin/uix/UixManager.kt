@@ -1491,13 +1491,6 @@ class UixManager(private val latinIME: LatinIME) {
         this.shouldShowSuggestionStrip.value = shouldShowSuggestionsStrip
     }
 
-    /** DEBUG-only on-demand count from the same state the visible strip reads. No text. */
-    fun debugReportSuggestionCount(request: String) {
-        if (!org.futo.inputmethod.latin.BuildConfig.DEBUG) return
-        val words = if (shouldShowSuggestionStrip.value) suggestedWords.value else null
-        android.util.Log.i("WBDBG", "SUGGREPORT request=$request n=${words?.size() ?: 0}")
-    }
-
     fun setSuggestions(suggestedWords: SuggestedWords?, rtlSubtype: Boolean, cfg: ExpandableSuggestionBarConfiguration) {
         if(org.futo.inputmethod.latin.BuildConfig.DEBUG) WbDebug.logSuggestions(suggestedWords)
         this.suggestedWords.value = suggestedWords

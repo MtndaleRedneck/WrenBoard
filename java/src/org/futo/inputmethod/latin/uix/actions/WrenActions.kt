@@ -113,8 +113,6 @@ val SaveWordAction = Action(
                 InputTypeUtils.isPasswordInputType(ei.inputType) ||
                 InputTypeUtils.isVisiblePasswordInputType(ei.inputType) || codeField
         if (blockedField) {
-            if (org.futo.inputmethod.latin.BuildConfig.DEBUG) android.util.Log.i("WBDBG",
-                "SAVEWORD blocked visiblePassword=${ei != null && InputTypeUtils.isVisiblePasswordInputType(ei.inputType)}")
             WrenSaveWordNotice.show(context.getString(R.string.wren_word_save_blocked_field))
         } else {
         val ic = ime.currentInputConnection
@@ -172,12 +170,6 @@ val SaveWordAction = Action(
                     }
                     val currentEditor = ime.actionEditorGeneration == editorGeneration
                     val currentRequest = WrenSaveWordNotice.isCurrentRequest(requestGeneration)
-                    // Content-free diagnostic from the actual action, not a shell-provider view.
-                    // No text, length, digest, package, or identity derived from the word is logged.
-                    if (org.futo.inputmethod.latin.BuildConfig.DEBUG) Log.i("WBDBG",
-                        "SAVEWORD_RESULT request=$requestGeneration before=$before after=$after " +
-                            "writeReturned=$writeReturned selected=${selected != null} " +
-                            "currentEditor=$currentEditor currentRequest=$currentRequest persisted=$persisted")
                     // Never apply a delayed chip to a new/closed editor or a newer save request.
                     if (!currentEditor || !currentRequest) return@launch
                     WrenSaveWordNotice.show(
@@ -203,43 +195,10 @@ private fun queryUserDictionary(context: Context, word: String): DictionaryPrese
         ?: DictionaryPresence.ERROR
 } catch (_: Exception) { DictionaryPresence.ERROR }
 
-private var saveFixtureGeneration = 0L
-
-/** Fixed synthetic fixture only. No command argument can retrieve or delete arbitrary words. */
-internal fun querySaveWordFixture(ime: org.futo.inputmethod.latin.LatinIME, reset: Boolean) {
-    if (!org.futo.inputmethod.latin.BuildConfig.DEBUG) return
-    val fixture = ++saveFixtureGeneration
-    // Synchronous acceptance binds this command before its asynchronous provider work.
-    Log.i("WBDBG", "SAVEFIXTURE_ACCEPT id=$fixture reset=$reset")
-    val editor = ime.actionEditorGeneration
-    val request = WrenSaveWordNotice.currentRequest()
-    val context = ime.applicationContext
-    ime.lifecycleScope.launch {
-        val results = withContext(Dispatchers.IO) {
-            listOf("zqxwjpos", "zqxwjtail", "zqxwjctb", "zqxwjctc", "zqxwjctd", "zqxwvisible").mapIndexed { index, token ->
-                val result = try {
-                    if (reset) context.contentResolver.delete(UserDictionary.Words.CONTENT_URI,
-                        "${UserDictionary.Words.WORD}=?", arrayOf(token))
-                    queryUserDictionary(context, token)
-                } catch (_: Exception) { DictionaryPresence.ERROR }
-                index to result
-            }
-        }
-        Log.i("WBDBG", "SAVEFIXTURE_BEGIN id=$fixture reset=$reset")
-        results.forEach { (index, result) ->
-            Log.i("WBDBG", "SAVEFIXTURE id=$fixture request=$request reset=$reset case=$index result=$result " +
-                "currentEditor=${ime.actionEditorGeneration == editor} " +
-                "currentRequest=${WrenSaveWordNotice.isCurrentRequest(request)}")
-        }
-        Log.i("WBDBG", "SAVEFIXTURE_END id=$fixture reset=$reset")
-    }
-}
-
 /** Transient centre-chip text (save-word confirmation). New instance per show so StateFlow re-emits. */
 object WrenSaveWordNotice {
     data class Notice(val text: String, val at: Long = android.os.SystemClock.uptimeMillis())
     private var requestGeneration = 0L
-    fun currentRequest(): Long = requestGeneration
     fun beginRequest(): Long = ++requestGeneration
     fun isCurrentRequest(value: Long): Boolean = value == requestGeneration
     val notice = MutableStateFlow<Notice?>(null)
