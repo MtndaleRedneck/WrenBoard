@@ -20,12 +20,12 @@ on:
         description: "debug (hooked positive control) or release (optimized final exact-head proof)"
         type: choice
         options: [release, debug]
-        default: release
+        default: debug  # SCRATCH-ONLY for push-triggered control run; final file keeps release
       mode:
         description: "control = hooks must be detected; final = hooks absent + retained baseline nine"
         type: choice
         options: [final, control]
-        default: final
+        default: control  # SCRATCH-ONLY for push-triggered control run; final file keeps final
 permissions:
   contents: read
 jobs:
