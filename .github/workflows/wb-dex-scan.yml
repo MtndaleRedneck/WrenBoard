@@ -1,0 +1,82 @@
+name: wb-dex-scan
+# Build-only DEX const-string exclusion scan. NO signing secrets, NO KLIPY key, NO
+# artifact upload, NO publication of any kind. Output is the bounded scan report in the
+# job log. Positive control: variant=debug + mode=control on the hooked head (scanner
+# must detect every hook marker). Final proof: variant=release + mode=final on the
+# cleanup head (excluded markers absent, retained voice baseline nine matched).
+# LABEL: this no-secrets build (VERSION_NAME 1.4.0-dexscan, code 5, no GIF key, debug
+# fallback signing) is a PREPARATORY optimized candidate proof ONLY - it is NOT the
+# final keyed 1.5.0/code6 shipping APK. The eventual actual shipping-APK hash/config
+# scan remains required separately.
+on:
+  # SCRATCH-ONLY trigger so this brand-new workflow can run before it exists on the
+  # default branch (workflow_dispatch requires default-branch presence). Removed before
+  # any default-branch proposal; dispatch remains the intended entry point.
+  push:
+    branches: [wrenboard-dex-scan-final]
+  workflow_dispatch:
+    inputs:
+      variant:
+        description: "debug (hooked positive control) or release (optimized final exact-head proof)"
+        type: choice
+        options: [release, debug]
+        default: release
+      mode:
+        description: "control = hooks must be detected; final = hooks absent + retained baseline nine"
+        type: choice
+        options: [final, control]
+        default: final
+permissions:
+  contents: read
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      VERSION_NAME: 1.4.0-dexscan
+      VERSION_CODE: "5"
+      # push events leave workflow_dispatch inputs empty; resolve effective values once
+      EFFECTIVE_VARIANT: ${{ inputs.variant || 'debug' }}
+      EFFECTIVE_MODE: ${{ inputs.mode || 'control' }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Init build submodules (same set as build.yml)
+        run: git submodule update --init java/assets/themes java/res-large libs translations voiceinput-shared/src/main/ml
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Install NDK (runner-provided Android SDK)
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;28.2.13676358"
+      - uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4.4.3
+      - name: Provenance binding (full commit, dirty=false enforced, variant, tool versions)
+        run: |
+          set -euo pipefail
+          echo "commit=$(git rev-parse HEAD)"
+          dirty=$(git status --porcelain)
+          [ -z "$dirty" ] || { echo "::error::working tree dirty"; echo "$dirty"; exit 1; }
+          echo "variant=$EFFECTIVE_VARIANT mode=$EFFECTIVE_MODE (inputs.variant=${{ inputs.variant }} inputs.mode=${{ inputs.mode }})"
+          echo "LABEL: PREPARATORY optimized candidate proof only - not the final keyed 1.5.0/code6 shipping APK; shipping-APK hash/config scan still required"
+          java -version 2>&1 | head -2
+          ./gradlew --version 2>/dev/null | sed -n '1,12p'
+      - name: Build APK (no signing setup; release falls back to in-repo debug key, R8 still applied)
+        run: |
+          set -euo pipefail
+          if [ "$EFFECTIVE_VARIANT" = release ]; then
+            ./gradlew --no-daemon assembleStableRelease
+          else
+            ./gradlew --no-daemon assembleStableDebug
+          fi
+      - name: Resolve exactly one APK output (refuse zero or multiple)
+        run: |
+          set -euo pipefail
+          mapfile -t APKS < <(find build/outputs/apk/stable/$EFFECTIVE_VARIANT -name '*.apk' | sort)
+          [ "${#APKS[@]}" -eq 1 ] || { echo "::error::expected exactly 1 $EFFECTIVE_VARIANT APK, found ${#APKS[@]}: ${APKS[*]}"; exit 1; }
+          echo "apk=${APKS[0]}" >> "$GITHUB_ENV"
+          sha256sum "${APKS[0]}"
+      - name: Install scanner dependency (pinned; failure fails closed)
+        run: python3 -m pip install --quiet --break-system-packages androguard==4.1.4 && python3 -c 'import androguard; print("androguard", androguard.__version__)'
+      - name: DEX const-string scan (fail closed)
+        run: python3 tools/dex_wbdbg_scan.py --apk "$apk" --mode "$EFFECTIVE_MODE" --policy tools/dex_marker_policy.txt
