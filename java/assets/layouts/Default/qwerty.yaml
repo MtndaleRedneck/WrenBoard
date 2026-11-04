@@ -1,8 +1,9 @@
 name: QWERTY
-# WrenBoard 1.4 SwiftKey parity (item 4): shift/backspace capped at ~134px at 1080px wide;
-# the leftover becomes the inner gaps between shift/Z and M/backspace (SwiftKey: 28px incl. key gap).
+# SwiftKey parity (spec v1.1 item 20): shift/backspace keys are 0.1241 x keyboard width (47.6 dp at 384 dp,
+# 134 px on the S22 Ultra); the layout cell adds the key gap, so the cell is 0.1296. The leftover becomes the
+# inner gaps between shift/Z and M/backspace.
 overrideWidths:
-  FunctionalKey: 0.1315
+  FunctionalKey: 0.1296
 rows:
   - letters: q w e r t y u i o p
   - letters: a s d f g h j k l

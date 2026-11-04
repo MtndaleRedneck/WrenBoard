@@ -34,6 +34,11 @@ import org.futo.inputmethod.latin.uix.setSettingBlocking
 import org.futo.inputmethod.latin.utils.ResourceUtils
 import kotlin.math.roundToInt
 
+/** SwiftKey parity (spec v1.1): letter-row pitch = 52.6 dp key + 2.5 dp gap. */
+const val LetterRowPitchDp: Float = 55.1f
+/** SwiftKey parity (spec v1.1 item 18): bottom padding under the arrow row, before the nav bar. */
+const val WrenBottomPaddingDp: Float = 2.6f
+
 val OldKeyboardHeightMultiplierSetting = SettingsKey(floatPreferencesKey("keyboardHeightMultiplier"), 1.0f)
 val OldKeyboardBottomOffsetSetting = SettingsKey(floatPreferencesKey("keyboardOffset"), 0.0f)
 
@@ -232,7 +237,9 @@ fun getDefaultSettingForKind(kind: KeyboardSizeSettingKind, context: Context): S
             heightMultiplier = 1.0f * oldHeightMultiplier * portraitDeviceSizeHeightMultiplier,
             // WrenBoard 1.4 SwiftKey parity (item 2): no base side padding - the leftover-to-gap split puts
             // outer keys exactly 3px from the screen edge at 1080px, matching SwiftKey's margins and 108px pitch.
-            paddingDp = DpRect(extraSidePadding, 4.dp, extraSidePadding, 10.dp + oldBottomOffset),
+            // SwiftKey parity (spec v1.1 item 18): 4.6 dp from the arrow-row outline to the nav bar; the
+            // last row's own gap and key chrome already supply about 2 dp of it.
+            paddingDp = DpRect(extraSidePadding, 4.dp, extraSidePadding, WrenBottomPaddingDp.dp + oldBottomOffset),
             splitPaddingDp = DpRect(2.dp, 4.dp, 2.dp, 10.dp + oldBottomOffset),
             splitWidthFraction = portraitSplitWidthFraction,
             oneHandedDirection = OneHandedDirection.Right,
@@ -464,8 +471,18 @@ class KeyboardSizingCalculator(val context: Context, val uixManager: UixManager)
             KeyboardMode.Floating -> dp(Rect(8,8,8,8))
         }
 
-        val singularRowHeight = ((ResourceUtils.getDefaultKeyboardHeight(context.resources) + heightAddition - padding.bottom) / 4.0) *
-                savedSettings.heightMultiplier.guardNaN(1.0f)
+        // WrenBoard SwiftKey parity (approved item 2, pixel spec v1.1 items 12-15): in portrait the rows are
+        // fixed in dp like SwiftKey on Ezzy's S22 Ultra, not a share of the screen height. The letter-row pitch
+        // is a 52.6 dp key plus the 2.5 dp outline-to-outline gap; number row and arrow row are fractions of it
+        // (NumberRowHeight, ArrowRowHeight). The user's height setting still scales everything.
+        val isPortraitPhone = sizeStateProvider.currentSizeState == KeyboardSizeSettingKind.Portrait
+        val singularRowHeight = if(isPortraitPhone) {
+            (displayMetrics.density * LetterRowPitchDp + heightAddition / 4.0) *
+                    savedSettings.heightMultiplier.guardNaN(1.0f)
+        } else {
+            ((ResourceUtils.getDefaultKeyboardHeight(context.resources) + heightAddition - padding.bottom) / 4.0) *
+                    savedSettings.heightMultiplier.guardNaN(1.0f)
+        }
 
         val numRows = 4.0 +
                 ((effectiveRowCount - 5) / 2.0).coerceAtLeast(0.0) +
@@ -480,13 +497,13 @@ class KeyboardSizingCalculator(val context: Context, val uixManager: UixManager)
                         effectiveRows.first { it.isNumberRow }.rowHeight.guardNaN(0.5).coerceAtLeast(0.0)
 
                     // WrenBoard 1.4 SwiftKey parity (item 2): budget the number row's real height so letter
-                    // rows grow to SwiftKey's 149px instead of compressing to fit.
-                    settings.mIsNumberRowEnabled -> 0.85
+                    // rows keep their full height instead of compressing to fit.
+                    settings.mIsNumberRowEnabled -> NumberRowHeight
 
                     else -> 0.0
                 } +
                 when { // Arrow row height
-                    settings.mIsArrowRowEnabled -> 0.75
+                    settings.mIsArrowRowEnabled -> ArrowRowHeight
                     else -> 0.0
                 }
 
