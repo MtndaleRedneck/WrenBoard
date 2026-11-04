@@ -33,11 +33,38 @@ val WrenAboutMenu = UserSettingsMenu(
         userSettingDecorationOnly {
             LocalNavController.current?.let { UpdatesCard(it) }
         },
-        // (FUTO's "Check for updates manually" row stays on the FUTO page; the card above has "Check now".)
+        userSettingDecorationOnly {
+            Text("Modified version of FUTO Keyboard", style = Typography.Body.RegularMl,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp))
+        },
+        userSettingNavigationItem(
+            title = R.string.help_menu_title,
+            style = NavigationItemStyle.MiscNoArrow,
+            navigateTo = "help",
+        ),
+        userSettingNavigationItem(
+            title = R.string.wren_futo_license,
+            style = NavigationItemStyle.MiscNoArrow,
+            navigateTo = "wren_license",
+        ),
         userSettingNavigationItem(
             title = R.string.credits_menu_title,
             style = NavigationItemStyle.MiscNoArrow,
             navigateTo = "credits",
         ),
     )
+)
+
+/** Exact bundled repository license text, not a summary or a legal interpretation. */
+val WrenLicenseMenu = UserSettingsMenu(
+    title = R.string.wren_futo_license,
+    navPath = "wren_license", registerNavPath = true,
+    settings = listOf(userSettingDecorationOnly {
+        val context = androidx.compose.ui.platform.LocalContext.current
+        val license = androidx.compose.runtime.remember {
+            context.assets.open("wrenboard-futo-license.txt").bufferedReader().use { it.readText() }
+        }
+        Text(license, style = Typography.Body.RegularMl,
+            modifier = Modifier.fillMaxWidth().padding(16.dp))
+    })
 )
