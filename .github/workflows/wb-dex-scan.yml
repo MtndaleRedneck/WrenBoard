@@ -36,8 +36,8 @@ jobs:
       VERSION_NAME: 1.4.0-dexscan
       VERSION_CODE: "5"
       # push events leave workflow_dispatch inputs empty; resolve effective values once
-      EFFECTIVE_VARIANT: ${{ inputs.variant || 'debug' }}
-      EFFECTIVE_MODE: ${{ inputs.mode || 'control' }}
+      EFFECTIVE_VARIANT: ${{ inputs.variant || 'release' }}
+      EFFECTIVE_MODE: ${{ inputs.mode || 'final' }}
     steps:
       - uses: actions/checkout@v4
       - name: Init build submodules (same set as build.yml)
