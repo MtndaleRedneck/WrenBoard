@@ -79,15 +79,34 @@ adb shell input tap 484 1492; sleep 1.0
 F1=$(field_now); note "host field after GIF-search typing: [$F1]"
 [ "$F1" = "hostok" ] || fail "host text changed while typing in GIF search (hostok -> $F1)"
 shot 08_query_typed
-note "waiting for GIF results (screen-change detection; screen is static until results render)"
-BASE=$(adb exec-out screencap -p | md5sum | cut -d' ' -f1)
-LOADED=0
+note "submitting the search via the round arrow (1012,1105; measured on the 07/08 captures of"
+note "run 41842190012 at this exact config - the arrow submits the query and dismisses the"
+note "search keyboard; typing alone does not populate the grid in this build)"
+adb shell input tap 1012 1105; sleep 1
+shot 08b_submitted
+# Render pacing below uses screen-change polling ONLY to decide when to capture.
+# It PROVES NOTHING: the search-field cursor blink can produce one or more changes
+# in any panel state. The grid verdict comes from the actual pixels of 08c/09
+# (reviewed after the run) and from the fixture-side assertions, which fail closed
+# if no real cell is tapped.
+note "post-submit pacing: up to 20s for the search keyboard to dismiss"
+PREV=$(adb exec-out screencap -p | md5sum | cut -d' ' -f1)
+for i in $(seq 1 10); do
+  sleep 2
+  NOW=$(adb exec-out screencap -p | md5sum | cut -d' ' -f1)
+  [ "$NOW" != "$PREV" ] && break
+done
+shot 08c_after_dismiss
+note "post-dismiss pacing: up to 30s for a render change, then settle"
+PREV=$(adb exec-out screencap -p | md5sum | cut -d' ' -f1)
+RENDERED=0
 for i in $(seq 1 15); do
   sleep 2
   NOW=$(adb exec-out screencap -p | md5sum | cut -d' ' -f1)
-  if [ "$NOW" != "$BASE" ]; then sleep 2; LOADED=1; break; fi
+  if [ "$NOW" != "$PREV" ]; then RENDERED=1; break; fi
 done
-[ "$LOADED" = 1 ] || fail "no screen change indicating GIF results within ~32s"
+[ "$RENDERED" = 1 ] || note "no render change detected within 30s; proceeding to capture anyway (assertions decide)"
+sleep 2
 shot 09_results
 note "tapping first result cell (274,1251; 156px into the grid, inside cell 0 for any cell height)"
 adb shell input tap 274 1251; sleep 3
