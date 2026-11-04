@@ -35,6 +35,9 @@ jobs:
     env:
       VERSION_NAME: 1.4.0-dexscan
       VERSION_CODE: "5"
+      # push events leave workflow_dispatch inputs empty; resolve effective values once
+      EFFECTIVE_VARIANT: ${{ inputs.variant || 'debug' }}
+      EFFECTIVE_MODE: ${{ inputs.mode || 'control' }}
     steps:
       - uses: actions/checkout@v4
       - name: Init build submodules (same set as build.yml)
@@ -54,14 +57,14 @@ jobs:
           echo "commit=$(git rev-parse HEAD)"
           dirty=$(git status --porcelain)
           [ -z "$dirty" ] || { echo "::error::working tree dirty"; echo "$dirty"; exit 1; }
-          echo "variant=${{ inputs.variant }} mode=${{ inputs.mode }}"
+          echo "variant=$EFFECTIVE_VARIANT mode=$EFFECTIVE_MODE (inputs.variant=${{ inputs.variant }} inputs.mode=${{ inputs.mode }})"
           echo "LABEL: PREPARATORY optimized candidate proof only - not the final keyed 1.5.0/code6 shipping APK; shipping-APK hash/config scan still required"
           java -version 2>&1 | head -2
           ./gradlew --version 2>/dev/null | sed -n '1,12p'
       - name: Build APK (no signing setup; release falls back to in-repo debug key, R8 still applied)
         run: |
           set -euo pipefail
-          if [ "${{ inputs.variant }}" = release ]; then
+          if [ "$EFFECTIVE_VARIANT" = release ]; then
             ./gradlew --no-daemon assembleStableRelease
           else
             ./gradlew --no-daemon assembleStableDebug
@@ -69,11 +72,11 @@ jobs:
       - name: Resolve exactly one APK output (refuse zero or multiple)
         run: |
           set -euo pipefail
-          mapfile -t APKS < <(find build/outputs/apk/stable/${{ inputs.variant }} -name '*.apk' | sort)
-          [ "${#APKS[@]}" -eq 1 ] || { echo "::error::expected exactly 1 ${{ inputs.variant }} APK, found ${#APKS[@]}: ${APKS[*]}"; exit 1; }
+          mapfile -t APKS < <(find build/outputs/apk/stable/$EFFECTIVE_VARIANT -name '*.apk' | sort)
+          [ "${#APKS[@]}" -eq 1 ] || { echo "::error::expected exactly 1 $EFFECTIVE_VARIANT APK, found ${#APKS[@]}: ${APKS[*]}"; exit 1; }
           echo "apk=${APKS[0]}" >> "$GITHUB_ENV"
           sha256sum "${APKS[0]}"
       - name: Install scanner dependency (pinned; failure fails closed)
         run: python3 -m pip install --quiet --break-system-packages androguard==4.1.4 && python3 -c 'import androguard; print("androguard", androguard.__version__)'
       - name: DEX const-string scan (fail closed)
-        run: python3 tools/dex_wbdbg_scan.py --apk "$apk" --mode "${{ inputs.mode }}" --policy tools/dex_marker_policy.txt
+        run: python3 tools/dex_wbdbg_scan.py --apk "$apk" --mode "$EFFECTIVE_MODE" --policy tools/dex_marker_policy.txt
