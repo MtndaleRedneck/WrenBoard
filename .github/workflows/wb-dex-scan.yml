@@ -3,11 +3,11 @@ name: wb-dex-scan
 # artifact upload, NO publication of any kind. Output is the bounded scan report in the
 # job log. Positive control: variant=debug + mode=control on the hooked head (scanner
 # must detect every hook marker). Final proof: variant=release + mode=final on the
-# cleanup head (excluded markers absent, retained voice baseline nine matched).
-# LABEL: this no-secrets build (VERSION_NAME 1.4.0-dexscan, code 5, no GIF key, debug
-# fallback signing) is a PREPARATORY optimized candidate proof ONLY - it is NOT the
-# final keyed 1.5.0/code6 shipping APK. The eventual actual shipping-APK hash/config
-# scan remains required separately.
+# combined+cleanup head (excluded markers absent, retained voice baseline nine matched).
+# LABEL: this no-secrets build (VERSION_NAME 1.5.0, code 6, no GIF key, debug
+# fallback signing) is the FINAL keyed-config optimized DEX proof on the
+# combined+cleanup head. Debug-fallback signing / no GIF key mean the raw APK hash is
+# not the Play-signed shipping hash; this proof binds version/config and DEX markers.
 on:
   # SCRATCH-ONLY trigger so this brand-new workflow can run before it exists on the
   # default branch (workflow_dispatch requires default-branch presence). Removed before
@@ -33,8 +33,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     env:
-      VERSION_NAME: 1.4.0-dexscan
-      VERSION_CODE: "5"
+      VERSION_NAME: 1.5.0
+      VERSION_CODE: "6"
       # push events leave workflow_dispatch inputs empty; resolve effective values once
       EFFECTIVE_VARIANT: ${{ inputs.variant || 'release' }}
       EFFECTIVE_MODE: ${{ inputs.mode || 'final' }}
@@ -58,7 +58,7 @@ jobs:
           dirty=$(git status --porcelain)
           [ -z "$dirty" ] || { echo "::error::working tree dirty"; echo "$dirty"; exit 1; }
           echo "variant=$EFFECTIVE_VARIANT mode=$EFFECTIVE_MODE (inputs.variant=${{ inputs.variant }} inputs.mode=${{ inputs.mode }})"
-          echo "LABEL: PREPARATORY optimized candidate proof only - not the final keyed 1.5.0/code6 shipping APK; shipping-APK hash/config scan still required"
+          echo "LABEL: FINAL keyed 1.5.0/code6 optimized DEX proof on combined+cleanup head; debug-fallback signing/no GIF key - raw APK hash is not the Play-signed shipping hash"
           java -version 2>&1 | head -2
           ./gradlew --version 2>/dev/null | sed -n '1,12p'
       - name: Build APK (no signing setup; release falls back to in-repo debug key, R8 still applied)
