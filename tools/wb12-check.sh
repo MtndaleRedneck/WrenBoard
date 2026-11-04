@@ -1868,7 +1868,10 @@ if leg settings; then
   # a completed check with nothing newer shows an "Up-to-date" card instead; dismiss it too, otherwise
   # the pre-scroll home dump catches only the card and the first swipe scrolls the top rows out of view
   if uitext st00 | grep -q "Up-to-date"; then XY=$(node_center st00 "Dismiss"); [ -n "$XY" ] && { adb shell input tap $XY; sleep 2; note "  dismissed the up-to-date card"; }; dumpui st00; fi
-  uitext st00 | grep -q "Personal dictionary" && fail "Settings opened on the Personal dictionary page"
+  # match the page title node only: the home Dictionary row's subtitle
+  # ("Personal dictionary, word blacklist, use for voice") contains the same words
+  # (same pattern as the setup leg's s01 check above)
+  grep -q 'text="Personal dictionary"' shots/st00.xml && fail "Settings opened on the Personal dictionary page"
   shot st01_settings_home; dumpui st01; T=$(uitext st01)
   # scroll-until-visible: a loaded emulator can swallow a single fling (run 41600879995 lost the
   # lower groups); keep scrolling until FUTO is in view, max 4 tries. Final check below stays strict.
@@ -1960,6 +1963,17 @@ if leg settingspreview; then
   ensure_ime
   adb shell input keyevent KEYCODE_HOME; sleep 1
   opensettings "" 5
+  # Home readback precondition: opensettings uses CLEAR_TOP, which reuses the Settings
+  # activity, so the in-app nav back stack survives - after the settings leg's dictionary
+  # drill-in an empty-dest open lands on Personal dictionary (sp01/sp02 misrouted in
+  # combined runs 41779405941, 41781634835, 41783371396). Back out until the home title
+  # node is present, bounded; never capture a mislabeled home.
+  for i in 1 2 3 4; do
+    dumpui sp_home_readback
+    grep -q 'text="WrenBoard Settings"' shots/sp_home_readback.xml && break
+    adb shell input keyevent KEYCODE_BACK; sleep 1
+  done
+  grep -q 'text="WrenBoard Settings"' shots/sp_home_readback.xml || fail "settingspreview could not navigate back to the Settings home"
   shot sp01_home_top
   adb shell input swipe 540 1800 540 600 400; sleep 1.2; shot sp02_home_bottom
   for d in languages wren_appearance wren_layout wren_typing wren_swipe wren_dict wren_soundfeel wren_voice wren_clipemoji wren_backup about wren_license wren_advanced payment; do
