@@ -31,6 +31,7 @@ import org.futo.inputmethod.latin.settings.SettingsValuesForSuggestion;
 import org.futo.inputmethod.latin.utils.AutoCorrectionUtils;
 import org.futo.inputmethod.latin.utils.BinaryDictionaryUtils;
 import org.futo.inputmethod.latin.utils.SuggestionResults;
+import org.futo.inputmethod.latin.utils.TranspositionCorrection;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -164,6 +165,19 @@ public final class Suggest {
             final Locale locale, final SuggestionResults suggestionResults,
             final float autoCorrectionThreshold, final boolean numberRowActive
     ) {
+        return obtainNonBatchedInputSuggestedWords(wordComposer, inputStyleIfNotPrediction,
+                isCorrectionEnabled, sequenceNumber, locale, suggestionResults,
+                autoCorrectionThreshold, numberRowActive, null);
+    }
+
+    /** WrenBoard: as above; a non-null [dictionaryFacilitator] also enables transposition auto-correct (item 2). */
+    public static SuggestedWords obtainNonBatchedInputSuggestedWords(
+            final WordComposer wordComposer, final int inputStyleIfNotPrediction,
+            final boolean isCorrectionEnabled, final int sequenceNumber,
+            final Locale locale, final SuggestionResults suggestionResults,
+            final float autoCorrectionThreshold, final boolean numberRowActive,
+            final DictionaryFacilitator dictionaryFacilitator
+    ) {
         final String typedWordString = wordComposer.getTypedWord();
         final int trailingSingleQuotesCount =
                 StringUtils.getTrailingSingleQuotesCount(typedWordString);
@@ -203,7 +217,7 @@ public final class Suggest {
                 (SHOULD_AUTO_CORRECT_USING_NON_WHITE_LISTED_SUGGESTION || whitelistedWord != null)
                 || (consideredWord.length() > 1 && (sourceDictionaryOfRemovedWord == null));
 
-        final boolean hasAutoCorrection;
+        boolean hasAutoCorrection;
         // If correction is not enabled, we never auto-correct. This is for example for when
         // the setting "Auto-correction" is "off": we still suggest, but we don't auto-correct.
         if (!isCorrectionEnabled
@@ -268,6 +282,49 @@ public final class Suggest {
                 // is determined, see #isAllowedByAutoCorrectionWithSpaceFilter.
                 // TODO: this should not have its own logic here but be handled by the dictionary.
                 hasAutoCorrection = isAllowedByAutoCorrectionWithSpaceFilter(firstSuggestion);
+            }
+        }
+
+        // WrenBoard (owner-approved item 2): adjacent-transposition typos (brwon, jumsp, thsi, tset)
+        // score as two edits and miss the threshold above. When the typed word is not a real word and
+        // one neighbouring-letter swap makes a real word, auto-correct to it. Same guards as above.
+        if (!hasAutoCorrection && dictionaryFacilitator != null && isCorrectionEnabled
+                && !resultsArePredictions
+                && !wordComposer.hasDashes()
+                && !wordComposer.hasDigits()
+                && !wordComposer.isMostlyCaps()
+                && !wordComposer.isResumed()
+                && !wordComposer.isAttachedToNonWord()
+                && wordComposer.getRejectedBatchModeSuggestion() == null
+                && trailingSingleQuotesCount == 0
+                && !StringUtils.lastPartLooksLikeURL(typedWordString)) {
+            final ArrayList<String> ranked = new ArrayList<>();
+            for (final SuggestedWordInfo info : suggestionsContainer) ranked.add(info.mWord);
+            final String fix = TranspositionCorrection.pick(consideredWord, ranked,
+                    new TranspositionCorrection.WordCheck() {
+                        @Override public boolean isKnown(@Nonnull final String word) {
+                            return dictionaryFacilitator.isKnownCorrectionWord(word);
+                        }
+                        @Override public int frequency(@Nonnull final String word) {
+                            return dictionaryFacilitator.getMainDictionaryFrequency(word);
+                        }
+                    });
+            if (fix != null) {
+                SuggestedWordInfo fixInfo = null;
+                for (int i = 0; i < suggestionsContainer.size(); i++) {
+                    if (suggestionsContainer.get(i).mWord.equals(fix)) {
+                        fixInfo = suggestionsContainer.remove(i);
+                        break;
+                    }
+                }
+                if (fixInfo == null) {
+                    fixInfo = new SuggestedWordInfo(fix, "" /* prevWordsContext */,
+                            SuggestedWordInfo.MAX_SCORE, SuggestedWordInfo.KIND_CORRECTION,
+                            Dictionary.DICTIONARY_USER_TYPED,
+                            SuggestedWordInfo.NOT_AN_INDEX, SuggestedWordInfo.NOT_A_CONFIDENCE);
+                }
+                suggestionsContainer.add(0, fixInfo);
+                hasAutoCorrection = true;
             }
         }
 
@@ -336,7 +393,7 @@ public final class Suggest {
         callback.onGetSuggestedWords(
             obtainNonBatchedInputSuggestedWords(wordComposer, inputStyleIfNotPrediction,
                 isCorrectionEnabled, sequenceNumber, locale, suggestionResults, mAutoCorrectionThreshold,
-                    keyboard.mId.mNumberRow)
+                    keyboard.mId.mNumberRow, mDictionaryFacilitator)
         );
     }
 

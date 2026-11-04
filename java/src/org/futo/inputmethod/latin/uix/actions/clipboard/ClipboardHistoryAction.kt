@@ -127,9 +127,11 @@ import java.io.File
 import java.security.MessageDigest
 import kotlin.math.roundToInt
 
+// WrenBoard (owner-approved item 4): history is on by default, like SwiftKey's clipboard.
+// Password copies are still skipped (see WrenClipPolicy).
 val ClipboardHistoryEnabled = SettingsKey(
     booleanPreferencesKey("enableClipboardHistory"),
-    false
+    true
 )
 
 val ClipboardHistoryItemsToKeep = SettingsKey(
@@ -623,6 +625,16 @@ class ClipboardHistoryManager(val context: Context, val coroutineScope: Lifecycl
                 ) == true
 
                 if(isSensitive && !canSaveSensitive) return
+                // WrenBoard item 4: never keep a copy made from a password field or labelled as a password.
+                val inPasswordField = try {
+                    org.futo.inputmethod.latin.settings.Settings.getInstance().current?.mInputAttributes?.mIsPasswordField == true
+                } catch(_: Exception) { false }
+                if(!WrenClipPolicy.shouldKeep(
+                        isSensitive = isSensitive,
+                        canSaveSensitive = canSaveSensitive,
+                        copiedInPasswordField = inPasswordField,
+                        clipLabel = clip?.description?.label?.toString()
+                    )) return
 
                 if(text != null) {
                     val isAlreadyPinned = clipboardHistory.firstOrNull {

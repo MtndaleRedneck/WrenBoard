@@ -959,6 +959,29 @@ public class DictionaryFacilitatorImpl implements DictionaryFacilitator {
         return isValidWord(word, ALL_DICTIONARY_TYPES);
     }
 
+    private static final String[] CORRECTION_DICTIONARY_TYPES = new String[] {
+            Dictionary.TYPE_MAIN,
+            Dictionary.TYPE_USER
+    };
+
+    @Override
+    public boolean isKnownCorrectionWord(final String word) {
+        return isValidWord(word, CORRECTION_DICTIONARY_TYPES);
+    }
+
+    @Override
+    public int getMainDictionaryFrequency(final String word) {
+        if (TextUtils.isEmpty(word)) return Dictionary.NOT_A_PROBABILITY;
+        int maxFreq = Dictionary.NOT_A_PROBABILITY;
+        for (DictionaryGroup dictionaryGroup : mDictionaryGroups) {
+            if (dictionaryGroup.mLocale == null) continue;
+            final Dictionary dictionary = dictionaryGroup.getDict(Dictionary.TYPE_MAIN);
+            if (dictionary == null) continue;
+            maxFreq = Math.max(maxFreq, dictionary.getFrequency(word));
+        }
+        return maxFreq;
+    }
+
     private boolean isValidWord(final String word, final String[] dictionariesToCheck) {
         if (TextUtils.isEmpty(word)) {
             return false;
