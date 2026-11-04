@@ -32,9 +32,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
+      # Checkout the triggering ref: the scratch branch head is the composition
+      # head (4094f96e1) plus only these two test files, and the binary under
+      # test is the downloaded hash-bound artifact, not anything built here.
       - uses: actions/checkout@v4
-        with:
-          ref: wrenboard-1.5-final-composition
       - name: Download the exact accepted signed artifact (no rebuild)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
