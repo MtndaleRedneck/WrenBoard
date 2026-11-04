@@ -4,6 +4,8 @@ import android.content.Context
 import android.media.AudioManager
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -122,7 +124,10 @@ import org.futo.inputmethod.latin.uix.settings.Tip
 import org.futo.inputmethod.latin.uix.settings.UserSetting
 import org.futo.inputmethod.latin.uix.settings.UserSettingsMenu
 import org.futo.inputmethod.latin.uix.settings.render
+import org.futo.inputmethod.latin.uix.settings.WrenSettingsColors
+import org.futo.inputmethod.latin.uix.settings.WrenSettingsStyle
 import org.futo.inputmethod.latin.uix.settings.useDataStore
+import org.futo.inputmethod.latin.uix.settings.useDataStoreValue
 import org.futo.inputmethod.latin.uix.settings.useSharedPrefsBool
 import org.futo.inputmethod.latin.uix.settings.useSharedPrefsInt
 import org.futo.inputmethod.latin.uix.settings.userSettingDecorationOnly
@@ -312,6 +317,8 @@ private fun DraggableSettingItem(idx: Int, item: LongPressKey, moveItem: (LongPr
         }
     }
 
+    val wrenStyle = useDataStoreValue(WrenSettingsStyle)
+
     val dragging = remember { mutableStateOf(false) }
     val offset = remember { mutableFloatStateOf(0.0f) }
     val height = remember { mutableIntStateOf(1) }
@@ -384,7 +391,9 @@ private fun DraggableSettingItem(idx: Int, item: LongPressKey, moveItem: (LongPr
             .onSizeChanged { size -> height.intValue = size.height }
             .let { modifier ->
                 if (!dragging.value) {
-                    modifier
+                    // WrenBoard 1.5 (Tab review): uniform card color in the Wren style; the
+                    // alternating orange tint belongs to the plain FUTO style.
+                    if (wrenStyle) modifier else modifier
                         .background(LocalKeyboardScheme.current.surfaceTint.copy(alpha = if(idx % 2 == 0) 0.02f else 0.06f))
                 } else {
                     modifier
@@ -415,10 +424,21 @@ private fun DraggableSettingItem(idx: Int, item: LongPressKey, moveItem: (LongPr
 @Composable
 private fun LongPressKeyLayoutEditor(context: Context, setting: DataStoreItem<String>) {
     val resources = LocalResources.current
+    // WrenBoard 1.5 (Tab review): in the Wren style the list header matches the page's orange
+    // section labels with Reset at the right; the plain FUTO style keeps the heading.
+    val wrenStyle = useDataStoreValue(WrenSettingsStyle)
+
     Row(Modifier.padding(16.dp)) {
-        Text(stringResource(R.string.morekey_settings_layout), style = Typography.Heading.Medium, modifier = Modifier
-            .align(CenterVertically)
-            .weight(1.0f))
+        if (wrenStyle) {
+            Text(stringResource(R.string.morekey_settings_layout), color = WrenSettingsColors.Orange,
+                fontSize = 12.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp, modifier = Modifier
+                .align(CenterVertically)
+                .weight(1.0f))
+        } else {
+            Text(stringResource(R.string.morekey_settings_layout), style = Typography.Heading.Medium, modifier = Modifier
+                .align(CenterVertically)
+                .weight(1.0f))
+        }
 
         Spacer(Modifier.width(4.dp))
 
@@ -492,6 +512,10 @@ private fun LongPressKeyLayoutEditor(context: Context, setting: DataStoreItem<St
                         limits = items.indices
                     )
                 }
+                // WrenBoard 1.5 (Tab review): thin home-like dividers between the uniform rows.
+                if (wrenStyle && i < items.size - 1) {
+                    Box(Modifier.padding(start = 72.dp).fillMaxWidth().height(0.8.dp).background(WrenSettingsColors.Divider))
+                }
             }
         }
     }
@@ -510,7 +534,7 @@ private fun LongPressKeyLayoutEditor(context: Context, setting: DataStoreItem<St
             )
             contentDescription = resources.getString(R.string.morekey_settings_inactive)
         }) {
-            inactiveEntries.forEach {
+            inactiveEntries.forEachIndexed { i, it ->
                 SettingItem(
                     title = it.name(resources),
                     subtitle = it.description(resources),
@@ -529,6 +553,9 @@ private fun LongPressKeyLayoutEditor(context: Context, setting: DataStoreItem<St
                             contentDescription = stringResource(R.string.morekey_settings_reactivate)
                         )
                     }
+                }
+                if (wrenStyle && i < inactiveEntries.size - 1) {
+                    Box(Modifier.padding(start = 72.dp).fillMaxWidth().height(0.8.dp).background(WrenSettingsColors.Divider))
                 }
             }
         }
