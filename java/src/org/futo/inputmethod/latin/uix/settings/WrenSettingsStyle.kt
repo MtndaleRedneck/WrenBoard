@@ -17,6 +17,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -53,6 +54,13 @@ object WrenSettingsColors {
     val ChipDarkBottom = Color(0xFF232328)
 }
 
+// WrenBoard 1.5 (Tab review): pages whose rows never carry an icon (Sound & feel) collapse the
+// empty icon gutter; their titles start at the card padding like plain rows.
+val LocalWrenNoIconColumn = compositionLocalOf { false }
+
+// navPaths of the iconless pages.
+val WrenIconlessMenuPaths = setOf("wren_soundfeel")
+
 private val wrenSettingsScheme: KeyboardColorScheme by lazy {
     val c = WrenSettingsColors
     val s = extendedDarkColorScheme(
@@ -73,7 +81,10 @@ private val wrenSettingsScheme: KeyboardColorScheme by lazy {
         primaryTransparent = c.Orange.copy(alpha = 0.3f),
         onSurfaceTransparent = c.Title.copy(alpha = 0.1f),
     )
+    // WrenBoard 1.5 (Tab review): the FAB-clearance strip and gesture area below the page brush
+    // showed the default scheme background as a lighter band; match it to the brush's bottom.
     s.copy(base = s.base.copy(
+        background = c.PageBottom,
         surfaceVariant = c.CardBottom,
         surfaceContainerLowest = c.PageBottom,
         surfaceContainerLow = c.PageTop,

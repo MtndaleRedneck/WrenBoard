@@ -46,7 +46,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -255,21 +257,27 @@ fun SettingItem(
         verticalAlignment = Alignment.CenterVertically
     ) {
         Row(Modifier.weight(1.0f).fillMaxHeight().padding(0.dp, 4.dp)) {
-            Spacer(Modifier.width(4.dp))
-            Spacer(Modifier.width(16.dp))
-            Column(
-                modifier = Modifier
-                    .width(48.dp)
-                    .align(Alignment.CenterVertically)
-            ) {
-                Box(modifier = Modifier.align(Alignment.CenterHorizontally)) {
-                    if (icon != null) {
-                        icon()
+            // WrenBoard 1.5 (Tab review): on iconless Wren pages the empty 48dp gutter collapses
+            // and titles start at the card padding; every other page keeps the upstream column.
+            if (icon == null && LocalWrenNoIconColumn.current) {
+                Spacer(Modifier.width(16.dp))
+            } else {
+                Spacer(Modifier.width(4.dp))
+                Spacer(Modifier.width(16.dp))
+                Column(
+                    modifier = Modifier
+                        .width(48.dp)
+                        .align(Alignment.CenterVertically)
+                ) {
+                    Box(modifier = Modifier.align(Alignment.CenterHorizontally)) {
+                        if (icon != null) {
+                            icon()
+                        }
                     }
                 }
-            }
 
-            Spacer(Modifier.width(12.dp))
+                Spacer(Modifier.width(12.dp))
+            }
 
             Row(
                 modifier = Modifier
@@ -306,10 +314,14 @@ fun SettingItem(
         }
 
         if(onSubmenuNavigate != null) {
-            VerticalDivider(
-                Modifier.height(64.dp),
-                color = MaterialTheme.colorScheme.outline
-            )
+            // WrenBoard 1.5 (Tab review): the stray divider left of the toggle (Number Row) is
+            // plain-FUTO chrome; the Wren style drops it.
+            if (!useDataStoreValue(WrenSettingsStyle)) {
+                VerticalDivider(
+                    Modifier.height(64.dp),
+                    color = MaterialTheme.colorScheme.outline
+                )
+            }
         } else {
             Spacer(Modifier.width(4.dp))
         }
@@ -505,30 +517,88 @@ fun<T: Number> SettingSliderForDataStoreItem(
         if(isTextFieldVisible) focusRequester.requestFocus()
     }
 
+    val wrenStyle = useDataStoreValue(WrenSettingsStyle)
+
+    val apply = {
+        if(isTextFieldVisible) {
+            val number = textFieldValue.text.trim().toFloatOrNull()
+            val newValue = if (number != null) {
+                transform(number.coerceIn(hardRange))
+            } else {
+                default
+            }
+
+            setValue(newValue)
+            virtualValue = newValue.toFloat().pow(1.0f / power)
+
+            isTextFieldVisible = false
+            textFieldValue = TextFieldValue()
+        }
+    }
+
     Column {
+        if (wrenStyle) {
+            // WrenBoard 1.5 (Tab review): normal row title with the value as a subtext (still
+            // tap-to-edit), then a full-width orange track with a round thumb on the track.
+            Column(Modifier.padding(16.dp, 4.dp)) {
+                Text(title, style = Typography.Heading.RegularMl, color = MaterialTheme.colorScheme.onSurface)
+                if (isTextFieldVisible) {
+                    BasicTextField(
+                        value = textFieldValue,
+                        onValueChange = { textFieldValue = it },
+                        modifier = Modifier
+                            .focusRequester(focusRequester)
+                            .onFocusChanged {
+                                if (it.isFocused) hasTextFieldFocusedYet = true
+                                else if (!it.isFocused && hasTextFieldFocusedYet) apply()
+                            },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        keyboardActions = KeyboardActions(
+                            onDone = {
+                                apply()
+                            }
+                        ),
+                        singleLine = true,
+                        textStyle = Typography.SmallMl.copy(color = MaterialTheme.colorScheme.onBackground),
+                        cursorBrush = SolidColor(MaterialTheme.colorScheme.primary)
+                    )
+                } else {
+                    Text(
+                        text = indicator(value),
+                        modifier = Modifier.clickable {
+                            hasTextFieldFocusedYet = false
+                            isTextFieldVisible = true
+                        },
+                        style = Typography.SmallMl,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+            Slider(
+                value = virtualValue,
+                onValueChange = {
+                    virtualValue = it
+                    setValue(transform(it.pow(power))) },
+                valueRange = range.start.pow(1.0f / power) .. range.endInclusive.pow(1.0f / power),
+                enabled = !isTextFieldVisible,
+                modifier = Modifier.fillMaxWidth().padding(16.dp, 0.dp),
+                steps = steps,
+                colors = SliderDefaults.colors(
+                    thumbColor = WrenSettingsColors.Orange,
+                    activeTrackColor = WrenSettingsColors.Orange,
+                    inactiveTrackColor = WrenSettingsColors.Sub.copy(alpha = 0.3f)
+                ),
+                thumb = {
+                    Box(Modifier.size(20.dp).clip(CircleShape).background(WrenSettingsColors.Orange))
+                }
+            )
+        } else {
         ScreenTitle(title, showBack = false)
         if(subtitle != null) {
             Text(subtitle, style = Typography.Body.MediumMl, modifier = Modifier.padding(12.dp, 0.dp))
         }
         Row(modifier = Modifier.padding(16.dp, 0.dp)) {
             if (isTextFieldVisible) {
-                val apply = {
-                    if(isTextFieldVisible) {
-                        val number = textFieldValue.text.trim().toFloatOrNull()
-                        val newValue = if (number != null) {
-                            transform(number.coerceIn(hardRange))
-                        } else {
-                            default
-                        }
-
-                        setValue(newValue)
-                        virtualValue = newValue.toFloat().pow(1.0f / power)
-
-                        isTextFieldVisible = false
-                        textFieldValue = TextFieldValue()
-                    }
-                }
-
                 BasicTextField(
                     value = textFieldValue,
                     onValueChange = { textFieldValue = it },
@@ -573,6 +643,7 @@ fun<T: Number> SettingSliderForDataStoreItem(
                 modifier = Modifier.weight(1.0f),
                 steps = steps
             )
+        }
         }
     }
 }
@@ -714,7 +785,13 @@ fun NavigationItem(title: String, style: NavigationItemStyle, navigate: () -> Un
         }
     ) {
         when(style) {
-            NavigationItemStyle.Misc -> Icon(Icons.Default.ArrowForward, contentDescription = null)
+            // WrenBoard 1.5 (Tab review): same grey chevron as the home rows instead of the white arrow.
+            NavigationItemStyle.Misc -> if (useDataStoreValue(WrenSettingsStyle)) {
+                Icon(painterResource(R.drawable.wren_ic_chevron_right), contentDescription = null,
+                    tint = WrenSettingsColors.Chevron, modifier = Modifier.size(20.dp))
+            } else {
+                Icon(Icons.Default.ArrowForward, contentDescription = null)
+            }
             NavigationItemStyle.Mail -> Icon(Icons.Default.Send, contentDescription = null)
             NavigationItemStyle.ExternalLink -> Icon(painterResource(R.drawable.external_link), contentDescription = null)
             else -> {}
@@ -889,7 +966,8 @@ fun<T> DropDownPicker(
                 Text(
                     text = getDisplayName(selection),
                     style = Typography.Body.Regular,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    // WrenBoard 1.5 (Tab review): the selected value read as disabled grey; show it as normal text.
+                    color = if (useDataStoreValue(WrenSettingsStyle)) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.weight(1.0f)
                 )
             } else {
