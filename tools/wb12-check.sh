@@ -1665,6 +1665,27 @@ FIXTUREBLOCK
     { head -1 shots/swdiag_d3a-apptok-argv.txt | grep -q 'rc=0' && grep -q "word=$SWP" shots/swdiag_d3a-apptok-argv.txt; } && fa=1
     { head -1 shots/swdiag_d3b-apptok-rquoted.txt | grep -q 'rc=0' && grep -q "word=$SWP" shots/swdiag_d3b-apptok-rquoted.txt; } && fb=1
     note "stage1 argv-found=$fa remotequoted-found=$fb (diagnostic only; disagreement localizes shell quoting/parser, agreement is inconclusive and reported as such)"
+    # --- stage 2: caller-identity grounding, still strictly READ-ONLY (no root, no insert,
+    # no delete, no DB pull, no dumpsys). Stage 1 found the shell caller sees a completely
+    # EMPTY table through the same URI the app reads its row back from. This excludes a
+    # quoting-only explanation for the observed empty table; the actual cause is unresolved.
+    # The open question is caller/user identity. Runs immediately after the sw01 same-app requery
+    # above, so the contemporaneous same-app WBDBG SAVEWORD_RESULT marker in this same run is
+    # the current-provider comparison, not a stale prior marker.
+    probe d5-shell-id 'id'
+    probe d5-whoami 'whoami'
+    probe d5-curuser 'am get-current-user'
+    # actual running Wren process identity from /proc (read-only)
+    local wpid; wpid=$(adb shell pidof "$PKG" 2>/dev/null | tr -d '\r' | tr ' ' '\n' | head -1)
+    note "D5 wren pidof=$wpid"
+    if [ -n "$wpid" ]; then probe d5-wren-uid "grep -E '^(Name|Uid|Gid):' /proc/$wpid/status"; else note "D5 wren process not found by pidof $PKG"; fi
+    # same-URI unfiltered query with explicit user ids: documented content CLI form is
+    # `content query --uri <URI> [--user <USER_ID>] ...`
+    probe d5-dump-user0 'content query --uri content://user_dictionary/words --user 0'
+    local cur currc; currc=$(sed -n '1s/.* rc=\([0-9]*\).*/\1/p' shots/swdiag_d5-curuser.txt); cur=$(sed -n 2p shots/swdiag_d5-curuser.txt | tr -d '\r')
+    [ "$currc" = "0" ] || { note "D5 am get-current-user rc=$currc; parsed user not trusted, only --user 0 variant run"; cur=''; }
+    case "$cur" in ''|*[!0-9]*) note "D5 current user unparsable from am get-current-user; only --user 0 variant run";; 0) note "D5 current user is 0; --user 0 variant already run";; *) probe d5-dump-usercur "content query --uri content://user_dictionary/words --user $cur";; esac
+    note "stage2 caller-identity probes complete (read-only; if explicit-user variants are still empty, that is reported before any further probe is designed)"
   }
   swdiag
   # --- END SHELL-VISIBILITY DIAGNOSTICS ---
