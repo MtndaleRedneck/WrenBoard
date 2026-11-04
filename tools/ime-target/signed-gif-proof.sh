@@ -29,6 +29,9 @@ fail() { note "RESULT: 1 ($1)"; dumpui final_fail; shot final_fail; exit 1; }
 note "installing signed candidate + local fixture"
 adb wait-for-device
 for i in $(seq 1 60); do [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = "1" ] && break; sleep 2; done
+# Fixed test geometry: same override the composition harness used (1080x2316@420),
+# so the measured control coordinates below are deterministic.
+adb shell wm size 1080x2316; adb shell wm density 420; sleep 2
 adb install -r "$APK" >/dev/null || fail "signed APK install failed"
 adb install -r "$FIXTURE" >/dev/null || fail "fixture install failed"
 
@@ -53,45 +56,42 @@ adb shell input text hostok; sleep 1
 F=$(field_now); note "field after host typing: [$F]"
 echo "$F" | grep -q 'hostok' || fail "host text baseline not in fixture field"
 
-note "expanding the action bar (desc: Open Action Bar)"
-dumpui 03_toolbar_collapsed
-tap_node 03_toolbar_collapsed content-desc "Open Action Bar" || note "action bar already expanded or chevron absent"
-sleep 1
-dumpui 04_toolbar_expanded
-shot 04_toolbar_expanded
-
-note "tapping the GIF action (desc: GIF)"
-tap_node 04_toolbar_expanded content-desc "GIF" || fail "GIF action button not found"
-sleep 2
-dumpui 05_gif_panel
-shot 05_gif_panel
-sed 's/>/>\n/g' "$SHOTS/05_gif_panel.xml" | grep -q 'text="Search KLIPY GIFs"' || fail "GIF search field placeholder not visible (panel did not open on GIF tab)"
-
-note "focusing GIF search and typing query"
-tap_node 05_gif_panel text "Search KLIPY GIFs" || fail "search field node not tappable"
-sleep 1
-adb shell input text cat; sleep 2
-
-note "waiting for GIF results grid (clickable content-desc nodes not in known-label set)"
-CELL=""
+note "pixel navigation: IME window is absent from uiautomator dumps on this setup (verified"
+note "in run 41839936532: dumps contain only com.wrenboard.imetarget nodes while the keyboard"
+note "visibly renders), so controls are tapped by measured coordinates. Coordinates are from"
+note "pair-4 run 41793297781 WBDBG markers at the identical 1080x2316@420 config (same product"
+note "layout code in release; cleanup touched no panel/keyboard layout), emoji-key position"
+note "verified against pair-4 k01 screenshot pixels. Every transition is screenshot-captured"
+note "for review; PASS/FAIL comes ONLY from the fixture-side assertions below."
+note "tapping emoji key (160,1967) to open the panel"
+adb shell input tap 160 1967; sleep 2
+shot 05_panel_open
+note "tapping GIF tab (390,919)"
+adb shell input tap 390 919; sleep 2
+shot 06_gif_tab
+note "tapping GIF search field (521,1038) to raise the letters keyboard"
+adb shell input tap 521 1038; sleep 1.5
+shot 07_search_keyboard
+note "typing query via on-screen keys c(430,1808) a(106,1650) t(484,1492)"
+adb shell input tap 430 1808; sleep 0.3
+adb shell input tap 106 1650; sleep 0.3
+adb shell input tap 484 1492; sleep 1.0
+F1=$(field_now); note "host field after GIF-search typing: [$F1]"
+[ "$F1" = "hostok" ] || fail "host text changed while typing in GIF search (hostok -> $F1)"
+shot 08_query_typed
+note "waiting for GIF results (screen-change detection; screen is static until results render)"
+BASE=$(adb exec-out screencap -p | md5sum | cut -d' ' -f1)
+LOADED=0
 for i in $(seq 1 15); do
-  dumpui "06_grid_poll_$i"
-  CELL=$(sed 's/>/>\n/g' "$SHOTS/06_grid_poll_$i.xml" \
-    | grep 'clickable="true"' | grep 'content-desc="[^"]' \
-    | grep -v 'content-desc="Open Action Bar"' | grep -v 'content-desc="Close Action Bar"' \
-    | grep -v 'content-desc="GIF"' | grep -v 'content-desc="Emoji"' | grep -v 'content-desc="Backspace"' \
-    | head -1)
-  [ -n "$CELL" ] && break
   sleep 2
+  NOW=$(adb exec-out screencap -p | md5sum | cut -d' ' -f1)
+  if [ "$NOW" != "$BASE" ]; then sleep 2; LOADED=1; break; fi
 done
-[ -n "$CELL" ] || fail "no GIF result cells after 30s"
-CT=$(echo "$CELL" | sed -n 's/.*content-desc="\([^"]*\)".*/\1/p')
-note "first result cell: [$CT]"
-shot 06_results
-C=$(echo "$CELL" | grep -o 'bounds="\[[0-9]*,[0-9]*\]\[[0-9]*,[0-9]*\]"' | grep -o '[0-9]*' | tr '\n' ' ' | awk '{print int(($1+$3)/2), int(($2+$4)/2)}')
-note "tapping first result at $C"
-adb shell input tap $C; sleep 3
-shot 07_after_insert
+[ "$LOADED" = 1 ] || fail "no screen change indicating GIF results within ~32s"
+shot 09_results
+note "tapping first result cell (274,1251; 156px into the grid, inside cell 0 for any cell height)"
+adb shell input tap 274 1251; sleep 3
+shot 10_after_insert
 
 note "asserting fixture-side commit (mime/bytes/signature) and host text unchanged"
 L=$(adb logcat -d -s IMETARGET:I 2>/dev/null | tr -d '\r' | grep 'CONTENT=' | tail -1)
