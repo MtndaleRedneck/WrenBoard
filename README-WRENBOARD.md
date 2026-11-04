@@ -35,3 +35,24 @@ https://huggingface.co/futo-org/acft-whisper-tiny.en) and converted by FUTO with
 method (https://github.com/futo-org/whisper-acft). The conversion is supplied by FUTO and
 bundled here unchanged; Apache-2.0 covers the converted Object form. No conversion was
 performed by WrenBoard.
+
+## Bundled swipe model provenance (frozen at pin)
+
+Swipe typing uses FUTO Swipe weights from submodule `java/assets/futo-swipe`, pinned at
+commit `93931877c0083d0de7f51fad82325dcbe10421bf` of https://huggingface.co/futo-org/futo-swipe
+(fetched at build time with Git LFS; the demo animation and model card are not packaged).
+License: FUTO Model Weights License 1.0 (`java/assets/futo-swipe/LICENSE.md`, SHA-256
+`ef6b4f6437efa0a2929de351b10c16a8c870b32e1c23054ac76af61531f5db21`). As that license requires, the app
+shows "Swipe typing powered by FUTO Swipe" with the full license text in Settings > Credits. The weights
+are bundled unchanged; no derivative model is made.
+
+| File | Bytes | SHA-256 |
+|---|---:|---|
+| honorable_sturgeon/model_fp32.pte (encoder, required) | 2,649,856 | `725242bab5d14345e96ff214e8de2bfbc1f962c232d320df9c24cb82ffd1fbaf` |
+| magic_macaw/model_fp32.pte (English decoder) | 1,247,468 | `01eaf16ac4bc0f1ed0698c240807f0e95e6d427bcf6de04983ffc50736744d85` |
+| hungry_jellyfish/context_lm.pte (English context LM) | 6,247,616 | `74d29f56a513c0c60abcd43df3b16a6b68925cdf4e97e51b094a5275ec2810d7` |
+| hungry_jellyfish/vocab.txt | 284,965 | `a7db66376783b5a23ee3d4a2aaa8f2499fd9b35f975e92bcb248664c2cf6ebd1` |
+| scoring.json | 1,085 | `8377ba6932882667da1e87717609f4ccd6bb78709b6b6ea898d3d4325c9c37f6` |
+
+If any required file is missing, empty, or a Git LFS pointer, swipe quietly falls back and the keyboard
+does not crash (`SwipeModelGate`, unit test `SwipeModelGateTest`).
