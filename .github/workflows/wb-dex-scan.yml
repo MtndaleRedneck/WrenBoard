@@ -9,6 +9,11 @@ name: wb-dex-scan
 # final keyed 1.5.0/code6 shipping APK. The eventual actual shipping-APK hash/config
 # scan remains required separately.
 on:
+  # SCRATCH-ONLY trigger so this brand-new workflow can run before it exists on the
+  # default branch (workflow_dispatch requires default-branch presence). Removed before
+  # any default-branch proposal; dispatch remains the intended entry point.
+  push:
+    branches: [wrenboard-dex-scan]
   workflow_dispatch:
     inputs:
       variant:
