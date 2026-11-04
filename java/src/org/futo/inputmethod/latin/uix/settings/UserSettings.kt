@@ -3,6 +3,12 @@ package org.futo.inputmethod.latin.uix.settings
 import androidx.annotation.DrawableRes
 import androidx.annotation.StringRes
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.Modifier
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.res.painterResource
@@ -142,11 +148,22 @@ fun UserSettingsMenuScreen(menu: UserSettingsMenu) {
             menu.render()
         } else {
             ScreenTitle(stringResource(menu.title), showBack = true, LocalNavController.current)
-            sections.forEach { (label, items) ->
-                val shown = items.filter { it.visibilityCheck?.invoke() != false }
-                if (shown.isNotEmpty()) {
-                    WrenSectionLabel(stringResource(label))
-                    WrenCard { shown.forEach { it.component() } }
+            // WrenBoard 1.5 (Tab review): rows get the home rows' rhythm - about 16dp from the card
+            // edges and even air between rows; iconless pages (Sound & feel) collapse the empty
+            // icon gutter.
+            CompositionLocalProvider(LocalWrenNoIconColumn provides (menu.navPath in WrenIconlessMenuPaths)) {
+                sections.forEach { (label, items) ->
+                    val shown = items.filter { it.visibilityCheck?.invoke() != false }
+                    if (shown.isNotEmpty()) {
+                        WrenSectionLabel(stringResource(label))
+                        WrenCard {
+                            Spacer(Modifier.height(8.dp))
+                            shown.forEach { setting ->
+                                Box(Modifier.padding(vertical = 8.dp)) { setting.component() }
+                            }
+                            Spacer(Modifier.height(8.dp))
+                        }
+                    }
                 }
             }
         }
