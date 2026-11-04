@@ -35,6 +35,13 @@ val ThirdPartyList: List<ThirdPartyItem> = listOf(
         License.Apache2
     ),
     TP(
+        "FUTO Swipe",
+        "Swipe typing powered by FUTO Swipe",
+        "https://huggingface.co/futo-org/futo-swipe",
+        "Copyright (c) FUTO Holdings, Inc.",
+        License.FUTOModelWeights1_0
+    ),
+    TP(
         "ggml projects",
         "whisper.cpp, llama.cpp, ggml",
         "https://ggml.ai",
