@@ -1222,6 +1222,7 @@ public final class PointerTracker implements PointerTrackerQueue.Element,
         if (key == null) {
             return;
         }
+        if (org.futo.inputmethod.latin.BuildConfig.DEBUG) android.util.Log.i("WBDBG", "LONGPRESS code=" + key.getCode() + " at " + android.os.SystemClock.uptimeMillis());
         if (key.getCode() == Constants.CODE_SHIFT
                 && Settings.getInstance().getCurrent().mShiftLockMode == Settings.SHIFT_LOCK_MODE_CYCLE) {
             // WrenBoard "Caps lock: tap cycle" mode: holding shift does not lock caps (tap cycle only).
