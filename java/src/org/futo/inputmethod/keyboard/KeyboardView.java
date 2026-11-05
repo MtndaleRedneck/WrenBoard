@@ -239,13 +239,14 @@ public class KeyboardView extends View {
     /**
      * WrenBoard 1.6 (approved mock-up 05): label sizes follow the narrower of key width and height. Symbols
      * page 2 has 9 keys per row instead of 10, so its wider keys drew every symbol about 20% bigger than
-     * on page 1 and the letters. Size page 2 as if it had 10 keys per row, like SwiftKey.
+     * the mock-up. Page 2 sizes its labels from 80% of its key width, which lands on the mock-up.
      */
     private static int labelReferenceKeyWidth(@Nonnull final Keyboard keyboard) {
         final int keyWidth = keyboard.mMostCommonKeyWidth;
-        if (keyboard.mId != null && keyboard.mId.mElementId == KeyboardId.ELEMENT_SYMBOLS_SHIFTED
-                && keyboard.mBaseWidth > 0) {
-            return Math.min(keyWidth, keyboard.mBaseWidth / 10);
+        if (keyboard.mId != null && keyboard.mId.mElementId == KeyboardId.ELEMENT_SYMBOLS_SHIFTED) {
+            // 9 wide keys per row: scale to the approved mock-up's measured page-2 glyphs ([ ] 52 px at
+            // 1080x2316; full key width drew them 64 px, the 10-key width 58 px)
+            return keyWidth * 8 / 10;
         }
         return keyWidth;
     }
