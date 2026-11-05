@@ -97,6 +97,8 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.text.font.FontWeight
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.rememberNavController
 import org.futo.inputmethod.latin.R
@@ -109,6 +111,13 @@ import kotlin.math.pow
 
 @Composable
 fun ScreenTitle(title: String, showBack: Boolean = false, navController: NavHostController? = LocalNavController.current ?: rememberNavController()) {
+    // WrenBoard 1.6 (item 11): in the WrenBoard look a page title is the mock-up's top bar, and a title used as a
+    // heading inside a page (no back arrow) is an orange section label.
+    if(LocalWrenStyle.current) {
+        if(showBack) WrenTopBar(title, onBack = { navController?.navigateUp() })
+        else if(title.isNotEmpty()) WrenFlatSectionLabel(title)
+        return
+    }
     val rowModifier = if(showBack) {
         Modifier
             .fillMaxWidth()
@@ -230,10 +239,13 @@ fun SettingItem(
         else -> MaterialTheme.colorScheme.onSurfaceVariant
     }
 
+    val wrenStyle = LocalWrenStyle.current
+    val wrenFlat = LocalWrenFlatRows.current
+
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .defaultMinSize(0.dp, if(compact) { 48.dp } else { 68.dp })
+            .defaultMinSize(0.dp, if(wrenFlat) { 54.dp } else if(compact) { 48.dp } else { 68.dp })
             .let {
                 if(onClick != null && onSubmenuNavigate == null) {
                     it.clickable(enabled = !disabled, onClick = {
@@ -254,7 +266,11 @@ fun SettingItem(
             .height(intrinsicSize = IntrinsicSize.Min),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Row(Modifier.weight(1.0f).fillMaxHeight().padding(0.dp, 4.dp)) {
+        Row(Modifier.weight(1.0f).fillMaxHeight().padding(0.dp, if(wrenFlat) 10.dp else 4.dp)) {
+            if(wrenFlat) {
+                // WrenBoard 1.6 (item 11): flat mock-up rows, text 16 dp in, no icon gutter.
+                Spacer(Modifier.width(16.dp))
+            } else {
             Spacer(Modifier.width(4.dp))
             Spacer(Modifier.width(16.dp))
             Column(
@@ -270,6 +286,7 @@ fun SettingItem(
             }
 
             Spacer(Modifier.width(12.dp))
+            }
 
             Row(
                 modifier = Modifier
@@ -283,19 +300,20 @@ fun SettingItem(
                         }
                     )
             ) {
-                SpacedColumn(4.dp) {
+                SpacedColumn(if(wrenStyle) 2.dp else 4.dp) {
                     Text(
                         title,
-                        style = Typography.Heading.RegularMl,
-                        color = textColor,
-                        modifier = Modifier.heightIn(min = 24.dp)
+                        style = if(wrenStyle) Typography.Heading.RegularMl.copy(fontSize = 16.sp, fontWeight = FontWeight.Bold, lineHeight = 21.sp)
+                            else Typography.Heading.RegularMl,
+                        color = if(wrenStyle && textColor == MaterialTheme.colorScheme.onSurface) WrenFlat.Title else textColor,
+                        modifier = if(wrenStyle) Modifier else Modifier.heightIn(min = 24.dp)
                     )
 
                     if (subtitle != null) {
                         Text(
                             subtitle,
-                            style = Typography.SmallMl,
-                            color = subTextColor
+                            style = if(wrenStyle) Typography.SmallMl.copy(fontSize = 14.sp, lineHeight = 19.sp) else Typography.SmallMl,
+                            color = if(wrenStyle && subTextColor == MaterialTheme.colorScheme.onSurfaceVariant) WrenFlat.Sub else subTextColor
                         )
                     } else if (subcontent != null) {
                         subcontent()
@@ -370,6 +388,10 @@ fun SettingToggleRaw(
         onSubmenuNavigate = onSubmenuNavigate,
         compact = compact
     ) {
+        if(LocalWrenStyle.current) {
+            // WrenBoard 1.6 (item 11): the mock-up's switch. The whole row toggles it.
+            WrenSwitchVisual(checked = enabled, disabled = disabled)
+        } else
         Switch(checked = enabled, onCheckedChange = {
             if (!disabled) {
                 setValue(!enabled)
@@ -713,7 +735,8 @@ fun NavigationItem(title: String, style: NavigationItemStyle, navigate: () -> Un
             }
         }
     ) {
-        when(style) {
+        // WrenBoard 1.6 (item 11): the flat mock-up rows carry no trailing arrows.
+        if(!LocalWrenFlatRows.current) when(style) {
             NavigationItemStyle.Misc -> Icon(Icons.Default.ArrowForward, contentDescription = null)
             NavigationItemStyle.Mail -> Icon(Icons.Default.Send, contentDescription = null)
             NavigationItemStyle.ExternalLink -> Icon(painterResource(R.drawable.external_link), contentDescription = null)

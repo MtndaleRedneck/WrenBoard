@@ -21,6 +21,10 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.painterResource
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.windowInsetsTopHeight
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.MutableState
@@ -186,6 +190,14 @@ class SettingsActivity : ComponentActivity(), DynamicThemeProviderOwner {
                                 .fillMaxSize(),
                             color = MaterialTheme.colorScheme.background
                         ) {
+                            // WrenBoard 1.6 (item 11 mock-ups): the status bar sits on the top bar's #212121.
+                            if (LocalWrenStyle.current) {
+                                Box(
+                                    Modifier.fillMaxWidth()
+                                        .windowInsetsTopHeight(androidx.compose.foundation.layout.WindowInsets.statusBars)
+                                        .background(WrenFlat.Bar)
+                                )
+                            }
                             Box(Modifier.safeDrawingPadding()) {
                                 // WrenBoard 1.3 (teardown item 42 + Tab review): the floating
                                 // try-keyboard button overlays content, so shrink every page's

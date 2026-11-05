@@ -38,6 +38,7 @@ import org.futo.inputmethod.latin.uix.SYSTEM_VOICE_INPUT_PACKAGE
 import org.futo.inputmethod.latin.uix.TextEditPopupActivity
 import org.futo.inputmethod.latin.uix.USE_SYSTEM_VOICE_INPUT
 import org.futo.inputmethod.latin.uix.settings.NavigationItem
+import org.futo.inputmethod.latin.uix.settings.findActivity
 import org.futo.inputmethod.latin.uix.settings.useDataStore
 
 import androidx.datastore.preferences.core.booleanPreferencesKey
@@ -223,34 +224,44 @@ fun HomeScreen(navController: NavHostController = rememberNavController()) {
                 .fillMaxWidth()
                 .verticalScroll(scrollState)
         ) {
-            Spacer(modifier = Modifier.height(24.dp))
-            Row(Modifier.padding(16.dp)) {
-                Text(stringResource(R.string.english_ime_settings),
-                    style = if(useDataStoreValue(org.futo.inputmethod.latin.uix.settings.WrenSettingsStyle))
-                        Typography.Heading.Medium.copy(fontSize = 26.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
-                    else Typography.Heading.Medium,
-                    modifier = Modifier
-                    .align(CenterVertically)
-                    .weight(1.0f))
+            val wrenLook = useDataStoreValue(org.futo.inputmethod.latin.uix.settings.WrenSettingsStyle)
+            if(wrenLook) {
+                // WrenBoard 1.6 (item 11, mock-up 01): the top bar with back and search, then the flat list.
+                org.futo.inputmethod.latin.uix.settings.WrenTopBar(
+                    stringResource(R.string.wren_home_title),
+                    onBack = { context.findActivity()?.finish() },
+                    onSearch = { navController.navigate("search") }
+                )
+            } else {
+                Spacer(modifier = Modifier.height(24.dp))
+                Row(Modifier.padding(16.dp)) {
+                    Text(stringResource(R.string.english_ime_settings),
+                        style = if(useDataStoreValue(org.futo.inputmethod.latin.uix.settings.WrenSettingsStyle))
+                            Typography.Heading.Medium.copy(fontSize = 26.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+                        else Typography.Heading.Medium,
+                        modifier = Modifier
+                        .align(CenterVertically)
+                        .weight(1.0f))
 
-                Spacer(Modifier.width(4.dp))
+                    Spacer(Modifier.width(4.dp))
 
-                IconButton(onClick = {
-                    navController.navigate("search")
-                }) {
-                    Icon(Icons.Default.Search, contentDescription = stringResource(
-                        R.string.settings_search_menu_title
-                    ), tint = if(useDataStoreValue(org.futo.inputmethod.latin.uix.settings.WrenSettingsStyle))
-                        androidx.compose.material3.MaterialTheme.colorScheme.primary
-                    else androidx.compose.material3.LocalContentColor.current)
+                    IconButton(onClick = {
+                        navController.navigate("search")
+                    }) {
+                        Icon(Icons.Default.Search, contentDescription = stringResource(
+                            R.string.settings_search_menu_title
+                        ), tint = if(useDataStoreValue(org.futo.inputmethod.latin.uix.settings.WrenSettingsStyle))
+                            androidx.compose.material3.MaterialTheme.colorScheme.primary
+                        else androidx.compose.material3.LocalContentColor.current)
+                    }
                 }
-            }
 
+            }
             ConditionalMigrateUpdateNotice()
             val wrenStyle = useDataStoreValue(org.futo.inputmethod.latin.uix.settings.WrenSettingsStyle)
             if(wrenStyle) {
-                // WrenBoard 1.2: six groups plus the FUTO entry; FUTO's paid-version notice lives under FUTO, and
-                // update checks under About (automatic checks and the update prompt keep running).
+                // WrenBoard 1.6: eleven pages plus the FUTO entry; FUTO's paid-version notice and FUTO's update
+                // check live under FUTO (automatic checks and the update prompt keep running).
                 WrenHomeList()
             } else {
                 ConditionalUnpaidNoticeWithNav(navController)

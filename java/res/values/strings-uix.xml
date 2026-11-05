@@ -828,4 +828,39 @@ Default is %1$s</string>
     <string name="voicebar_bluetooth_mic">Bluetooth mic</string>
     <string name="voicebar_phone_mic">Phone mic</string>
     <string name="voicebar_switch_mic">Switch microphone, currently %1$s</string>
+
+    <!-- WrenBoard 1.6 settings (item 11, mock-ups v3) -->
+    <string name="wren_home_title">WrenBoard settings</string>
+    <string name="wren_home_languages">Languages</string>
+    <string name="wren_home_themes">Themes</string>
+    <string name="wren_home_typing">Typing</string>
+    <string name="wren_home_emoji">Emoji</string>
+    <string name="wren_home_voice">Voice typing</string>
+    <string name="wren_home_clipboard">Clipboard</string>
+    <string name="wren_home_toolbar">Toolbar</string>
+    <string name="wren_home_layout">Layout &amp; keys</string>
+    <string name="wren_home_sound">Sound &amp; vibration</string>
+    <string name="wren_home_backup">Backup &amp; restore</string>
+    <string name="wren_home_advanced">Advanced</string>
+    <string name="wren_s_typing">Typing</string>
+    <string name="wren_s_predictions">Predictions</string>
+    <string name="wren_s_swipe">Swipe typing</string>
+    <string name="wren_s_space_backspace">Space bar and backspace</string>
+    <string name="wren_s_emoji">Emoji</string>
+    <string name="wren_s_voice_engine">Voice engine</string>
+    <string name="wren_s_toolbar_buttons">Toolbar buttons</string>
+    <string name="wren_s_size">Size</string>
+    <string name="wren_s_rows">Rows</string>
+    <string name="wren_s_keys">Keys</string>
+    <string name="wren_s_predictions_engine">Predictions engine</string>
+    <string name="wren_s_keyboard">Keyboard</string>
+    <string name="wren_s_voice">Voice</string>
+    <string name="wren_s_other">Other</string>
+    <string name="wren_s_paid">Paid version</string>
+    <string name="wren_s_updates">Updates</string>
+    <string name="wren_s_help_links">Help &amp; links</string>
+    <string name="wren_s_version">Version</string>
+    <string name="wren_s_licence">Licence &amp; credits</string>
+    <string name="wren_s_look">Look</string>
+    <string name="wren_advanced_tip">Changes here can make typing worse or hide parts of the keyboard.</string>
 </resources>

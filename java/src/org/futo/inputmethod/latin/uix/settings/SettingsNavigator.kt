@@ -23,10 +23,14 @@ import org.futo.inputmethod.latin.uix.actions.AllActions
 import org.futo.inputmethod.latin.uix.settings.pages.ActionEditorScreen
 import org.futo.inputmethod.latin.uix.settings.pages.ActionsScreen
 import org.futo.inputmethod.latin.uix.settings.pages.WrenAboutMenu
-import org.futo.inputmethod.latin.uix.settings.pages.WrenKeyboardMenu
 import org.futo.inputmethod.latin.uix.settings.pages.WrenTypingMenu
-import org.futo.inputmethod.latin.uix.settings.pages.WrenClipEmojiMenu
+import org.futo.inputmethod.latin.uix.settings.pages.WrenEmojiMenu
+import org.futo.inputmethod.latin.uix.settings.pages.WrenVoiceMenu
+import org.futo.inputmethod.latin.uix.settings.pages.WrenToolbarMenu
+import org.futo.inputmethod.latin.uix.settings.pages.WrenLayoutMenu
+import org.futo.inputmethod.latin.uix.settings.pages.WrenSoundMenu
 import org.futo.inputmethod.latin.uix.settings.pages.WrenBackupMenu
+import org.futo.inputmethod.latin.uix.settings.pages.WrenAdvancedMenu
 import org.futo.inputmethod.latin.uix.settings.pages.WrenFutoMenu
 import org.futo.inputmethod.latin.uix.settings.pages.AdvancedParametersScreen
 import org.futo.inputmethod.latin.uix.settings.pages.AlreadyPaidDialog
@@ -118,10 +122,14 @@ val SettingsMenus = listOf(
     CreditsScreenLite,
     IMESettingsMenu,
     WrenAboutMenu,
-    WrenKeyboardMenu,
     WrenTypingMenu,
-    WrenClipEmojiMenu,
+    WrenEmojiMenu,
+    WrenVoiceMenu,
+    WrenToolbarMenu,
+    WrenLayoutMenu,
+    WrenSoundMenu,
     WrenBackupMenu,
+    WrenAdvancedMenu,
     WrenFutoMenu
 ) + AllActions.mapNotNull { it.settingsMenu } + SettingsByLanguage.values
 

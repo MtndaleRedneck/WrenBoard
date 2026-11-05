@@ -17,9 +17,13 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
@@ -41,8 +45,8 @@ object WrenSettingsColors {
     val Orange = Color(0xFFFF8714)
     val OrangeTop = Color(0xFFFB9E2E)
     val OrangeBottom = Color(0xFFF97C02)
-    val PageTop = Color(0xFF1B1B1E)
-    val PageBottom = Color(0xFF141417)
+    val PageTop = Color(0xFF141414)
+    val PageBottom = Color(0xFF141414)
     val CardTop = Color(0xFF2E2E36)
     val CardBottom = Color(0xFF26262D)
     val Title = Color(0xFFF5F5F7)
@@ -92,13 +96,117 @@ private val wrenSettingsScheme: KeyboardColorScheme by lazy {
 @Composable
 fun WrenSettingsTheme(content: @Composable () -> Unit) {
     if (useDataStoreValue(WrenSettingsStyle)) {
-        UixThemeWrapper(colorScheme = wrenSettingsScheme, content)
+        UixThemeWrapper(colorScheme = wrenSettingsScheme) {
+            CompositionLocalProvider(LocalWrenStyle provides true, content = content)
+        }
     } else {
         UixThemeAuto(content)
     }
 }
 
-val wrenPageBrush: Brush get() = Brush.verticalGradient(listOf(WrenSettingsColors.PageTop, WrenSettingsColors.PageTop, WrenSettingsColors.PageBottom))
+/*
+ * WrenBoard 1.6 (item 11, settings mock-ups v3 approved by Ezzy): a flat dark list. Page #141414, top bar #212121,
+ * orange section labels, bold 16 sp row titles with 14 sp grey subtitles, orange switches, and the Feedback & bugs
+ * and Updates cards (#2A2A31) at the bottom of the home page. Sizes are the mock-up's CSS px, which are dp.
+ */
+object WrenFlat {
+    val Page = Color(0xFF141414)
+    val Bar = Color(0xFF212121)
+    val Title = Color(0xFFFFFFFF)
+    val Sub = Color(0xFFA6A6A6)
+    val Icon = Color(0xFFEDEDED)
+    val Card = Color(0xFF2A2A31)
+    val CardSub = Color(0xFFA6A6A6)
+    val CardChevron = Color(0xFFB4B4BC)
+    val Orange = Color(0xFFFF8710)
+    val ButtonTop = Color(0xFFFF9A26)
+    val ButtonBottom = Color(0xFFFF7A00)
+    val ButtonText = Color(0xFF1A1A1A)
+}
+
+/** True wherever the WrenBoard settings look is on (the whole Settings activity). */
+val LocalWrenStyle = staticCompositionLocalOf { false }
+
+/** True on WrenBoard's own list pages: rows drop FUTO's 48 dp icon gutter and trailing arrows (mock-up rows). */
+val LocalWrenFlatRows = staticCompositionLocalOf { false }
+
+val wrenPageBrush: Brush get() = Brush.verticalGradient(listOf(WrenFlat.Page, WrenFlat.Page))
+
+/** The mock-up's top bar: 56 dp, #212121, back arrow, 20 sp title, optional search. */
+@Composable
+fun WrenTopBar(title: String, onBack: (() -> Unit)?, onSearch: (() -> Unit)? = null) {
+    Row(
+        Modifier.fillMaxWidth().height(56.dp).background(WrenFlat.Bar).padding(horizontal = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        if (onBack != null) {
+            Box(Modifier.size(48.dp).clip(RoundedCornerShape(24.dp)).clickable(onClickLabel = "Navigate back", onClick = onBack), contentAlignment = Alignment.Center) {
+                Icon(painterResource(R.drawable.wren_set_ic_back), contentDescription = "Back", tint = WrenFlat.Icon, modifier = Modifier.size(24.dp))
+            }
+        } else {
+            Spacer(Modifier.width(4.dp))
+        }
+        Text(
+            title, color = WrenFlat.Title, fontSize = 20.sp, fontWeight = FontWeight.Medium, maxLines = 1,
+            modifier = Modifier.weight(1f).padding(start = 12.dp)
+        )
+        if (onSearch != null) {
+            Box(Modifier.size(48.dp).clip(RoundedCornerShape(24.dp)).clickable(onClick = onSearch), contentAlignment = Alignment.Center) {
+                Icon(painterResource(R.drawable.wren_set_ic_search), contentDescription = androidx.compose.ui.res.stringResource(R.string.settings_search_menu_title), tint = WrenFlat.Icon, modifier = Modifier.size(24.dp))
+            }
+        }
+    }
+}
+
+/** Orange section label: 14 sp medium, 22 dp above, 8 dp below, 16 dp in. */
+@Composable
+fun WrenFlatSectionLabel(text: String) {
+    Text(
+        text, color = WrenFlat.Orange, fontSize = 14.sp, fontWeight = FontWeight.Medium, lineHeight = 20.sp,
+        modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 22.dp, bottom = 8.dp)
+    )
+}
+
+/** One home row: 24 dp outline icon at 16 dp, title at 72 dp, 54 dp tall. */
+@Composable
+fun WrenHomeRow(title: String, icon: Int, iconSize: androidx.compose.ui.unit.Dp = 24.dp, onClick: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().heightIn(min = 54.dp).clickable(onClick = onClick).padding(horizontal = 16.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(Modifier.size(24.dp), contentAlignment = Alignment.Center) {
+            Icon(painterResource(icon), contentDescription = null, tint = WrenFlat.Icon, modifier = Modifier.size(iconSize))
+        }
+        Spacer(Modifier.width(32.dp))
+        Text(title, color = WrenFlat.Title, fontSize = 16.sp, fontWeight = FontWeight.Medium, lineHeight = 21.sp, modifier = Modifier.weight(1f))
+    }
+}
+
+/** The card behind Feedback & bugs and Updates: #2A2A31, 16 dp corners, 12 dp margin, 18 dp padding. */
+@Composable
+fun WrenBottomCard(title: String, titleGap: androidx.compose.ui.unit.Dp = 10.dp, content: @Composable () -> Unit) {
+    Column(
+        Modifier.padding(start = 12.dp, end = 12.dp, top = 12.dp).fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp)).background(WrenFlat.Card).padding(18.dp)
+    ) {
+        Text(title, color = WrenFlat.Title, fontSize = 19.sp, fontWeight = FontWeight.Bold, lineHeight = 24.sp)
+        Spacer(Modifier.height(titleGap))
+        content()
+    }
+}
+
+/** The orange pill button from the mock-up (46 dp, vertical gradient, dark bold label). */
+@Composable
+fun WrenOrangeButton(label: String, enabled: Boolean = true, onClick: () -> Unit) {
+    Box(
+        Modifier.fillMaxWidth().height(46.dp).clip(RoundedCornerShape(23.dp))
+            .background(Brush.verticalGradient(listOf(WrenFlat.ButtonTop, WrenFlat.ButtonBottom)))
+            .clickable(enabled = enabled, role = androidx.compose.ui.semantics.Role.Button, onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(label, color = WrenFlat.ButtonText, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+    }
+}
 
 /** Rounded card (1008 x n px at 36 px in), with the faint orange top hairline from the render. */
 @Composable
@@ -153,5 +261,22 @@ fun WrenNavRow(
             Icon(painterResource(R.drawable.wren_ic_chevron_right), contentDescription = null, tint = WrenSettingsColors.Chevron, modifier = Modifier.padding(start = 4.dp, end = 10.dp).size(20.dp))
         }
         if (divider) Box(Modifier.padding(start = 72.dp).fillMaxWidth().height(0.8.dp).background(WrenSettingsColors.Divider))
+    }
+}
+
+/** The mock-up switch: 36 x 14 dp track, 20 dp thumb; orange when on, grey when off. Drawn only; the row toggles. */
+@Composable
+fun WrenSwitchVisual(checked: Boolean, disabled: Boolean = false) {
+    Box(Modifier.padding(start = 16.dp).width(40.dp).height(20.dp).then(if (disabled) Modifier.alpha(0.5f) else Modifier), contentAlignment = Alignment.Center) {
+        Box(
+            Modifier.width(36.dp).height(14.dp).clip(RoundedCornerShape(7.dp))
+                .background(if (checked) WrenFlat.Orange.copy(alpha = 0.5f) else Color(0xFF5A5A5A))
+        )
+        Box(
+            Modifier.align(if (checked) Alignment.CenterEnd else Alignment.CenterStart)
+                .shadow(2.dp, RoundedCornerShape(10.dp))
+                .size(20.dp).clip(RoundedCornerShape(10.dp))
+                .background(if (checked) WrenFlat.Orange else Color(0xFFBDBDBD))
+        )
     }
 }
