@@ -3,6 +3,7 @@ package org.futo.inputmethod.latin.uix.theme
 
 import org.futo.inputmethod.keyboard.Key
 import org.futo.inputmethod.keyboard.Keyboard
+import org.futo.inputmethod.keyboard.internal.KeyboardLayoutKind
 import org.futo.inputmethod.v2keyboard.KeyVisualStyle
 
 sealed class RowColSelection {
@@ -50,6 +51,9 @@ sealed class KeyQualifier {
 
     data class AspectRatio(val target: KeyAspectRatio) : KeyQualifier()
     data class Layer(val layer: Int) : KeyQualifier()
+
+    // WrenBoard 1.6 (item 10): matches keys on the given keyboard elements (e.g. the number/phone pad).
+    data class ElementKind(val kinds: Set<KeyboardLayoutKind>) : KeyQualifier()
 }
 
 fun matchesKey(qualifiers: Set<KeyQualifier>, layout: String, keyboard: Keyboard, key: Key, layer: Int = 0, popup: Boolean = false) =
@@ -67,6 +71,7 @@ fun matchesKey(qualifiers: Set<KeyQualifier>, layout: String, keyboard: Keyboard
         is KeyQualifier.RowColSelector -> it.selection.match(keyboard, key)
         is KeyQualifier.AspectRatio -> it.target.range.contains(key.height.toFloat() / key.width.toFloat())
         is KeyQualifier.Layer -> it.layer == layer
+        is KeyQualifier.ElementKind -> keyboard.mId?.mElement?.kind in it.kinds
     } }
 
 fun getLayer(qualifiers: Set<KeyQualifier>) =

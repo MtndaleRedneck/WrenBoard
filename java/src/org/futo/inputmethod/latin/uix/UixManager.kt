@@ -603,6 +603,12 @@ class UixManager(private val latinIME: LatinIME) {
     }
 
     private val shouldShowSuggestionStrip = mutableStateOf(true)
+
+    // WrenBoard 1.6 (item 10): SwiftKey's number/phone pad has no prediction strip and no toolbar.
+    private val swiftKeyPadField = mutableStateOf(false)
+    fun onInputStartingForPad(editorInfo: EditorInfo?) {
+        swiftKeyPadField.value = org.futo.inputmethod.v2keyboard.isSwiftKeyPadField(editorInfo)
+    }
     private val suggestedWords: MutableState<SuggestedWords?> = mutableStateOf(null)
     private val expandableSuggestionCfg: MutableState<ExpandableSuggestionBarConfiguration> = mutableStateOf(
         NonExpandableSuggestionBar
@@ -736,7 +742,8 @@ class UixManager(private val latinIME: LatinIME) {
                 if(!inlineStuffHiddenByTyping.value) inlineSuggestions.value else emptyList()
             }
 
-            if(actionBarShown.value || inlineSuggestions.isNotEmpty()) {
+            // Pad fields keep autofill chips (inline suggestions) only.
+            if((actionBarShown.value && !swiftKeyPadField.value) || inlineSuggestions.isNotEmpty()) {
                 ActionBar(
                     suggestedWordsOrNull,
                     suggestionStripListener,

@@ -456,6 +456,13 @@ public class KeyboardView extends View {
     }
 
     private final Rect mTextBounds = new Rect();
+
+    // WrenBoard 1.6 (item 10): true on SwiftKey's compact number/phone pad (number_basic / phone layouts).
+    private boolean isSwiftKeyPadKeyboard() {
+        final Keyboard keyboard = mKeyboard;
+        if (keyboard == null || keyboard.mId == null || keyboard.mId.mElement == null) return false;
+        return org.futo.inputmethod.v2keyboard.KeyboardKt.isSwiftKeyPad(keyboard.mId.mElement.getKind());
+    }
     private Drawable mWrenClipboardHint;
     private Drawable getWrenClipboardHint() {
         if (mWrenClipboardHint == null) {
@@ -574,6 +581,15 @@ public class KeyboardView extends View {
                 paint.getTextBounds(label, 0, label.length(), mTextBounds);
                 final float targetCentre = skTop + skBodyH / 2.0f + 0.0079f * skPitch;
                 labelBaseline = targetCentre - (mTextBounds.top + mTextBounds.bottom) / 2.0f;
+            }
+
+            if (skGeom && isSwiftKeyPadKeyboard()) {
+                // WrenBoard 1.6 (item 10, pixel spec v1.1 item 65): SwiftKey's number/phone pad labels are
+                // Roboto Regular 18 dp on a 50.5 dp row pitch, every label on the digits' baseline with the
+                // digit glyph centred in the key body.
+                paint.setTextSize(18.0f / 50.5f * skPitch);
+                paint.getTextBounds("0", 0, 1, mTextBounds);
+                labelBaseline = skTop + skBodyH / 2.0f - (mTextBounds.top + mTextBounds.bottom) / 2.0f;
             }
 
             // Horizontal label text alignment

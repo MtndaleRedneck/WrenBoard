@@ -635,6 +635,8 @@ class LatinIME : InputMethodServiceCompose(), LatinIMELegacy.SuggestionStripCont
 
     override fun onStartInputView(info: EditorInfo?, restarting: Boolean) {
         super.onStartInputView(info, restarting)
+        // WrenBoard 1.6 (item 10): number/phone fields show SwiftKey's pad without strip or toolbar.
+        uixManager.onInputStartingForPad(info)
         onSizeMaybeUpdated()
         imeManager.onStartInput()
         latinIMELegacy.onStartInputView(info, restarting)
