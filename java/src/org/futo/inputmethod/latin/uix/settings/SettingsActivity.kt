@@ -191,6 +191,9 @@ class SettingsActivity : ComponentActivity(), DynamicThemeProviderOwner {
                                 .fillMaxSize(),
                             color = MaterialTheme.colorScheme.background
                         ) {
+                            // Surface lays its children out with propagateMinConstraints, which centred the
+                            // status-bar strip mid-screen; a plain Box keeps it at the top.
+                            Box(Modifier.fillMaxSize()) {
                             // WrenBoard 1.6 (item 11 mock-ups): the status bar sits on the top bar's #212121.
                             if (LocalWrenStyle.current) {
                                 Box(
@@ -242,6 +245,7 @@ class SettingsActivity : ComponentActivity(), DynamicThemeProviderOwner {
                                         )
                                     }
                                 }
+                            }
                             }
                         }
                     }
