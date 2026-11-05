@@ -37,6 +37,7 @@ data class KeyDrawingConfiguration(
     val hintTypeface: Typeface,
     val centeredHint: Boolean = false,
     val outline: KeyOutline? = null,
+    val swiftKeyGeometry: Boolean = false,
 )
 
 data class CachedKeyedMatcher<T>(
@@ -172,8 +173,22 @@ class AdvancedThemeMatcher(
             label == "," -> 1.25f
             else -> 1.0f
         }
-        val textSize = key.selectTextSize(params).toFloat() * scheme.extended.advancedThemeOptions.textSizeMultiplier * switchLabelBoost
-        val hintSize = key.selectHintTextSize(drawableProvider, params).toFloat() * scheme.extended.advancedThemeOptions.hintSizeMultiplier
+        val adv = scheme.extended.advancedThemeOptions
+        val dm = context.resources.displayMetrics
+        var textSize = key.selectTextSize(params).toFloat() * adv.textSizeMultiplier * switchLabelBoost
+        var hintSize = key.selectHintTextSize(drawableProvider, params).toFloat() * adv.hintSizeMultiplier
+        if (adv.swiftKeyLabelGeometry) {
+            // Pixel spec v1.1 items 5, 8, 9: hints 13.2 dp; letters-page "123" and ",!?" 15.2 dp;
+            // the comma at the letter size (no boost).
+            if (label == ",") textSize = key.selectTextSize(params).toFloat() * adv.textSizeMultiplier
+            adv.switchLabelSizeDp?.let { sz ->
+                if (key.code == org.futo.inputmethod.latin.common.Constants.CODE_SWITCH_ALPHA_SYMBOL && label == "123") {
+                    textSize = sz * dm.density
+                }
+            }
+            adv.hintTextSizeDp?.let { hintSize = it * dm.density }
+            adv.switchLabelSizeDp?.let { sz -> if (hintLabel == ",!?") hintSize = sz * dm.density }
+        }
 
         var textTypeface = drawableProvider.selectKeyTypeface(key.selectTypeface(params))
         var hintTypeface = drawableProvider.selectKeyTypeface(key.selectHintTypeface(drawableProvider, params))
@@ -211,7 +226,8 @@ class AdvancedThemeMatcher(
             textTypeface = textTypeface,
             hintTypeface = hintTypeface,
             centeredHint = scheme.extended.advancedThemeOptions.centerHints,
-            outline = outline
+            outline = outline,
+            swiftKeyGeometry = scheme.extended.advancedThemeOptions.swiftKeyLabelGeometry
         )
     }
 }

@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Clipboard hint glyph on the letters-page 123 key. SwiftKey parity (pixel spec v1.1 item 68), original
+     drawing: body 7.8 x 9.6 dp outline with 1.2 dp stroke and 1.1 dp corners, a solid 3.9 x 2.1 dp clip tab
+     on top, and two 3.6 x 1.1 dp lines inside. Viewport units are 0.1 dp. Tinted at draw time. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="7.8dp"
+    android:height="10.8dp"
+    android:viewportWidth="78"
+    android:viewportHeight="108">
+  <path
+      android:strokeColor="#FFFFFFFF"
+      android:strokeWidth="12"
+      android:fillColor="#00000000"
+      android:pathData="M17,18 L61,18 Q72,18 72,29 L72,91 Q72,102 61,102 L17,102 Q6,102 6,91 L6,29 Q6,18 17,18 Z"/>
+  <path
+      android:fillColor="#FFFFFFFF"
+      android:pathData="M23.5,4 Q23.5,0 27.5,0 L50.5,0 Q54.5,0 54.5,4 L54.5,21 L23.5,21 Z"/>
+  <path
+      android:fillColor="#FFFFFFFF"
+      android:pathData="M21,48 L57,48 L57,59 L21,59 Z M21,73 L57,73 L57,84 L21,84 Z"/>
+</vector>

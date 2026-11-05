@@ -440,6 +440,16 @@ public class KeyboardView extends View {
         canvas.translate(-bgX, -bgY);
     }
 
+    private final Rect mTextBounds = new Rect();
+    private Drawable mWrenClipboardHint;
+    private Drawable getWrenClipboardHint() {
+        if (mWrenClipboardHint == null) {
+            final Drawable d = androidx.core.content.ContextCompat.getDrawable(getContext(), org.futo.inputmethod.latin.R.drawable.wren_clipboard_hint);
+            if (d != null) mWrenClipboardHint = d.mutate();
+        }
+        return mWrenClipboardHint;
+    }
+
     // WrenBoard 1.4 SwiftKey parity (items 9/11): icon names drawn at their full 32dp box
     // (Tab's 1.4 artwork), bypassing the textSize*1.75 icon cap.
     private static final java.util.Set<String> FULL_SIZE_ICON_IDS = new java.util.HashSet<>(java.util.Arrays.asList(
@@ -470,6 +480,18 @@ public class KeyboardView extends View {
             keyHintPaddingX = bgPadding.right;
             keyHintPaddingY = bgPadding.top;
         }
+
+        // WrenBoard SwiftKey parity (pixel spec v1.1 items 3-9): label positions are measured from the visible
+        // key top (one 0.4 dp hairline inside the drawn rect) as fractions of the row pitch (key + gap).
+        final boolean skGeom = kdc.getSwiftKeyGeometry();
+        final float skDensity = getResources().getDisplayMetrics().density;
+        final float skTop = Math.max(1.0f, Math.round(0.4f * skDensity));
+        final float skPitch = key.getHeight() + key.getVerticalGap();
+        final float skBodyH = keyHeight - 2.0f * skTop;
+        final boolean skBaselineLabel = skGeom && label != null && (
+                (label.length() == 1 && Character.isLetter(label.charAt(0)))
+                || (key.getCode() == Constants.CODE_SWITCH_ALPHA_SYMBOL && "123".equals(label))
+                || ",".equals(label) || ".".equals(label));
 
         if (label != null && icon == null) {
             paint.setTypeface(kdc.getTextTypeface());
@@ -517,6 +539,17 @@ public class KeyboardView extends View {
                 if (labelBaseline > keyHeight - 1.0f) {
                     labelBaseline = Math.max(centerY + labelCharHeight / 2.0f, keyHeight - 1.0f);
                 }
+            }
+
+            if (skBaselineLabel) {
+                // Letters, the letters-page "123", comma and period: baseline 39.8 dp below the key top on a
+                // 52.6 dp row = 0.7568 x row pitch (items 3, 8, 9), whatever hint sits above.
+                labelBaseline = skTop + 0.7568f * skPitch;
+            } else if (skGeom && isSingleDigit) {
+                // Number-row digits: glyph centre 0.0079 x row pitch below the key-body centre (item 7).
+                paint.getTextBounds(label, 0, label.length(), mTextBounds);
+                final float targetCentre = skTop + skBodyH / 2.0f + 0.0079f * skPitch;
+                labelBaseline = targetCentre - (mTextBounds.top + mTextBounds.bottom) / 2.0f;
             }
 
             // Horizontal label text alignment
@@ -612,6 +645,13 @@ public class KeyboardView extends View {
                 if (kdc.getCenteredHint()) {
                     hintX = centerX;
                     hintBaseline += paint.ascent() / 3.0f;
+                    if (skGeom) {
+                        // Hint glyph top 8.4 dp below the key top = 0.1588 x row pitch (item 6). One shared
+                        // baseline from the '%' reference glyph, as SwiftKey's hints share a baseline.
+                        paint.getTextBounds("%", 0, 1, mTextBounds);
+                        hintBaseline = skTop + 0.1588f * skPitch - mTextBounds.top
+                                - params.mHintLabelVerticalAdjustment * labelCharHeight;
+                    }
                 }
                 paint.setTextAlign(Align.CENTER);
             }
@@ -644,8 +684,26 @@ public class KeyboardView extends View {
                 hintX = (int)centerX - iconWidth / 2;
             }
 
-            hintIcon.setTint(kdc.getHintColor());
-            drawIcon(canvas, hintIcon, hintX, hintY, iconWidth, iconHeight);
+            Drawable hintDrawable = hintIcon;
+            if (skGeom) {
+                if ("action_clipboard_history".equals(key.getEffectiveHintIcon()) && getWrenClipboardHint() != null) {
+                    // Clipboard glyph on the letters-page 123 key, drawn at its own size (7.8 x 10.8 dp: body
+                    // 7.8 x 9.6 dp, 1.2 dp stroke, clip tab 3.9 x 2.1 dp, two 3.6 x 1.1 dp lines), tab top
+                    // 8.0 dp below the key top on a 52.6 dp row (pixel spec v1.1 item 68).
+                    hintDrawable = getWrenClipboardHint();
+                    final float rowScale = skPitch / (52.6f * skDensity);
+                    iconWidth = Math.round(hintDrawable.getIntrinsicWidth() * rowScale);
+                    iconHeight = Math.round(hintDrawable.getIntrinsicHeight() * rowScale);
+                    hintX = (int)(centerX - iconWidth / 2.0f);
+                    hintY = Math.round(skTop + (8.0f / 52.6f) * skPitch);
+                } else {
+                    // Mic and other hint glyphs: top aligned with the hint symbols (item 6).
+                    hintY = Math.round(skTop + 0.1588f * skPitch);
+                }
+            }
+
+            hintDrawable.setTint(kdc.getHintColor());
+            drawIcon(canvas, hintDrawable, hintX, hintY, iconWidth, iconHeight);
         }
 
         // Draw key icon.
