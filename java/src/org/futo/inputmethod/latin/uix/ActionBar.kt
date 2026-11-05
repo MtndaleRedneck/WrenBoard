@@ -681,6 +681,16 @@ fun RowScope.SuggestionItems(words: SuggestedWords, onClick: (i: Int) -> Unit, o
     }
 }
 
+/** WrenBoard 1.6 (item 51): the toolbar's thin outline versions of the default buttons (others keep their icon). */
+private fun wrenToolbarIcon(icon: Int): Int = when (icon) {
+    R.drawable.clipboard_manager -> R.drawable.wren_tb_clipboard
+    R.drawable.smile -> R.drawable.wren_tb_emoji
+    R.drawable.mic_fill -> R.drawable.wren_tb_mic
+    R.drawable.wren_share -> R.drawable.wren_tb_share
+    R.drawable.wren_info -> R.drawable.wren_tb_info
+    else -> icon
+}
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun LazyItemScope.ActionItem(idx: Int, action: Action, onSelect: (Action) -> Unit, onLongSelect: (Action) -> Unit, width: androidx.compose.ui.unit.Dp = 56.dp, swiftKeyIcons: Boolean = false) {
@@ -709,7 +719,8 @@ fun LazyItemScope.ActionItem(idx: Int, action: Action, onSelect: (Action) -> Uni
             )
         } else {
             Icon(
-                painter = painterResource(id = action.icon),
+                // WrenBoard 1.6 (item 51): thin-outline toolbar artwork on key-styled themes (approved mock-up 01)
+                painter = painterResource(id = if (swiftKeyIcons) wrenToolbarIcon(action.icon) else action.icon),
                 contentDescription = stringResource(action.name),
                 tint = contentCol,
                 // SwiftKey parity (item 46): 21.3 dp icon box on key-styled themes

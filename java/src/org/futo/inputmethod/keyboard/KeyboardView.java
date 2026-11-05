@@ -450,6 +450,15 @@ public class KeyboardView extends View {
         return mWrenClipboardHint;
     }
 
+    private Drawable mWrenMicHint;
+    private Drawable getWrenMicHint() {
+        if (mWrenMicHint == null) {
+            final Drawable d = androidx.core.content.ContextCompat.getDrawable(getContext(), org.futo.inputmethod.latin.R.drawable.wren_mic_hint);
+            if (d != null) mWrenMicHint = d.mutate();
+        }
+        return mWrenMicHint;
+    }
+
     // WrenBoard 1.4 SwiftKey parity (items 9/11): icon names drawn at their full 32dp box
     // (Tab's 1.4 artwork), bypassing the textSize*1.75 icon cap.
     private static final java.util.Set<String> FULL_SIZE_ICON_IDS = new java.util.HashSet<>(java.util.Arrays.asList(
@@ -696,6 +705,15 @@ public class KeyboardView extends View {
                     iconHeight = Math.round(hintDrawable.getIntrinsicHeight() * rowScale);
                     hintX = (int)(centerX - iconWidth / 2.0f);
                     hintY = Math.round(skTop + (8.0f / 52.6f) * skPitch);
+                } else if ("action_voice_input".equals(key.getEffectiveHintIcon()) && getWrenMicHint() != null) {
+                    // WrenBoard 1.6 (item 51, approved mock-up 01): mic on the comma key drawn at its own size,
+                    // 7.1 x 14.2 dp on a 52.6 dp row, top 6.0 dp below the key top.
+                    hintDrawable = getWrenMicHint();
+                    final float rowScale = skPitch / (52.6f * skDensity);
+                    iconWidth = Math.round(hintDrawable.getIntrinsicWidth() * rowScale);
+                    iconHeight = Math.round(hintDrawable.getIntrinsicHeight() * rowScale);
+                    hintX = (int)(centerX - iconWidth / 2.0f);
+                    hintY = Math.round(skTop + (6.0f / 52.6f) * skPitch);
                 } else {
                     // Mic and other hint glyphs: top aligned with the hint symbols (item 6).
                     hintY = Math.round(skTop + 0.1588f * skPitch);
