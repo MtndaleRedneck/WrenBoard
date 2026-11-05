@@ -684,6 +684,10 @@ class LatinIME : InputMethodServiceCompose(), LatinIMELegacy.SuggestionStripCont
         candidatesStart: Int,
         candidatesEnd: Int
     ) {
+        // WrenBoard debug builds: trace selections and backward cursor jumps (text-loss hunt)
+        if (BuildConfig.DEBUG && (newSelStart != newSelEnd || newSelStart < oldSelStart - 1)) {
+            Log.i("WBDBG", "SELJUMP old=$oldSelStart,$oldSelEnd new=$newSelStart,$newSelEnd cand=$candidatesStart,$candidatesEnd")
+        }
         super.onUpdateSelection(
             oldSelStart,
             oldSelEnd,
