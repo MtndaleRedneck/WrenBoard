@@ -482,7 +482,6 @@ class GeneralIME(val helper: IMEHelper) : IMEInterface, WordLearner, SuggestionS
     var updateSuggestionJob: Job? = null
     var lmUpdateJob: Job? = null
     private suspend fun updateSuggestionsDictionaryInternal(inputStyle: Int, sequenceNumber: Int) {
-        if(BuildConfig.DEBUG) Log.i("WBDBG", "PASS start seq=$sequenceNumber style=$inputStyle")
         // This method returns null for us if LM is disabled
         val predictionInputValues = languageModelFacilitator.makePredictionInputValues(inputStyle)
 
@@ -492,9 +491,10 @@ class GeneralIME(val helper: IMEHelper) : IMEInterface, WordLearner, SuggestionS
             // WrenBoard 1.6: the LM wait can be cut short by a space/punctuation commit
             // (ensureSuggestionsCompleted), so the word's autocorrection is never lost to a late LM.
             val passStart = System.currentTimeMillis()
+            val lmDeadline = WrenLmWait.deadlineFor(passStart, if (commitSequence == sequenceNumber) commitLmDeadline else null)
             val lmResultHolder = WrenLmWait<ArrayList<SuggestedWordInfo>>(
                 sequenceNumber,
-                WrenLmWait.deadlineFor(passStart, if (commitSequence == sequenceNumber) commitLmDeadline else null),
+                lmDeadline,
                 { System.currentTimeMillis() }
             )
             activeLmWait = lmResultHolder
@@ -640,7 +640,10 @@ class GeneralIME(val helper: IMEHelper) : IMEInterface, WordLearner, SuggestionS
             commitLmDeadline = now + WrenLmWait.COMMIT_LM_BUDGET_MS
             commitSequence = seqId
             val waiting = activeLmWait
-            waiting?.shortenTo(WrenLmWait.commitDeadlineForWaitingPass(waiting.sequenceNumber, seqId, now, commitLmDeadline))
+            waiting?.shortenTo(
+                WrenLmWait.commitDeadlineForWaitingPass(waiting.sequenceNumber, seqId, now, commitLmDeadline),
+                superseded = waiting.sequenceNumber < seqId
+            )
             if (BuildConfig.DEBUG) Log.i("WBDBG", "COMMITWAIT seq=$seqId completed=${sequenceIdCompleted.get()} waitingPass=${waiting?.sequenceNumber}")
 
             currJob?.cancel()
@@ -655,7 +658,7 @@ class GeneralIME(val helper: IMEHelper) : IMEInterface, WordLearner, SuggestionS
             updateSuggestionJob = newJob
 
             val completed = runBlocking {
-                (withTimeoutOrNull(WrenLmWait.COMMIT_WAIT_MS) {
+                (withTimeoutOrNull(WrenLmWait.COMMIT_MAX_WAIT_MS) {
                     newJob.join()
                     true
                 } == true)
