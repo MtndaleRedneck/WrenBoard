@@ -742,48 +742,51 @@ private fun WrenGifPlaceholder(w: WrenEmojiWindow, view: View, modifier: Modifie
 
     Column(modifier = modifier.fillMaxWidth()) {
         if (!hasKey) {
-            Box(modifier = Modifier.fillMaxWidth().padding(12.dp).clip(RoundedCornerShape(12.dp)).background(EmojiColors.Field).padding(18.dp), contentAlignment = Alignment.Center) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("GIFs powered by KLIPY", color = EmojiColors.Orange, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
-                    Spacer(Modifier.height(6.dp))
-                    Text("GIF search is not available in this build.", color = EmojiColors.OrangeMuted, fontSize = 12.sp, textAlign = TextAlign.Center)
+            // No KLIPY key in this build: the message takes the grid's place; the bottom bar (abc) still shows.
+            Box(Modifier.weight(1f).fillMaxWidth().background(Brush.verticalGradient(listOf(EmojiColors.GifTop, EmojiColors.GifBottom)))) {
+                Box(modifier = Modifier.fillMaxWidth().padding(12.dp).clip(RoundedCornerShape(12.dp)).background(EmojiColors.Field).padding(18.dp), contentAlignment = Alignment.Center) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("GIFs powered by KLIPY", color = EmojiColors.Orange, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                        Spacer(Modifier.height(6.dp))
+                        Text("GIF search is not available in this build.", color = EmojiColors.OrangeMuted, fontSize = 12.sp, textAlign = TextAlign.Center)
+                    }
                 }
             }
-            return@Column
-        }
-        // SwiftKey reference layout (owner screenshots, Nov 3): two-column varied-height grid
-        // filling the panel; no letters keyboard below; bottom bar = abc / categories / backspace.
-        // Mock-up 10: 8 px margins and gaps, square corners, warm grey behind.
-        LazyVerticalGrid(columns = GridCells.Fixed(2), modifier = Modifier.weight(1f).fillMaxWidth().wbPos("GIFGRID")
-                .background(Brush.verticalGradient(listOf(EmojiColors.GifTop, EmojiColors.GifBottom))),
-            contentPadding = PaddingValues(2.8.dp),
-            horizontalArrangement = Arrangement.spacedBy(2.8.dp),
-            verticalArrangement = Arrangement.spacedBy(2.8.dp)) {
-            itemsIndexed(gifs.value, key = { _, g -> g.id }) { idx, gif ->
-                val preview = gif.gridPreview()
-                val ratio = if (preview != null && preview.width > 0 && preview.height > 0)
-                    preview.width.toFloat() / preview.height.toFloat() else 1f
-                AsyncImage(
-                    model = ImageRequest.Builder(context).data(preview?.url)
-                        .apply { if (Build.VERSION.SDK_INT >= 28) decoderFactory(ImageDecoderDecoder.Factory()) }
-                        .build(),
-                    contentDescription = gif.title,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxWidth().aspectRatio(ratio)
-                        .background(EmojiColors.Field).wbPos("GIFCELL i=$idx").clickable {
-                            KlipyInsert.insert(w.manager, appKey, gif)
-                        })
+        } else {
+            // SwiftKey reference layout (owner screenshots, Nov 3): two-column varied-height grid
+            // filling the panel; no letters keyboard below; bottom bar = abc / categories / backspace.
+            // Mock-up 10: 8 px margins and gaps, square corners, warm grey behind.
+            LazyVerticalGrid(columns = GridCells.Fixed(2), modifier = Modifier.weight(1f).fillMaxWidth().wbPos("GIFGRID")
+                    .background(Brush.verticalGradient(listOf(EmojiColors.GifTop, EmojiColors.GifBottom))),
+                contentPadding = PaddingValues(2.8.dp),
+                horizontalArrangement = Arrangement.spacedBy(2.8.dp),
+                verticalArrangement = Arrangement.spacedBy(2.8.dp)) {
+                itemsIndexed(gifs.value, key = { _, g -> g.id }) { idx, gif ->
+                    val preview = gif.gridPreview()
+                    val ratio = if (preview != null && preview.width > 0 && preview.height > 0)
+                        preview.width.toFloat() / preview.height.toFloat() else 1f
+                    AsyncImage(
+                        model = ImageRequest.Builder(context).data(preview?.url)
+                            .apply { if (Build.VERSION.SDK_INT >= 28) decoderFactory(ImageDecoderDecoder.Factory()) }
+                            .build(),
+                        contentDescription = gif.title,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxWidth().aspectRatio(ratio)
+                            .background(EmojiColors.Field).wbPos("GIFCELL i=$idx").clickable {
+                                KlipyInsert.insert(w.manager, appKey, gif)
+                            })
+                }
             }
+            val status = when {
+                !canInsert -> "This app does not accept GIFs here"
+                loading.value -> "Loading\u2026"
+                failed.value -> "Couldn't load GIFs - check connection"
+                gifs.value.isEmpty() && mode.value == "recents" -> "No recent GIFs yet"
+                gifs.value.isEmpty() -> "No GIFs found"
+                else -> ""
+            }
+            if (status.isNotEmpty()) Text(status, color = EmojiColors.OrangeMuted, fontSize = 10.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp))
         }
-        val status = when {
-            !canInsert -> "This app does not accept GIFs here"
-            loading.value -> "Loading\u2026"
-            failed.value -> "Couldn't load GIFs - check connection"
-            gifs.value.isEmpty() && mode.value == "recents" -> "No recent GIFs yet"
-            gifs.value.isEmpty() -> "No GIFs found"
-            else -> ""
-        }
-        if (status.isNotEmpty()) Text(status, color = EmojiColors.OrangeMuted, fontSize = 10.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp))
         // Bottom bar (mock-up 10): abc / Recents (clock disc + label) and category labels / backspace (edits the
         // GIF query only - it can never touch the host field).
         Row(Modifier.fillMaxWidth().height(44.dp).background(EmojiColors.Bar), verticalAlignment = Alignment.CenterVertically) {
