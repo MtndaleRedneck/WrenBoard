@@ -127,6 +127,13 @@ object WrenFlat {
 /** True wherever the WrenBoard settings look is on (the whole Settings activity). */
 val LocalWrenStyle = staticCompositionLocalOf { false }
 
+/**
+ * Height the floating try-keyboard button covers at the bottom of Settings (56 dp button + 16 dp margin), or 0 dp
+ * while it is hidden. Settings home lets its list run under the button (mock-ups 01/02) and ends with this much
+ * extra content padding so its last card can still be scrolled clear of the button.
+ */
+val LocalSettingsFabInset = staticCompositionLocalOf { 0.dp }
+
 /** True on WrenBoard's own list pages: rows drop FUTO's 48 dp icon gutter and trailing arrows (mock-up rows). */
 val LocalWrenFlatRows = staticCompositionLocalOf { false }
 
