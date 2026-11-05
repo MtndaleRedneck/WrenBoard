@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import org.futo.inputmethod.latin.uix.TextEditPopupActivity
 import org.futo.inputmethod.latin.R
 import androidx.compose.ui.unit.dp
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.painterResource
 import androidx.compose.foundation.layout.padding
@@ -38,6 +39,7 @@ import androidx.lifecycle.repeatOnLifecycle
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.ComposeNavigator
 import androidx.navigation.compose.DialogNavigator
+import androidx.navigation.compose.currentBackStackEntryAsState
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
@@ -207,13 +209,20 @@ class SettingsActivity : ComponentActivity(), DynamicThemeProviderOwner {
                                 // try-keyboard button overlays content, so shrink every page's
                                 // viewport by the FAB's height + margin (56dp + 16dp) while it shows.
                                 val fabVisible = inputMethodEnabled.value && inputMethodSelected.value
+                                // WrenBoard 1.6 (Ezzy, Nov 5: "Match the mockup"): in the WrenBoard look, Settings
+                                // home keeps no band; its list runs to the bottom edge and scrolls under the
+                                // button, and the page ends with that much content padding instead (Home.kt).
+                                val currentRoute = navController.currentBackStackEntryAsState().value?.destination?.route
+                                val homeUnderFab = LocalWrenStyle.current && currentRoute == "home"
                                 SetupOrMain(
                                     inputMethodEnabled.value,
                                     inputMethodSelected.value,
                                     doublePackage.value
                                 ) {
-                                    Box(if (fabVisible) Modifier.padding(bottom = 72.dp) else Modifier) {
-                                        SettingsNavigator(navController = navController)
+                                    Box(if (fabVisible && !homeUnderFab) Modifier.padding(bottom = 72.dp) else Modifier) {
+                                        CompositionLocalProvider(LocalSettingsFabInset provides (if (fabVisible) 72.dp else 0.dp)) {
+                                            SettingsNavigator(navController = navController)
+                                        }
                                     }
                                 }
                                 // WrenBoard 1.3 (teardown item 42): SwiftKey-style floating try-keyboard
