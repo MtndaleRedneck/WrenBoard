@@ -48,4 +48,15 @@ class SwappedLetterCorrectionTest {
         // two valid swaps -> ambiguous -> nothing
         assertNull(SwappedLetterCorrection.findInDictionary("bcad") { it == "cbad" || it == "bacd" })
     }
+
+    @Test fun knownTyposMapToTheirWordWithCase() {
+        assertEquals("the", SwappedLetterCorrection.knownTypoTarget("teh"))
+        assertEquals("The", SwappedLetterCorrection.knownTypoTarget("Teh"))
+        assertEquals("and", SwappedLetterCorrection.knownTypoTarget("adn"))
+        assertEquals("just", SwappedLetterCorrection.knownTypoTarget("jsut"))
+        // real words and other typos are left to the general rule
+        assertNull(SwappedLetterCorrection.knownTypoTarget("form"))
+        assertNull(SwappedLetterCorrection.knownTypoTarget("the"))
+        assertNull(SwappedLetterCorrection.knownTypoTarget("recieve"))
+    }
 }
