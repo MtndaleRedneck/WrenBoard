@@ -482,6 +482,7 @@ class GeneralIME(val helper: IMEHelper) : IMEInterface, WordLearner, SuggestionS
     var updateSuggestionJob: Job? = null
     var lmUpdateJob: Job? = null
     private suspend fun updateSuggestionsDictionaryInternal(inputStyle: Int, sequenceNumber: Int) {
+        if(BuildConfig.DEBUG) Log.i("WBDBG", "PASS start seq=$sequenceNumber style=$inputStyle")
         // This method returns null for us if LM is disabled
         val predictionInputValues = languageModelFacilitator.makePredictionInputValues(inputStyle)
 
@@ -515,11 +516,12 @@ class GeneralIME(val helper: IMEHelper) : IMEInterface, WordLearner, SuggestionS
             ) { suggestedWords -> dictResult = suggestedWords }
 
             // Wait for LM to report result
+            val dictDoneAt = System.currentTimeMillis()
             val (lmOutcome, lmValue) = lmResultHolder.await()
             if (activeLmWait === lmResultHolder) activeLmWait = null
             lmResult = lmValue
             if(WrenLmWait.countsAsLmTimeout(lmOutcome)) languageModelFacilitator.reportTimeout()
-            if(BuildConfig.DEBUG && lmOutcome == WrenLmWait.Outcome.CUT_SHORT) Log.i("WBDBG", "LMWAIT cut short seq=$sequenceNumber after ${System.currentTimeMillis() - passStart}ms (dictionary decides)")
+            if(BuildConfig.DEBUG) Log.i("WBDBG", "LMWAIT seq=$sequenceNumber style=$inputStyle outcome=$lmOutcome dict=${dictDoneAt - passStart}ms total=${System.currentTimeMillis() - passStart}ms")
         } else {
             inputLogic.getSuggestedWords(
                 settings.current,
@@ -637,9 +639,9 @@ class GeneralIME(val helper: IMEHelper) : IMEInterface, WordLearner, SuggestionS
             val now = System.currentTimeMillis()
             commitLmDeadline = now + WrenLmWait.COMMIT_LM_BUDGET_MS
             commitSequence = seqId
-            activeLmWait?.let {
-                it.shortenTo(WrenLmWait.commitDeadlineForWaitingPass(it.sequenceNumber, seqId, now, commitLmDeadline))
-            }
+            val waiting = activeLmWait
+            waiting?.shortenTo(WrenLmWait.commitDeadlineForWaitingPass(waiting.sequenceNumber, seqId, now, commitLmDeadline))
+            if (BuildConfig.DEBUG) Log.i("WBDBG", "COMMITWAIT seq=$seqId completed=${sequenceIdCompleted.get()} waitingPass=${waiting?.sequenceNumber}")
 
             currJob?.cancel()
 
