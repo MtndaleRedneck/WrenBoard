@@ -985,6 +985,31 @@ fun<T> DropDownPickerSettingItem(
     modifier: Modifier = Modifier,
     icon: @Composable (() -> Unit)? = null,
 ) {
+    if(LocalWrenStyle.current) {
+        // WrenBoard 1.6 (item 11 mock-ups): a plain row, the choice as its grey subtitle; tap for the list.
+        val expanded = androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+        Box(modifier) {
+            SettingItem(
+                title = label,
+                subtitle = selection?.let(getDisplayName),
+                icon = icon,
+                onClick = { expanded.value = true }
+            ) { }
+            androidx.compose.material3.DropdownMenu(
+                expanded = expanded.value,
+                onDismissRequest = { expanded.value = false },
+                offset = androidx.compose.ui.unit.DpOffset(16.dp, 0.dp)
+            ) {
+                options.forEach { option ->
+                    androidx.compose.material3.DropdownMenuItem(
+                        text = { Text(getDisplayName(option)) },
+                        onClick = { onSet(option); expanded.value = false }
+                    )
+                }
+            }
+        }
+        return
+    }
     SettingItem(
         title = label,
         icon = icon,

@@ -134,7 +134,7 @@ val wrenPageBrush: Brush get() = Brush.verticalGradient(listOf(WrenFlat.Page, Wr
 
 /** The mock-up's top bar: 56 dp, #212121, back arrow, 20 sp title, optional search. */
 @Composable
-fun WrenTopBar(title: String, onBack: (() -> Unit)?, onSearch: (() -> Unit)? = null) {
+fun WrenTopBar(title: String, onBack: (() -> Unit)?, onSearch: (() -> Unit)? = null, titleIcon: Int? = null) {
     Row(
         Modifier.fillMaxWidth().height(56.dp).background(WrenFlat.Bar).padding(horizontal = 4.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -145,6 +145,11 @@ fun WrenTopBar(title: String, onBack: (() -> Unit)?, onSearch: (() -> Unit)? = n
             }
         } else {
             Spacer(Modifier.width(4.dp))
+        }
+        if (titleIcon != null) {
+            // The FUTO page shows the FUTO logo mark before its title (mock-up 19).
+            Spacer(Modifier.width(12.dp))
+            Icon(painterResource(titleIcon), contentDescription = null, tint = WrenFlat.Icon, modifier = Modifier.size(24.dp))
         }
         Text(
             title, color = WrenFlat.Title, fontSize = 20.sp, fontWeight = FontWeight.Medium, maxLines = 1,
