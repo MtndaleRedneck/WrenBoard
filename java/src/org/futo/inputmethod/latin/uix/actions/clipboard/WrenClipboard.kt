@@ -120,7 +120,9 @@ private fun wrenScreenHeightDp(): Float {
     return dm.heightPixels / dm.density
 }
 val WrenClipboardPanelHeight: Dp get() = (wrenScreenHeightDp() * (428f / 882f)).dp
-val WrenEmojiPanelHeight: Dp get() = (wrenScreenHeightDp() * (520f / 882f)).dp
+// WrenBoard 1.6 (item 9): mock-ups 09/10 put the emoji/GIF panel top at y=808 of Ezzy's 1080x2316 screen
+// (2181 px above the nav bar); 551/882 lands there.
+val WrenEmojiPanelHeight: Dp get() = (wrenScreenHeightDp() * (551f / 882f)).dp
 val WrenPanelSearchHeight: Dp = 64.dp
 
 /** One removal that can still be undone: the entries and where they were in the history list. */
