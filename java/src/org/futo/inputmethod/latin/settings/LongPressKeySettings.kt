@@ -38,7 +38,11 @@ fun LongPressKey.description(resources: Resources): String {
 val LongPressKeyLayoutSetting = SettingsKey(
     stringPreferencesKey("longPressKeyOrdering"),
     // SwiftKey list item 8: accents (LanguageKeys) out of the default long-press categories.
-    "${LongPressKey.Numbers.ordinal},${LongPressKey.Symbols.ordinal},${LongPressKey.QuickActions.ordinal},${LongPressKey.MiscLetters.ordinal}"
+    // WrenBoard 1.6 item 8 (approved mock-up 08): like SwiftKey with accents off, holding a letter gives only
+    // the symbol shown on it (e -> ~). Quick actions and the extra letters are off by default too; all of
+    // them can still be switched back on in the existing long-press settings. Numbers only appear when the
+    // number row is off (MoreKeysBuilder), as in SwiftKey.
+    "${LongPressKey.Numbers.ordinal},${LongPressKey.Symbols.ordinal}"
 )
 
 fun String.toLongPressKeyLayoutItems(): List<LongPressKey> {
