@@ -205,6 +205,21 @@ data class LayoutEngine(
         layoutParams.element.kind.isAlphabet && params.mId.isEmailOrUrlField()
                 && row.keys.any { it is FieldVariantKey }
 
+    // WrenBoard 1.6 (item 10, pixel spec v1.1 item 67): in SwiftKey's email row 123 and return are 40.2 dp
+    // (113 px of 1080), not the letter rows' functional width (a layout's FunctionalKey override would
+    // otherwise win); the space bar takes what is left.
+    private fun swiftKeyEmailRowWidths(row: List<LayoutEntry.Key>, widths: Map<KeyWidth, Float>): Map<KeyWidth, Float> {
+        val oldFunctional = widths[KeyWidth.FunctionalKey] ?: return widths
+        val newFunctional = layoutWidth * SwiftKeyEmailFunctionalWidth
+        val numFunctional = row.count { it.data.width == KeyWidth.FunctionalKey }
+        val numGrow = row.count { it.data.width == KeyWidth.Grow }
+        if (numFunctional == 0 || numGrow == 0) return widths
+        return widths.toMutableMap().apply {
+            put(KeyWidth.FunctionalKey, newFunctional)
+            put(KeyWidth.Grow, (widths[KeyWidth.Grow] ?: 0.0f) + numFunctional * (oldFunctional - newFunctional) / numGrow)
+        }
+    }
+
 
     private fun computeRegularKeyWidth(layoutWidth: Int = this.layoutWidth): Float {
         return keyboard.overrideWidths[KeyWidth.Regular]?.let { it * layoutWidth.toFloat() } ?: run {
@@ -373,14 +388,16 @@ data class LayoutEngine(
         widths: Map<KeyWidth, Float>,
         height: Float,
         splittable: Boolean,
-        isBottomRow: Boolean = false
+        isBottomRow: Boolean = false,
+        swiftKeyEmailRow: Boolean = false
     ): LayoutRow {
         val computedRow = computedRowWithoutWidths.map { key ->
             LayoutEntry.Key(key.data, widths[key.data.width]!!, key.rowSpan)
         }.let { row ->
             // SwiftKey bottom row (owner-approved 480/156): enter is 1.5 letter pitches
             // (156px at 1080px), the Grow space bar absorbs the delta (500px -> 480px).
-            if (!isBottomRow) {
+            // WrenBoard 1.6 (item 10): the email row's return key keeps its own 113 px width.
+            if (!isBottomRow || swiftKeyEmailRow) {
                 row
             } else {
                 val enterWidth = 1.5f * regularKeyWidth
@@ -494,16 +511,18 @@ data class LayoutEngine(
                     row = it,
                     regularKeyWidth = rowRegularKeyWidths[i],
                     layoutWidth = rowLayoutWidths[i],
-                    functionalWidth = if (rows[i].isBottomRow && isSwiftKeyEmailRow(rows[i])) {
-                        // WrenBoard 1.6 (item 10, pixel spec v1.1 item 67): 123 and return are 40.2 dp
-                        // (113 px of 1080) in SwiftKey's email row; the space bar takes what is left.
-                        layoutWidth * SwiftKeyEmailFunctionalWidth
-                    } else if (rows[i].isBottomRow && keyboard.bottomRowWidthMode.separateFunctional) {
+                    functionalWidth = if (rows[i].isBottomRow && keyboard.bottomRowWidthMode.separateFunctional) {
                         maxOf(minimumBottomFunctionalKeyWidth, functionalWidth)
                     } else {
                         functionalWidth
                     }
-                )
+                ).let { widths ->
+                    if (rows[i].isBottomRow && isSwiftKeyEmailRow(rows[i])) {
+                        swiftKeyEmailRowWidths(it, widths)
+                    } else {
+                        widths
+                    }
+                }
             }
         }
 
@@ -523,7 +542,8 @@ data class LayoutEngine(
                 rowWidths[i],
                 height.toFloat(),
                 rows[i].splittable,
-                rows[i].isBottomRow
+                rows[i].isBottomRow,
+                swiftKeyEmailRow = rows[i].isBottomRow && isSwiftKeyEmailRow(rows[i])
             )
         }
 

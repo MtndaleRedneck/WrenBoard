@@ -1331,6 +1331,7 @@ class UixManager(private val latinIME: LatinIME) {
                                 && (quickClipState.value == null || inlineStuffHiddenByTyping.value)
                                 && currentNotice.value == null
                                 && (inlineSuggestions.value.isEmpty() || inlineStuffHiddenByTyping.value)
+                                && !swiftKeyPadField.value
                     when {
                         currWindowActionWindow.value != null -> ActionViewWithHeader(
                             currWindowActionWindow.value!!,
@@ -1342,7 +1343,8 @@ class UixManager(private val latinIME: LatinIME) {
                         )
                     }
 
-                    if(!needToUseExpandableSuggestionUi) {
+                    // WrenBoard 1.6 (item 10): no strip above SwiftKey's number/phone pad, so no gap under it.
+                    if(!needToUseExpandableSuggestionUi && !swiftKeyPadField.value) {
                         Spacer(modifier = Modifier.height(gap))
                     }
 
