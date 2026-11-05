@@ -47,6 +47,14 @@ jobs:
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;28.2.13676358"
       - uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4.4.3
+      - name: Unit tests (full JVM suite; a failing test stops the build before anything is signed)
+        run: ./gradlew --no-daemon testStableDebugUnitTest
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: WrenBoard-unit-test-results
+          path: build/test-results/testStableDebugUnitTest/*.xml
+          retention-days: 30
       - name: Signing setup
         env:
           KEYSTORE_B64: ${{ secrets.KEYSTORE_B64 }}
