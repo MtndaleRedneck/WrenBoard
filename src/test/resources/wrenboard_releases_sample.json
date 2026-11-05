@@ -1,0 +1,32 @@
+[
+ {
+  "tag_name": "v1.5.0",
+  "draft": false,
+  "prerelease": false,
+  "name": "WrenBoard 1.5",
+  "assets": [
+   {
+    "name": "WrenBoard-1.5.apk",
+    "size": 129403471,
+    "digest": "sha256:2b6cb34a8a6193a6a4f9acae7170f664ead08374a5675285ab6e9591f394d404",
+    "browser_download_url": "https://github.com/MtndaleRedneck/WrenBoard/releases/download/v1.5.0/WrenBoard-1.5.apk",
+    "content_type": "application/vnd.android.package-archive"
+   }
+  ]
+ },
+ {
+  "tag_name": "v1.4.0",
+  "draft": false,
+  "prerelease": false,
+  "name": "WrenBoard 1.4",
+  "assets": [
+   {
+    "name": "WrenBoard-1.4.apk",
+    "size": 129324976,
+    "digest": "sha256:b92358ecb18c20549c3e64a82ad6c4510d0ab89a9208d68cd823b8278e85d5a7",
+    "browser_download_url": "https://github.com/MtndaleRedneck/WrenBoard/releases/download/v1.4.0/WrenBoard-1.4.apk",
+    "content_type": "application/vnd.android.package-archive"
+   }
+  ]
+ }
+]

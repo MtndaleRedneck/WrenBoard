@@ -77,6 +77,10 @@ private fun GithubRelease.toUpdateResult(): UpdateResult? {
         size = asset.size, sha256 = sha)
 }
 
+/** The first usable release in GitHub's releases-list JSON (newest first). Throws on JSON that is not a list. */
+internal fun newestUsableRelease(body: String): UpdateResult? =
+    updateJson.decodeFromString<List<GithubRelease>>(body).firstNotNullOfOrNull { it.toUpdateResult() }
+
 /** The newest published release (the list comes newest-first), or null on any failure. */
 private suspend fun fetchNewestRelease(): Pair<Boolean, UpdateResult?> {
     if(!BuildConfig.UPDATE_CHECKING || !BuildConfig.UPDATE_CHECKING_NETWORK) return false to null
@@ -95,12 +99,11 @@ private suspend fun fetchNewestRelease(): Pair<Boolean, UpdateResult?> {
             val body = connection.inputStream.bufferedReader().use { it.readText() }
             connection.disconnect()
 
-            val releases = updateJson.decodeFromString<List<GithubRelease>>(body)
-            val newest = releases.firstNotNullOfOrNull { it.toUpdateResult() }
+            val newest = newestUsableRelease(body)
             if(newest != null) Log.d("UpdateChecking", "Retrieved update for version ${newest.nextVersionString}")
             true to newest
         } catch (e: Exception) {
-            Log.e("UpdateChecking", "Checking update failed with exception")
+            Log.e("UpdateChecking", "Checking update failed with exception: $e")
             e.printStackTrace()
             false to null
         }
