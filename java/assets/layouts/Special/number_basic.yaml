@@ -2,6 +2,7 @@ name: Numbers (Basic)
 # WrenBoard 1.6 (item 10, pixel spec v1.1 items 64-65, Ezzy's approved mock-ups 13/14): SwiftKey's compact
 # 4 x 6 pad, the same for number and phone fields (number, date and time fields use this file). No letters on the keys, no arrow row,
 # no prediction strip or toolbar (UixManager), 576 px tall at 1080x2316 (KeyboardSizingCalculator).
+# Long-press 0 gives +, long-press ; gives : (hint " " keeps those off the key face, as on SwiftKey).
 # Columns at 1080 px: three 216 px cells, then 140 / 141 / 151 px (keys 210, 134, 135, 145 px + gaps).
 numberRowMode: AlwaysDisabled
 bottomRowHeightMode: Flexible
@@ -37,7 +38,7 @@ rows:
       - "6"
       - {type: base, spec: "+", attributes: {width: Custom2}}
       - {type: base, spec: "-", attributes: {width: Custom3}}
-      - {type: base, spec: ";", moreKeys: [":"], attributes: {width: Custom4}}
+      - {type: base, spec: ";", moreKeys: [":"], hint: " ", attributes: {width: Custom4}}
     splittable: false
   - letters:
       - "7"
@@ -49,7 +50,7 @@ rows:
     splittable: false
   - bottom:
       - {type: base, spec: "*"}
-      - {type: base, spec: "0", moreKeys: "!noPanelAutoMoreKey!,+"}
+      - {type: base, spec: "0", moreKeys: "!noPanelAutoMoreKey!,+", hint: " "}
       - {type: base, spec: "#"}
       - {type: base, spec: ".", attributes: {width: Custom2}}
       # SwiftKey's blank key: a space with no glyph
