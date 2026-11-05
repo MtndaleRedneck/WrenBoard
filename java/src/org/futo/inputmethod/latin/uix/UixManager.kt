@@ -1343,9 +1343,12 @@ class UixManager(private val latinIME: LatinIME) {
                         )
                     }
 
-                    // WrenBoard 1.6 (item 10): no strip above SwiftKey's number/phone pad, so no gap under it.
+                    // WrenBoard 1.6 (item 10): no strip above SwiftKey's number/phone pad, so no gap under it; the
+                    // pad's own board starts 1.4 dp (4 px) above its first key outline instead (mock-ups 13/14).
                     if(!needToUseExpandableSuggestionUi && !swiftKeyPadField.value) {
                         Spacer(modifier = Modifier.height(gap))
+                    } else if(swiftKeyPadField.value) {
+                        Spacer(modifier = Modifier.height(1.4.dp))
                     }
 
                     val kbHeight = remember { mutableIntStateOf(latinIME.size.value!!.height) }
