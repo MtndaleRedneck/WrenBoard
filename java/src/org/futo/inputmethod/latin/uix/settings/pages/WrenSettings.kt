@@ -1,10 +1,10 @@
 package org.futo.inputmethod.latin.uix.settings.pages
 
 import androidx.compose.foundation.layout.Column
-import org.futo.inputmethod.latin.uix.gif.WrenStickersEnabled
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
@@ -23,9 +23,7 @@ import org.futo.inputmethod.latin.uix.settings.NavigationItem
 import org.futo.inputmethod.latin.uix.settings.NavigationItemStyle
 import org.futo.inputmethod.latin.uix.settings.UserSetting
 import org.futo.inputmethod.latin.uix.settings.UserSettingsMenu
-import org.futo.inputmethod.latin.uix.settings.WrenCard
-import org.futo.inputmethod.latin.uix.settings.WrenNavRow
-import org.futo.inputmethod.latin.uix.settings.WrenSectionLabel
+import org.futo.inputmethod.latin.uix.settings.WrenHomeRow
 import org.futo.inputmethod.latin.uix.settings.WrenSettingsStyle
 import org.futo.inputmethod.latin.uix.settings.useDataStoreValue
 import org.futo.inputmethod.latin.uix.settings.userSettingDecorationOnly
@@ -33,186 +31,225 @@ import org.futo.inputmethod.latin.uix.settings.userSettingNavigationItem
 import org.futo.inputmethod.latin.uix.settings.userSettingToggleDataStore
 
 /*
- * WrenBoard 1.2 Settings tree (FULL_LIST P3 and Ezzy's 11:44 PM decision): six groups, then one FUTO entry that
- * holds FUTO's whole original Settings home, so nothing FUTO had is cut. The rows below are FUTO's own setting
- * items, regrouped; their keys and behaviour are unchanged, so backups and the 1.1 repairs read them as before.
+ * WrenBoard 1.6 Settings tree (item 11; settings mock-ups v3, Ezzy Nov 4 2026): eleven pages and one FUTO page,
+ * then the Feedback & bugs and Updates cards at the bottom of the home page. Every row below is an existing
+ * WrenBoard or FUTO setting object, regrouped; keys and behaviour are unchanged, so backups and search read
+ * them as before. Nothing is added and nothing is dropped (Ezzy, 10:03 PM: only settings that already exist).
  */
 
-private val keyPressNames = setOf(
-    R.string.popup_on_keypress,
-    R.string.vibrate_on_keypress,
-    R.string.typing_settings_vibration_strength,
-    R.string.sound_on_keypress,
-    R.string.typing_settings_keypress_sound_volume,
-)
+/** The listed settings of [menu], in the order given. A missing name fails loudly at first use. */
+private fun UserSettingsMenu.named(vararg ids: Int): List<UserSetting> =
+    ids.map { id -> settings.first { it.name == id } }
 
-private val wrenKeyboardLook = listOf(
-    userSettingNavigationItem(
-        title = R.string.theme_settings_title,
-        style = NavigationItemStyle.Misc,
-        navigateTo = "themes",
-        icon = R.drawable.themes
-    ),
-    userSettingNavigationItem(
-        title = R.string.wren_set_toolbar_buttons,
-        style = NavigationItemStyle.Misc,
-        navigateTo = "actions",
-        icon = R.drawable.smile
-    ),
-)
-private val wrenKeyboardLayout get() = KeyboardSettingsMenu.settings
-private val wrenKeyboardFeel get() = TypingSettingsMenu.settings.filter { it.name in keyPressNames }
-
-val WrenKeyboardMenu = UserSettingsMenu(
-    title = R.string.wren_set_keyboard,
-    navPath = "wren_keyboard", registerNavPath = true,
-    settings = wrenKeyboardLook + wrenKeyboardLayout + wrenKeyboardFeel
-)
-
-private val wrenTypingShift get() = LongPressMenu.settings.filter { it.name == R.string.keyboard_settings_shift_lock }
-private val wrenTypingTyping get() = TypingSettingsMenu.settings.filter { it.name !in keyPressNames }
-private val wrenTypingWords = listOf(
-            userSettingNavigationItem(
-                title = R.string.wren_set_suggestions,
-                subtitle = R.string.wren_set_suggestions_sub,
-                style = NavigationItemStyle.Misc,
-                navigateTo = PredictiveTextMenu.navPath,
-                icon = R.drawable.text_prediction
-            ),
-            userSettingNavigationItem(
-                title = R.string.edit_personal_dictionary,
-                style = NavigationItemStyle.Misc,
-                navigateTo = "pdict",
-                icon = R.drawable.book
-            ),
-            userSettingNavigationItem(
-                title = R.string.prediction_settings_word_blacklist,
-                style = NavigationItemStyle.Misc,
-                navigateTo = "blacklist",
-                icon = R.drawable.file_text
-            ),
-)
+// Typing
+private val typingTyping get() = PredictiveTextMenu.named(R.string.auto_correction) +
+    TypingSettingsMenu.named(R.string.auto_cap, R.string.typing_settings_auto_space_mode, R.string.use_double_space_period,
+        R.string.typing_settings_revert_correction_on_backspace) +
+    LongPressMenu.named(R.string.keyboard_settings_shift_lock)
+private val typingPredictions get() = PredictiveTextMenu.named(R.string.use_personalized_dicts, R.string.wren_starter_words) +
+    KeyboardSettingsMenu.named(R.string.keyboard_settings_inline_autofill) +
+    PredictiveTextMenu.named(R.string.edit_personal_dictionary, R.string.prediction_settings_word_blacklist)
+private val typingSwipe get() = SwipeMenu.named(R.string.swipe_settings_enable_swipe_typing, R.string.swipe_settings_sensitive_swipe,
+    R.string.swipe_settings_suggest_mode, R.string.swipe_settings_kasroz)
+private val typingSpaceBackspace get() = LongPressMenu.named(R.string.morekey_settings_spacebar_swipe_shortcut,
+    R.string.morekey_settings_spacebar_hold_shortcut, R.string.morekey_settings_backspace_hold_delete_words,
+    R.string.morekey_settings_backspace_swipe_to_delete)
 
 val WrenTypingMenu = UserSettingsMenu(
-    title = R.string.wren_set_typing,
+    title = R.string.wren_home_typing,
     navPath = "wren_typing", registerNavPath = true,
-    settings = wrenTypingShift + wrenTypingTyping + wrenTypingWords
+    settings = typingTyping + typingPredictions + typingSwipe + typingSpaceBackspace
 )
 
-val WrenClipEmojiMenu = UserSettingsMenu(
-    title = R.string.wren_set_clip_emoji,
-    navPath = "wren_clipemoji", registerNavPath = true,
-    settings = listOf(
-        userSettingToggleDataStore(
-            title = R.string.wren_swiftkey_panels,
-            setting = WrenSwiftKeyPanels
-        ),
-        userSettingNavigationItem(
-            title = R.string.wren_clip_settings,
-            style = NavigationItemStyle.Misc,
-            navigateTo = "actions/clipboard_history",
-            icon = R.drawable.wren_ic_content_paste
-        ),
-        UserSetting(name = R.string.wren_set_clear_emoji_recents) {
-            val context = LocalContext.current
-            val scope = rememberCoroutineScope()
-            NavigationItem(
-                title = stringResource(R.string.wren_set_clear_emoji_recents),
-                style = NavigationItemStyle.MiscNoArrow,
-                navigate = { scope.launch { context.resetRecentEmojis() } }
-            )
-        },
-        UserSetting(name = R.string.wren_set_unlock_all_emojis) {
-            val context = LocalContext.current
-            val scope = rememberCoroutineScope()
-            val count = useDataStoreValue(WrenLockedEmojis).toLockedList().size
-            NavigationItem(
-                title = stringResource(R.string.wren_set_unlock_all_emojis),
-                subtitle = stringResource(R.string.wren_set_locked_count, count),
-                style = NavigationItemStyle.MiscNoArrow,
-                navigate = { scope.launch { context.setSetting(WrenLockedEmojis, "") } }
-            )
-        },
+// Emoji
+private val emojiClearRecents = UserSetting(name = R.string.wren_set_clear_emoji_recents) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    NavigationItem(
+        title = stringResource(R.string.wren_set_clear_emoji_recents),
+        style = NavigationItemStyle.MiscNoArrow,
+        navigate = { scope.launch { context.resetRecentEmojis() } }
     )
+}
+private val emojiUnlockAll = UserSetting(name = R.string.wren_set_unlock_all_emojis) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val count = useDataStoreValue(WrenLockedEmojis).toLockedList().size
+    NavigationItem(
+        title = stringResource(R.string.wren_set_unlock_all_emojis),
+        subtitle = stringResource(R.string.wren_set_locked_count, count),
+        style = NavigationItemStyle.MiscNoArrow,
+        navigate = { scope.launch { context.setSetting(WrenLockedEmojis, "") } }
+    )
+}
+private val emojiItems get() = TypingSettingsMenu.named(R.string.typing_settings_suggest_emojis) +
+    ActionsScreen.named(R.string.action_settings_quick_option_enable_action_key, R.string.action_settings_quick_option_language_switch_key) +
+    listOf(emojiClearRecents, emojiUnlockAll)
+
+val WrenEmojiMenu = UserSettingsMenu(
+    title = R.string.wren_home_emoji,
+    navPath = "wren_emoji", registerNavPath = true,
+    settings = emojiItems
 )
 
+// Voice typing (FUTO's voice page; "Suppress symbols" lives under Advanced, as in the mock-up)
+private val voiceEngine get() = VoiceInputMenu.named(R.string.voice_input_settings_backend_system)
+private val voiceRest get() = VoiceInputMenu.settings.filter {
+    it.name != R.string.voice_input_settings_backend_system && it.name != R.string.voice_input_settings_suppress_symbols
+}
+val WrenVoiceMenu = UserSettingsMenu(
+    title = R.string.wren_home_voice,
+    navPath = "wren_voice", registerNavPath = true,
+    settings = voiceEngine + voiceRest
+)
+
+// Toolbar
+private val toolbarButtons get() = ActionsScreen.named(R.string.action_editor_title) + listOf(ActionsScreen.settings.last())
+val WrenToolbarMenu = UserSettingsMenu(
+    title = R.string.wren_home_toolbar,
+    navPath = "wren_toolbar", registerNavPath = true,
+    settings = toolbarButtons
+)
+
+// Layout & keys
+private val layoutSize get() = KeyboardSettingsMenu.named(R.string.size_settings_title)
+private val layoutRows get() = KeyboardSettingsMenu.named(R.string.keyboard_settings_show_number_row) +
+    NumberRowSettingMenu.named(R.string.keyboard_settings_number_row_style, R.string.keyboard_settings_number_row_dont_use_script_digits) +
+    KeyboardSettingsMenu.named(R.string.keyboard_settings_show_arrow_row)
+private val layoutKeys get() = KeyboardSettingsMenu.named(R.string.keyboard_settings_period_key) +
+    LongPressMenu.named(R.string.morekey_settings_show_hints, R.string.morekey_settings_duration, R.string.morekey_settings_layout)
+val WrenLayoutMenu = UserSettingsMenu(
+    title = R.string.wren_home_layout,
+    navPath = "wren_layout", registerNavPath = true,
+    settings = layoutSize + layoutRows + layoutKeys
+)
+
+// Sound & vibration
+val WrenSoundMenu = UserSettingsMenu(
+    title = R.string.wren_home_sound,
+    navPath = "wren_sound", registerNavPath = true,
+    settings = TypingSettingsMenu.named(R.string.sound_on_keypress, R.string.typing_settings_keypress_sound_volume,
+        R.string.vibrate_on_keypress, R.string.typing_settings_vibration_strength, R.string.popup_on_keypress)
+)
+
+// Backup & restore (FUTO's export / import rows; the old in-page heading is left to the page title)
 val WrenBackupMenu = UserSettingsMenu(
-    title = R.string.wren_set_backup,
+    title = R.string.wren_home_backup,
     navPath = "wren_backup", registerNavPath = true,
     settings = MiscMenu.settings
 )
 
-/** FUTO's original Settings home, whole: swipe typing, languages, actions, theme, payment, help, developer, credits. */
-/**
- * WrenBoard style: the six group pages render their rows in labelled cards (render 10b: LOOK / LAYOUT / FEEL).
- * The rows are the same objects as in each menu's `settings` list, so search and the plain FUTO style see them unchanged.
- */
-val WrenMenuSections: Map<String, List<Pair<Int, List<UserSetting>>>> by lazy {
-    mapOf(
-        "wren_keyboard" to listOf(
-            R.string.wren_sec_look to wrenKeyboardLook,
-            R.string.wren_sec_layout to wrenKeyboardLayout,
-            R.string.wren_sec_feel to wrenKeyboardFeel,
-        ),
-        "wren_typing" to listOf(
-            R.string.wren_sec_shift to wrenTypingShift,
-            R.string.wren_sec_typing to wrenTypingTyping,
-            R.string.wren_sec_words to wrenTypingWords,
-        ),
-        "wren_clipemoji" to listOf(
-            R.string.wren_sec_panels to WrenClipEmojiMenu.settings.take(1),
-            R.string.wren_sec_clipboard to WrenClipEmojiMenu.settings.drop(1).take(1),
-            R.string.wren_sec_emoji to WrenClipEmojiMenu.settings.drop(2),
-        ),
-        "wren_backup" to listOf(R.string.wren_sec_backup to WrenBackupMenu.settings),
-        "wren_futo" to listOf(
-            R.string.wren_sec_futo to WrenFutoMenu.settings.dropLast(1),
-            R.string.wren_sec_style to WrenFutoMenu.settings.takeLast(1),
-        ),
+// Advanced
+private val advancedTip = userSettingDecorationOnly {
+    androidx.compose.material3.Text(
+        stringResource(R.string.wren_advanced_tip),
+        color = org.futo.inputmethod.latin.uix.settings.WrenFlat.Sub,
+        fontSize = androidx.compose.ui.unit.TextUnit(14f, androidx.compose.ui.unit.TextUnitType.Sp),
+        modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 16.dp)
     )
 }
+private val advancedEngine get() = PredictiveTextMenu.named(R.string.prediction_settings_transformer,
+        R.string.prediction_settings_transformer_models, R.string.prediction_settings_transformer_advanced_params) +
+    listOf(PredictiveTextMenu.settings[3]) + // FUTO's "alpha" tip under the model rows (shown only with the model on)
+    PredictiveTextMenu.named(R.string.prefs_show_suggestions, R.string.bigram_prediction, R.string.prediction_settings_smart_keyhit_detection)
+private val advancedKeyboard get() = KeyboardSettingsMenu.named(R.string.keyboard_settings_show_suggestion_row) +
+    listOf(userSettingToggleDataStore(title = R.string.wren_swiftkey_panels, setting = WrenSwiftKeyPanels)) +
+    TypingSettingsMenu.named(R.string.typing_settings_delete_pasted_text_on_backspace) +
+    KeyboardSettingsMenu.named(R.string.keyboard_settings_hide_when_hardware_keyboard_is_connected) +
+    listOf(SwipeMenu.settings.last()) // FUTO's "show unsupported / old swipe engine" control
+private val advancedVoice get() = VoiceInputMenu.named(R.string.voice_input_settings_suppress_symbols)
+private val advancedOther get() = HomeScreenLite.named(R.string.dev_settings_title)
+val WrenAdvancedMenu = UserSettingsMenu(
+    title = R.string.wren_home_advanced,
+    navPath = "wren_advanced", registerNavPath = true,
+    settings = listOf(advancedTip) + advancedEngine + advancedKeyboard + advancedVoice + advancedOther
+)
+
+// FUTO: everything FUTO's own (paid version, FUTO's manual update check, help and links, licence, the classic look)
+private val futoPaidNotice = userSettingDecorationOnly {
+    val isPaid = useDataStoreValue(IS_ALREADY_PAID)
+    if(isPaid || androidx.compose.ui.platform.LocalInspectionMode.current) {
+        androidx.compose.material3.Text(
+            stringResource(R.string.payment_paid_version_indicator),
+            style = org.futo.inputmethod.latin.uix.theme.Typography.SmallMl,
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)
+        )
+    }
+}
+private val futoAtl get() = listOf(HomeScreenLite.settings[0]) // FUTO's ATL launch rows (only on ATL builds)
+private val futoPaid get() = HomeScreenLite.named(R.string.payment_screen_short_title) + listOf(futoPaidNotice)
+private val futoUpdates get() = HomeScreenLite.named(R.string.settings_check_for_updates_manually)
+private val futoHelp get() = HelpMenu.named(R.string.help_menu_website, R.string.help_menu_documentation, R.string.help_menu_discord,
+    R.string.help_menu_futo_chat, R.string.help_menu_github, R.string.help_menu_email)
+private val futoVersion get() = HelpMenu.named(R.string.help_menu_version_name, R.string.help_menu_version_code) +
+    listOf(HelpMenu.settings[2]) // FUTO's version tip (tapping the version code is how developer mode is unlocked)
+private val futoLicence get() = HomeScreenLite.named(R.string.credits_menu_title)
+private val futoLook get() = listOf(userSettingToggleDataStore(title = R.string.wren_set_style, setting = WrenSettingsStyle))
 
 val WrenFutoMenu = UserSettingsMenu(
     title = R.string.wren_set_futo,
     navPath = "wren_futo", registerNavPath = true,
-    // WrenBoard 1.3 (teardown item 41): the paid-version notice moved here from the WrenBoard home; the
-    // Payment row, payment screen and already-paid flow stay exactly where they were, one tap from home.
-    settings = HomeScreenLite.settings + listOf(
-        userSettingDecorationOnly {
-            val isPaid = useDataStoreValue(IS_ALREADY_PAID)
-            if(isPaid || androidx.compose.ui.platform.LocalInspectionMode.current) {
-                androidx.compose.material3.Text(
-                    stringResource(R.string.payment_paid_version_indicator),
-                    style = org.futo.inputmethod.latin.uix.theme.Typography.SmallMl,
-                    modifier = Modifier.fillMaxWidth(),
-                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                )
-            }
-        },
-        userSettingToggleDataStore(
-            title = R.string.wren_set_style,
-            setting = WrenSettingsStyle
-        )
-    )
+    settings = futoAtl + futoPaid + futoUpdates + futoHelp + futoVersion + futoLicence + futoLook
 )
 
+/** The grouped pages: section label (0 = none) and its rows, the same objects as each menu's `settings`. */
+val WrenMenuSections: Map<String, List<Pair<Int, List<UserSetting>>>> by lazy {
+    mapOf(
+        "wren_typing" to listOf(
+            R.string.wren_s_typing to typingTyping,
+            R.string.wren_s_predictions to typingPredictions,
+            R.string.wren_s_swipe to typingSwipe,
+            R.string.wren_s_space_backspace to typingSpaceBackspace,
+        ),
+        "wren_emoji" to listOf(R.string.wren_s_emoji to WrenEmojiMenu.settings),
+        "wren_voice" to listOf(
+            R.string.wren_s_voice_engine to voiceEngine,
+            0 to voiceRest,
+        ),
+        "wren_toolbar" to listOf(R.string.wren_s_toolbar_buttons to toolbarButtons),
+        "wren_layout" to listOf(
+            R.string.wren_s_size to layoutSize,
+            R.string.wren_s_rows to layoutRows,
+            R.string.wren_s_keys to layoutKeys,
+        ),
+        "wren_sound" to listOf(0 to WrenSoundMenu.settings),
+        "wren_backup" to listOf(0 to MiscMenu.settings.drop(1)),
+        "wren_advanced" to listOf(
+            0 to listOf(advancedTip),
+            R.string.wren_s_predictions_engine to advancedEngine,
+            R.string.wren_s_keyboard to advancedKeyboard,
+            R.string.wren_s_voice to advancedVoice,
+            R.string.wren_s_other to advancedOther,
+        ),
+        "wren_futo" to listOf(
+            0 to futoAtl,
+            R.string.wren_s_paid to futoPaid,
+            R.string.wren_s_updates to futoUpdates,
+            R.string.wren_s_help_links to futoHelp,
+            R.string.wren_s_version to futoVersion,
+            R.string.wren_s_licence to futoLicence,
+            R.string.wren_s_look to futoLook,
+        ),
+    )
+}
+
+/** The home list (mock-up 01): twelve flat rows with outline icons, FUTO last with the FUTO logo mark. */
 @Composable
 fun WrenHomeList() {
     val nav = LocalNavController.current
     Column {
-        Spacer(Modifier.height(6.dp))
-        WrenCard {
-            WrenNavRow(stringResource(R.string.wren_set_keyboard), stringResource(R.string.wren_set_keyboard_sub), R.drawable.wren_ic_keyboard_fill) { nav?.navigate(WrenKeyboardMenu.navPath) }
-            WrenNavRow(stringResource(R.string.wren_set_typing), stringResource(R.string.wren_set_typing_sub), R.drawable.wren_ic_spellcheck) { nav?.navigate(WrenTypingMenu.navPath) }
-            WrenNavRow(stringResource(R.string.wren_set_voice), stringResource(R.string.wren_set_voice_sub), R.drawable.wren_ic_mic_fill) { nav?.navigate(VoiceInputMenu.navPath) }
-            WrenNavRow(stringResource(R.string.wren_set_clip_emoji), stringResource(R.string.wren_set_clip_emoji_sub), R.drawable.wren_ic_content_paste) { nav?.navigate(WrenClipEmojiMenu.navPath) }
-            WrenNavRow(stringResource(R.string.wren_set_backup), stringResource(R.string.wren_set_backup_sub), R.drawable.wren_ic_settings_backup_restore) { nav?.navigate(WrenBackupMenu.navPath) }
-            WrenNavRow(stringResource(R.string.wren_set_about), stringResource(R.string.wren_set_about_sub), R.drawable.wren_ic_info_fill, divider = false) { nav?.navigate(WrenAboutMenu.navPath) }
-        }
-        WrenSectionLabel(stringResource(R.string.wren_set_futo))
-        WrenCard {
-            WrenNavRow(stringResource(R.string.wren_set_futo), stringResource(R.string.wren_set_futo_sub), R.drawable.wren_ic_more_horiz, dark = true, divider = false) { nav?.navigate(WrenFutoMenu.navPath) }
-        }
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(8.dp))
+        WrenHomeRow(stringResource(R.string.wren_home_languages), R.drawable.wren_set_ic_languages) { nav?.navigate("languages") }
+        WrenHomeRow(stringResource(R.string.wren_home_themes), R.drawable.wren_set_ic_themes) { nav?.navigate("themes") }
+        WrenHomeRow(stringResource(R.string.wren_home_typing), R.drawable.wren_set_ic_typing) { nav?.navigate(WrenTypingMenu.navPath) }
+        WrenHomeRow(stringResource(R.string.wren_home_emoji), R.drawable.wren_set_ic_emoji) { nav?.navigate(WrenEmojiMenu.navPath) }
+        WrenHomeRow(stringResource(R.string.wren_home_voice), R.drawable.wren_set_ic_voice) { nav?.navigate(WrenVoiceMenu.navPath) }
+        WrenHomeRow(stringResource(R.string.wren_home_clipboard), R.drawable.wren_set_ic_clipboard) { nav?.navigate("actions/clipboard_history") }
+        WrenHomeRow(stringResource(R.string.wren_home_toolbar), R.drawable.wren_set_ic_toolbar) { nav?.navigate(WrenToolbarMenu.navPath) }
+        WrenHomeRow(stringResource(R.string.wren_home_layout), R.drawable.wren_set_ic_layout) { nav?.navigate(WrenLayoutMenu.navPath) }
+        WrenHomeRow(stringResource(R.string.wren_home_sound), R.drawable.wren_set_ic_sound) { nav?.navigate(WrenSoundMenu.navPath) }
+        WrenHomeRow(stringResource(R.string.wren_home_backup), R.drawable.wren_set_ic_backup) { nav?.navigate(WrenBackupMenu.navPath) }
+        WrenHomeRow(stringResource(R.string.wren_home_advanced), R.drawable.wren_set_ic_advanced) { nav?.navigate(WrenAdvancedMenu.navPath) }
+        WrenHomeRow(stringResource(R.string.wren_set_futo), R.drawable.wren_ic_futo_mark, iconSize = 21.dp) { nav?.navigate(WrenFutoMenu.navPath) }
     }
 }
