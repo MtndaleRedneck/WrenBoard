@@ -143,8 +143,9 @@ fun FeedbackScreen(navController: NavHostController) {
     var text by rememberSaveable { mutableStateOf("") }
     val c = remember { Feedback.context(ctx) }
     fun open(url: String) = ctx.openURI(url, newTask = true)
-    Column(Modifier.fillMaxSize().background(WrenFlat.Page).verticalScroll(rememberScrollState())) {
-        WrenTopBar(androidx.compose.ui.res.stringResource(R.string.feedback_page_title), onBack = { navController.navigateUp() })
+    Column(Modifier.fillMaxSize().background(WrenFlat.Page)) {
+    WrenTopBar(androidx.compose.ui.res.stringResource(R.string.feedback_page_title), onBack = { navController.navigateUp() })
+    Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState())) {
         Spacer(Modifier.height(12.dp))
         FeedbackSection("") {
             Text("Tell us what is on your mind: a bug, an idea, or general feedback. Reports may become public issues on GitHub, so leave out personal details.",
@@ -194,6 +195,7 @@ fun FeedbackScreen(navController: NavHostController) {
         }
         Spacer(Modifier.height(16.dp))
     }
+    }
 }
 
 /** Home card 1 (mock-up 02): opens the Feedback page. */
@@ -201,7 +203,7 @@ fun FeedbackScreen(navController: NavHostController) {
 fun WrenFeedbackCard(navController: NavHostController) {
     WrenBottomCard("Feedback & bugs") {
         Row(
-            Modifier.fillMaxWidth().heightIn(min = 48.dp).clip(RoundedCornerShape(14.dp))
+            Modifier.fillMaxWidth().heightIn(min = 40.dp).clip(RoundedCornerShape(14.dp))
                 .clickable(role = Role.Button) { navController.navigate("feedback") },
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -211,7 +213,7 @@ fun WrenFeedbackCard(navController: NavHostController) {
             Spacer(Modifier.width(10.dp))
             Icon(painterResource(R.drawable.wren_set_ic_chevron), contentDescription = null, tint = WrenFlat.CardChevron, modifier = Modifier.size(22.dp))
         }
-        Spacer(Modifier.height(6.dp))
+        Spacer(Modifier.height(12.dp))
         Text("You see exactly what is sent before you send it.", color = WrenFlat.CardSub, fontSize = 14.sp, lineHeight = 20.sp)
     }
 }
@@ -224,8 +226,8 @@ fun WrenUpdatesCard(navController: NavHostController) {
     val scope = rememberCoroutineScope()
     var checking by remember { mutableStateOf(false) }
     var result by rememberSaveable { mutableStateOf("") }
-    WrenBottomCard("Updates", titleGap = 8.dp) {
-        Spacer(Modifier.height(6.dp))
+    WrenBottomCard("Updates", titleGap = 22.dp) {
+        Spacer(Modifier.height(14.dp))
         WrenOrangeButton(if (checking) "Checking\u2026" else "Check for updates", enabled = !checking) {
             if (checking) return@WrenOrangeButton
             checking = true
@@ -243,11 +245,11 @@ fun WrenUpdatesCard(navController: NavHostController) {
                 }
             }
         }
+        Spacer(Modifier.height(10.dp))
         if (result.isNotEmpty()) {
-            Spacer(Modifier.height(4.dp))
             Text(result, color = WrenFlat.CardSub, fontSize = 14.sp, lineHeight = 20.sp)
+            Spacer(Modifier.height(2.dp))
         }
-        Spacer(Modifier.height(if (result.isNotEmpty()) 2.dp else 4.dp))
         Text("Version ${BuildConfig.VERSION_NAME}", color = WrenFlat.CardSub, fontSize = 14.sp, lineHeight = 20.sp)
     }
 }

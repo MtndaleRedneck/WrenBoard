@@ -62,4 +62,20 @@ class FeedbackUrlTest {
         assertFalse(UpdateVerify.hostAllowed("https://evilgithubusercontent.com/x"))
         assertFalse(UpdateVerify.hostAllowed("https://keyboard.futo.tech/x"))
     }
+
+    @Test fun releasesListPicksNewestAllowedApkWithDigest() {
+        val body = javaClass.getResource("/wrenboard_releases_sample.json")!!.readText()
+        val r = newestUsableRelease(body)!!
+        assertEquals("1.5.0", r.nextVersionString)
+        assertEquals(1005000, r.nextVersion)
+        assertEquals("https://github.com/MtndaleRedneck/WrenBoard/releases/download/v1.5.0/WrenBoard-1.5.apk", r.apkUrl)
+        assertEquals(129403471L, r.size)
+        assertEquals("2b6cb34a8a6193a6a4f9acae7170f664ead08374a5675285ab6e9591f394d404", r.sha256)
+    }
+
+    @Test fun releaseFromAnotherHostIsIgnored() {
+        val body = """[{"tag_name":"v9.9.9","draft":false,"prerelease":false,"assets":[{"name":"x.apk","size":10,"browser_download_url":"https://example.com/x.apk"}]},
+            {"tag_name":"v9.0.0","draft":true,"prerelease":false,"assets":[{"name":"x.apk","size":10,"browser_download_url":"https://github.com/MtndaleRedneck/WrenBoard/releases/download/v9.0.0/x.apk"}]}]"""
+        assertEquals(null, newestUsableRelease(body))
+    }
 }
