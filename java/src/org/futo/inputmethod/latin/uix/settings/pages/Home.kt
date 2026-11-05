@@ -58,6 +58,8 @@ import org.futo.inputmethod.updates.LAST_UPDATE_CHECK_RESULT
 import org.futo.inputmethod.updates.SKIPPED_UPDATE_VERSION
 import org.futo.inputmethod.updates.UpdateResult
 import org.futo.inputmethod.updates.UpdatesCard
+import org.futo.inputmethod.updates.WrenFeedbackCard
+import org.futo.inputmethod.updates.WrenUpdatesCard
 import org.futo.inputmethod.updates.openManualUpdateCheck
 
 val DictionaryOnboardingDone = SettingsKey(booleanPreferencesKey("dictionary_onboarding_done"), false)
@@ -263,13 +265,18 @@ fun HomeScreen(navController: NavHostController = rememberNavController()) {
                 // WrenBoard 1.6: eleven pages plus the FUTO entry; FUTO's paid-version notice and FUTO's update
                 // check live under FUTO (automatic checks and the update prompt keep running).
                 WrenHomeList()
+                // WrenBoard 1.6 (Ezzy, 10:33 PM): his Feedback & bugs and Updates cards sit directly at the bottom of
+                // the home page, Feedback first, then Updates with the version line. Not in a sub-page, not in FUTO.
+                Spacer(modifier = Modifier.height(4.dp))
+                WrenFeedbackCard(navController)
+                WrenUpdatesCard(navController)
             } else {
                 ConditionalUnpaidNoticeWithNav(navController)
 
                 HomeScreenLite.render(showTitle = false)
 
                 UpdatesCard(navController)
-                FeedbackCard()
+                FeedbackCard(navController)
             }
 
 
@@ -289,13 +296,14 @@ fun HomeScreen(navController: NavHostController = rememberNavController()) {
                 Spacer(modifier = Modifier.height(12.dp))
             }
 
-            Text(
+            // In the WrenBoard look the version line is inside the Updates card.
+            if(!wrenStyle) Text(
                 "v${BuildConfig.VERSION_NAME}",
                 style = Typography.Small,
                 modifier = Modifier.fillMaxWidth(),
                 textAlign = TextAlign.Center
             )
-            Spacer(modifier = Modifier.height(32.dp))
+            Spacer(modifier = Modifier.height(if(wrenStyle) 12.dp else 32.dp))
         }
     }
 }

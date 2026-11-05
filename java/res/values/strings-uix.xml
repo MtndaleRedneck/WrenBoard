@@ -862,5 +862,6 @@ Default is %1$s</string>
     <string name="wren_s_version">Version</string>
     <string name="wren_s_licence">Licence &amp; credits</string>
     <string name="wren_s_look">Look</string>
+    <string name="feedback_page_title">Feedback</string>
     <string name="wren_advanced_tip">Changes here can make typing worse or hide parts of the keyboard.</string>
 </resources>
