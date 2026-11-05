@@ -36,8 +36,9 @@ import kotlin.math.roundToInt
 
 /** SwiftKey parity (spec v1.1): letter-row pitch = 52.6 dp key + 2.5 dp gap. */
 const val LetterRowPitchDp: Float = 55.1f
-/** SwiftKey parity (spec v1.1 item 18): bottom padding under the arrow row, before the nav bar. */
-const val WrenBottomPaddingDp: Float = 2.6f
+/** SwiftKey parity (spec v1.1 item 18): 4.6 dp from the arrow-row outline to the nav bar = this padding plus
+ *  half of the 2.5 dp row gap that the last row's pitch already carries. */
+const val WrenBottomPaddingDp: Float = 3.35f
 
 val OldKeyboardHeightMultiplierSetting = SettingsKey(floatPreferencesKey("keyboardHeightMultiplier"), 1.0f)
 val OldKeyboardBottomOffsetSetting = SettingsKey(floatPreferencesKey("keyboardOffset"), 0.0f)
@@ -237,9 +238,9 @@ fun getDefaultSettingForKind(kind: KeyboardSizeSettingKind, context: Context): S
             heightMultiplier = 1.0f * oldHeightMultiplier * portraitDeviceSizeHeightMultiplier,
             // WrenBoard 1.4 SwiftKey parity (item 2): no base side padding - the leftover-to-gap split puts
             // outer keys exactly 3px from the screen edge at 1080px, matching SwiftKey's margins and 108px pitch.
-            // SwiftKey parity (spec v1.1 item 18): 4.6 dp from the arrow-row outline to the nav bar; the
-            // last row's own gap and key chrome already supply about 2 dp of it.
-            paddingDp = DpRect(extraSidePadding, 4.dp, extraSidePadding, WrenBottomPaddingDp.dp + oldBottomOffset),
+            // SwiftKey parity (spec v1.1 items 17-18): no top padding (the number row's half-gap gives SwiftKey's
+            // strip-to-number-row spacing), 4.6 dp from the arrow-row outline to the nav bar.
+            paddingDp = DpRect(extraSidePadding, 0.dp, extraSidePadding, WrenBottomPaddingDp.dp + oldBottomOffset),
             splitPaddingDp = DpRect(2.dp, 4.dp, 2.dp, 10.dp + oldBottomOffset),
             splitWidthFraction = portraitSplitWidthFraction,
             oneHandedDirection = OneHandedDirection.Right,
@@ -507,7 +508,9 @@ class KeyboardSizingCalculator(val context: Context, val uixManager: UixManager)
                     else -> 0.0
                 }
 
-        val recommendedHeight = numRows * singularRowHeight + padding.bottom
+        // SwiftKey parity: in portrait the top padding is budgeted too, so it never squeezes the dp rows
+        // (a 4 dp top padding shrank every row by ~2 px in run 41939692871).
+        val recommendedHeight = numRows * singularRowHeight + padding.bottom + (if(isPortraitPhone) padding.top else 0)
 
         val foldState = foldStateProvider.foldState.feature
 
