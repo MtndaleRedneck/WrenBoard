@@ -62,6 +62,7 @@ import org.futo.inputmethod.latin.uix.namePreferenceKeyFor
 import org.futo.inputmethod.latin.uix.settings.NavigationItemStyle
 import org.futo.inputmethod.latin.uix.settings.Route
 import org.futo.inputmethod.latin.uix.settings.ScreenTitle
+import org.futo.inputmethod.latin.uix.settings.NavigationItem
 import org.futo.inputmethod.latin.uix.settings.Tip
 import org.futo.inputmethod.latin.uix.settings.UserSettingsMenu
 import org.futo.inputmethod.latin.uix.settings.pages.modelmanager.openModelImporter
@@ -752,6 +753,17 @@ fun LanguagesScreen(navController: NavHostController = rememberNavController()) 
         }
         items(LanguageSettingsBottom) {
             it.component()
+        }
+        // WrenBoard 1.6 (item 11, mock-up 04): the Chinese / Japanese settings page is reached from Languages
+        // (FUTO showed it at the top of Keyboard & Typing). Shown only when one of those languages is added.
+        item {
+            if(org.futo.inputmethod.engine.IMESettingsMenu.visibilityCheck?.invoke() == true) {
+                NavigationItem(
+                    title = stringResource(org.futo.inputmethod.engine.IMESettingsMenu.title),
+                    style = NavigationItemStyle.Misc,
+                    navigate = { navController.navigate(org.futo.inputmethod.engine.IMESettingsMenu.navPath) }
+                )
+            }
         }
     }
 }

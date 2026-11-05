@@ -5,6 +5,7 @@ import androidx.annotation.StringRes
 import androidx.compose.foundation.background
 import androidx.compose.ui.Modifier
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.navigation.NavHostController
@@ -133,20 +134,24 @@ fun UserSettingsMenu.render(showBack: Boolean = true, showTitle: Boolean = true)
 
 @Composable
 fun UserSettingsMenuScreen(menu: UserSettingsMenu) {
-    // WrenBoard 1.2: in the WrenBoard style the six group pages show their rows in labelled cards (render 10b).
-    val sections = if (useDataStoreValue(WrenSettingsStyle)) org.futo.inputmethod.latin.uix.settings.pages.WrenMenuSections[menu.navPath] else null
-    // WrenBoard 1.5 (item 9 transition glitch): Wren-style pages paint the defined-but-unwired page brush so the
-    // previous page can never show through the gaps between cards during predictive-back/transitions.
-    ScrollableList(modifier = if (sections == null) Modifier else Modifier.background(wrenPageBrush)) {
-        if (sections == null) {
+    // WrenBoard 1.6 (item 11): in the WrenBoard look every menu page is the mock-up's flat list on #141414:
+    // top bar, orange section labels for WrenBoard's grouped pages, flat rows. FUTO's look is unchanged.
+    val wren = useDataStoreValue(WrenSettingsStyle)
+    val sections = if (wren) org.futo.inputmethod.latin.uix.settings.pages.WrenMenuSections[menu.navPath] else null
+    ScrollableList(modifier = if (!wren) Modifier else Modifier.background(wrenPageBrush)) {
+        if (!wren) {
             menu.render()
-        } else {
-            ScreenTitle(stringResource(menu.title), showBack = true, LocalNavController.current)
-            sections.forEach { (label, items) ->
-                val shown = items.filter { it.visibilityCheck?.invoke() != false }
-                if (shown.isNotEmpty()) {
-                    WrenSectionLabel(stringResource(label))
-                    WrenCard { shown.forEach { it.component() } }
+        } else CompositionLocalProvider(LocalWrenFlatRows provides true) {
+            if (sections == null) {
+                menu.render()
+            } else {
+                ScreenTitle(stringResource(menu.title), showBack = true, LocalNavController.current)
+                sections.forEach { (label, items) ->
+                    val shown = items.filter { it.visibilityCheck?.invoke() != false }
+                    if (shown.isNotEmpty()) {
+                        if (label != 0) WrenFlatSectionLabel(stringResource(label))
+                        shown.forEach { it.component() }
+                    }
                 }
             }
         }
