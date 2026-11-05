@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- WrenBoard 1.6 (item 9): drawn for WrenBoard from the approved mock-ups; not copied artwork. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="60"
+    android:viewportHeight="60">
+    <path android:pathData="M22 6 L38 6 M24 6 L24 24 L14 36 L46 36 L36 24 L36 6 M30 36 L30 56" android:strokeColor="#FFFFFFFF" android:strokeWidth="5" android:strokeLineCap="round" android:strokeLineJoin="round"/>
+</vector>
