@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- WrenBoard 1.6 toolbar icon (item 51): thin outline, drawn by Tab for WrenBoard from the approved mock-up 01. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="21.3dp"
+    android:height="21.3dp"
+    android:viewportWidth="60"
+    android:viewportHeight="60">
+  <path android:fillColor="#00000000" android:strokeColor="#FFFFFFFF" android:strokeWidth="4.8" android:pathData="M30,4a9,9 0,0 1,9 9v14a9,9 0,0 1,-18 0v-14a9,9 0,0 1,9 -9z"/>
+  <path android:fillColor="#00000000" android:strokeColor="#FFFFFFFF" android:strokeWidth="4.8" android:strokeLineCap="round" android:pathData="M11,27Q11,46 30,46Q49,46 49,27"/>
+  <path android:fillColor="#00000000" android:strokeColor="#FFFFFFFF" android:strokeWidth="4.8" android:strokeLineCap="round" android:pathData="M30,46L30,56M21,56L39,56"/>
+</vector>
