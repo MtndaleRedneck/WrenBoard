@@ -20,6 +20,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.painterResource
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.background
@@ -227,11 +228,17 @@ class SettingsActivity : ComponentActivity(), DynamicThemeProviderOwner {
                                         },
                                         modifier = Modifier
                                             .align(androidx.compose.ui.Alignment.BottomEnd)
-                                            .padding(16.dp)
+                                            .padding(16.dp),
+                                        // WrenBoard 1.6 (item 11 mock-ups): a dark #2E2E2E button with a light outline keyboard.
+                                        containerColor = if (LocalWrenStyle.current) androidx.compose.ui.graphics.Color(0xFF2E2E2E)
+                                            else androidx.compose.material3.FloatingActionButtonDefaults.containerColor,
+                                        contentColor = if (LocalWrenStyle.current) WrenFlat.Icon
+                                            else androidx.compose.material3.contentColorFor(androidx.compose.material3.FloatingActionButtonDefaults.containerColor)
                                     ) {
                                         androidx.compose.material3.Icon(
-                                            painterResource(R.drawable.wren_ic_keyboard),
-                                            contentDescription = stringResource(R.string.settings_try_typing_here)
+                                            painterResource(if (LocalWrenStyle.current) R.drawable.wren_set_ic_typing else R.drawable.wren_ic_keyboard),
+                                            contentDescription = stringResource(R.string.settings_try_typing_here),
+                                            modifier = if (LocalWrenStyle.current) Modifier.size(26.dp) else Modifier
                                         )
                                     }
                                 }
