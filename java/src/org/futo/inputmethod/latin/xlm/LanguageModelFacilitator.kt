@@ -392,7 +392,9 @@ public class LanguageModelFacilitator(
             locale,
             suggestionResults,
             settingsValues.mAutoCorrectionThreshold,
-            settingsValues.mIsNumberRowEnabled
+            settingsValues.mIsNumberRowEnabled,
+            // WrenBoard (item 6): lets swapped-letter typos be checked against the dictionaries
+            { word: String -> dictionaryFacilitator.isValidSpellingWord(word) }
         )
 
 
