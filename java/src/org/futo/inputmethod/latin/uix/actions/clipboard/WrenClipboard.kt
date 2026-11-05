@@ -8,6 +8,8 @@ import androidx.compose.ui.input.pointer.changedToUp
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.ui.semantics.contentDescription
 import android.view.View
 import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.BorderStroke
@@ -93,18 +95,17 @@ private fun androidx.compose.ui.input.pointer.PointerInputChange.allSamples(): L
 /** WrenBoard 1.2: the SwiftKey-style emoji and clipboard panels. Off = FUTO's own panels (kept, not removed). */
 val WrenSwiftKeyPanels = SettingsKey(booleanPreferencesKey("wren_swiftkey_panels"), true)
 
-/** Colours measured from the approved renders (wrenboard_v4_swiftkey s06/s07). */
+/** WrenBoard 1.6 (item 9): colours from Ezzy's approved mock-up 11_clipboard_panel (accent #FF8710). */
 object WrenPanelColors {
-    val Orange = Color(0xFFEE8F33)
-    val OrangeBright = Color(0xFFFF8714)
-    val OrangeMuted = Color(0xFFC87A30)
-    val Handle = Color(0xFFD4822F)
+    val Orange = Color(0xFFFF8710)
+    val OrangeBright = Color(0xFFFF8710)
+    val OrangeMuted = Color(0xFFB16922)
+    val Handle = Color(0xFFFF8710)
     val Bar = Color(0xFF3C3C3C)
-    val BodyTop = Color(0xFF454442)
-    val BodyMid = Color(0xFF3E3D3B)
-    val BodyBottom = Color(0xFF363533)
-    val Card = Color(0xFF433B33)
-    val CardBorder = Color(0xFF5D544B)
+    val BodyTop = Color(0xFF41403C)
+    val BodyBottom = Color(0xFF383634)
+    val Card = Color(0xFF3C3C3C)
+    val CardBorder = Color(0xFF79542F)
     val Menu = Color(0xFF2B2A29)
     val MenuBorder = Color(0xFF5C5650)
     val Field = Color(0xFF2F2F2F)
@@ -119,9 +120,9 @@ private fun wrenScreenHeightDp(): Float {
     val dm = android.content.res.Resources.getSystem().displayMetrics
     return dm.heightPixels / dm.density
 }
-val WrenClipboardPanelHeight: Dp get() = (wrenScreenHeightDp() * (428f / 882f)).dp
-// WrenBoard 1.6 (item 9): mock-ups 09/10 put the emoji/GIF panel top at y=808 of Ezzy's 1080x2316 screen
-// (2181 px above the nav bar); 551/882 lands there.
+// WrenBoard 1.6 (item 9): mock-ups 09/10 put the emoji/GIF panel top at y=808 and mock-up 11 the clipboard panel
+// top at y=1055 of Ezzy's 1080x2316 screen (2181 px above the nav bar); 551/882 and 451/882 land there.
+val WrenClipboardPanelHeight: Dp get() = (wrenScreenHeightDp() * (451f / 882f)).dp
 val WrenEmojiPanelHeight: Dp get() = (wrenScreenHeightDp() * (551f / 882f)).dp
 val WrenPanelSearchHeight: Dp = 64.dp
 
@@ -239,9 +240,9 @@ private fun WrenIcon(id: Int, tint: Color, size: Dp, modifier: Modifier = Modifi
 }
 
 @Composable
-private fun HeaderButton(id: Int, description: String, size: Dp, onClick: () -> Unit) {
+private fun HeaderButton(id: Int, description: String, size: Dp, box: Dp = 40.dp, onClick: () -> Unit) {
     Box(
-        Modifier.size(40.dp).clip(RoundedCornerShape(20.dp)).clickable(onClick = onClick),
+        Modifier.size(box).clip(RoundedCornerShape(box / 2)).clickable(onClick = onClick),
         contentAlignment = Alignment.Center
     ) { WrenIcon(id, orange, size, description = description) }
 }
@@ -287,18 +288,23 @@ fun WrenClipboardPanel(w: WrenClipboardWindow) {
     }
 
     Column(Modifier.fillMaxSize()) {
-        // Header 124 px (47 dp): orange drag handle, back, title, Clear all, search, gear.
-        Box(Modifier.fillMaxWidth().height(47.dp).background(WrenPanelColors.Bar)) {
+        // Header 124 px (44 dp), mock-up 11: orange handle, back, title, Clear all, search, gear.
+        Box(Modifier.fillMaxWidth().height(44.dp).background(WrenPanelColors.Bar)) {
             Box(
-                Modifier.align(Alignment.TopCenter).padding(top = 5.dp).width(35.dp).height(5.dp)
-                    .background(WrenPanelColors.Handle, RoundedCornerShape(3.dp))
+                Modifier.align(Alignment.TopCenter).padding(top = 3.5.dp).width(34.dp).height(2.8.dp)
+                    .background(WrenPanelColors.Handle, RoundedCornerShape(1.4.dp))
             )
-            Row(Modifier.fillMaxSize().padding(start = 4.dp, end = 4.dp, top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                HeaderButton(R.drawable.wren_ic_arrow_back_ios_new, stringResource(R.string.wren_back), 18.dp) {
-                    manager_close(w, view)
+            Row(Modifier.fillMaxSize().padding(end = 5.dp, top = 3.dp), verticalAlignment = Alignment.CenterVertically) {
+                val backLabel = stringResource(R.string.wren_back)
+                Box(
+                    Modifier.width(30.dp).fillMaxHeight().semantics { contentDescription = backLabel }.clickable { manager_close(w, view) },
+                    contentAlignment = Alignment.CenterStart
+                ) {
+                    Icon(painterResource(R.drawable.wren_ic_line_chevron_back), contentDescription = null, tint = orange,
+                        modifier = Modifier.padding(start = 12.8.dp).size(width = 9.2.dp, height = 15.6.dp))
                 }
-                Spacer(Modifier.width(6.dp))
-                Text(stringResource(R.string.wren_clip_title), color = orange, fontSize = 20.sp)
+                Spacer(Modifier.width(4.1.dp))
+                Text(stringResource(R.string.wren_clip_title), color = orange, fontSize = 17.8.sp)
                 Spacer(Modifier.weight(1f))
                 // Clear all: a header button with a confirmation (Ezzy, Oct 30); pinned clips stay; Undo brings them back.
                 val unpinned = w.history.clipboardHistory.filter { !it.pinned }
@@ -314,11 +320,11 @@ fun WrenClipboardPanel(w: WrenClipboardWindow) {
                         }.padding(horizontal = 10.dp, vertical = 8.dp)
                     )
                 }
-                HeaderButton(R.drawable.wren_ic_search, stringResource(R.string.action_clipboard_manager_search), 27.dp) {
+                HeaderButton(R.drawable.wren_ic_line_search, stringResource(R.string.action_clipboard_manager_search), 20.6.dp, box = 36.dp) {
                     w.searching.value = true
                 }
-                Spacer(Modifier.width(18.dp))
-                HeaderButton(R.drawable.wren_ic_settings, stringResource(R.string.wren_clip_settings), 26.dp) {
+                Spacer(Modifier.width(1.8.dp))
+                HeaderButton(R.drawable.wren_ic_line_gear, stringResource(R.string.wren_clip_settings), 21.3.dp, box = 36.dp) {
                     org.futo.inputmethod.latin.uix.settings.SettingsActivity.openToNavDest(w.manager.getContext(), "actions/clipboard_history")
                 }
             }
@@ -334,21 +340,25 @@ fun WrenClipboardPanel(w: WrenClipboardWindow) {
 
         Box(
             Modifier.fillMaxWidth().weight(1f).background(
-                Brush.verticalGradient(listOf(WrenPanelColors.BodyTop, WrenPanelColors.BodyMid, WrenPanelColors.BodyBottom))
+                Brush.verticalGradient(listOf(WrenPanelColors.BodyTop, WrenPanelColors.BodyBottom))
             )
         ) {
             LaunchedEffect(entries.size) { WbDebug.logWindow("CLIP shown=${entries.size}") }
-            // Masonry: two columns of 201 dp cards (528 px), 4.5 dp gaps, newest first.
+            // Masonry (mock-up 11): two columns of 528 px cards, 6 px edges, 12 px between columns, 14 px between rows, newest first.
             LazyVerticalStaggeredGrid(
                 columns = StaggeredGridCells.Fixed(2),
-                modifier = Modifier.fillMaxSize().padding(horizontal = 2.dp),
-                verticalItemSpacing = 10.dp,
-                horizontalArrangement = Arrangement.spacedBy(4.5.dp),
-                contentPadding = androidx.compose.foundation.layout.PaddingValues(top = 5.dp, bottom = 60.dp)
+                modifier = Modifier.fillMaxSize().padding(horizontal = 2.1.dp),
+                verticalItemSpacing = 5.dp,
+                horizontalArrangement = Arrangement.spacedBy(4.3.dp),
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(top = 7.8.dp, bottom = 60.dp)
             ) {
                 items(entries.size, key = { i -> entries[i].timestamp.toString() + ":" + (entries[i].text?.hashCode() ?: entries[i].backingFile.hashCode()) }) { i ->
                     val entry = entries[i]
                     WrenClipCard(w, entry, view, i)
+                }
+                // Mock-up 11's tip card: purely visual (no action), shown after the clips until a clip has been pinned.
+                if (query.isEmpty() && entries.isNotEmpty() && entries.none { it.pinned }) {
+                    item(key = "wren_tip_pin") { WrenClipTipCard() }
                 }
             }
 
@@ -395,7 +405,7 @@ private fun WrenClipCard(w: WrenClipboardWindow, entry: ClipboardEntry, view: Vi
     val dragX = remember(entry) { mutableStateOf(0f) }
     val dragging = remember(entry) { mutableStateOf(false) }
     val widthPx = remember { mutableStateOf(1f) }
-    val shape = RoundedCornerShape(11.5.dp)
+    val shape = RoundedCornerShape(10.dp)
     // Swipe a clip sideways to delete it (with Undo). The gesture is read on the card's resting slot (outside the
     // offset), so the card moving under the finger cannot shrink or cancel the drag. Only a finished swipe past the
     // threshold deletes; an interrupted or cancelled drag snaps back (WrenSwipeJudge). The delete never waits on
@@ -573,11 +583,11 @@ private fun WrenClipCard(w: WrenClipboardWindow, entry: ClipboardEntry, view: Vi
             .semantics { onClick(label = null) { w.paste(entry, view); true } }
             .offset { IntOffset((if (dragging.value) dragX.value else offsetX.value).roundToInt(), 0) }
             .fillMaxWidth()
-            .heightIn(min = 52.dp)
+            .heightIn(min = 62.2.dp)
             .wbPos("CLIPCARD i=$index pinned=${entry.pinned}")
             .clip(shape)
             .background(WrenPanelColors.Card, shape)
-            .border(1.dp, WrenPanelColors.CardBorder, shape)
+            .border(0.5.dp, WrenPanelColors.CardBorder, shape)
 
     ) {
         val bitmap = remember(entry) {
@@ -591,38 +601,59 @@ private fun WrenClipCard(w: WrenClipboardWindow, entry: ClipboardEntry, view: Vi
         if (bitmap != null) {
             Image(bitmap, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxWidth().heightIn(max = 160.dp))
         } else {
+            // Mock-up 11: 38 px text, 50 px lines, 26 px in from the left, centred in a card at least 175 px tall.
             Text(
                 entry.text ?: "",
                 color = orange,
-                style = TextStyle(fontSize = 16.sp, lineHeight = 18.7.sp),
+                style = TextStyle(fontSize = 13.5.sp, lineHeight = 17.8.sp),
                 maxLines = 5,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(start = 8.5.dp, top = 8.dp, end = 50.dp, bottom = if (entry.pinned) 30.dp else 12.dp)
+                modifier = Modifier.align(Alignment.CenterStart)
+                    .padding(start = 9.2.dp, top = 12.dp, end = if (entry.pinned) 40.dp else 30.dp, bottom = 12.dp)
             )
         }
 
-        // 3-dot menu: Pin/Unpin, Paste, Edit, Delete.
-        Box(Modifier.align(Alignment.TopEnd).padding(top = 4.dp, end = 6.dp)) {
+        // Pinned marker (mock-up 11): an upright outline pin just left of the dots.
+        if (entry.pinned) {
+            WrenIcon(
+                R.drawable.wren_ic_line_pin, orange, 13.2.dp,
+                modifier = Modifier.align(Alignment.TopEnd).padding(top = 23.3.dp, end = 23.8.dp),
+                description = stringResource(R.string.wren_clip_pinned_marker)
+            )
+        }
+
+        // 3-dot menu: Pin/Unpin, Paste, Edit, Delete. Three 8 px dots, 13 px apart, centred 42 px from the right edge.
+        Box(Modifier.align(Alignment.TopEnd).padding(top = 6.5.dp)) {
+            val menuLabel = stringResource(R.string.wren_clip_menu)
             Box(
                 Modifier.size(width = 30.dp, height = 40.dp).wbPos("CLIPDOTS i=$index").clip(RoundedCornerShape(15.dp))
+                    .semantics { contentDescription = menuLabel }
                     .clickable { w.menuFor.value = entry },
                 contentAlignment = Alignment.Center
             ) {
-                Column(verticalArrangement = Arrangement.spacedBy(3.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    repeat(3) { Box(Modifier.size(4.dp).background(orange, RoundedCornerShape(2.dp))) }
+                Column(verticalArrangement = Arrangement.spacedBy(1.8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    repeat(3) { Box(Modifier.size(2.8.dp).background(orange, RoundedCornerShape(1.4.dp))) }
                 }
             }
             if (w.menuFor.value == entry) {
                 WrenClipMenu(w, entry, view, onDismiss = { w.menuFor.value = null })
             }
         }
+    }
+}
 
-        if (entry.pinned) {
-            WrenIcon(
-                R.drawable.wren_ic_push_pin_fill, orange, 24.dp,
-                modifier = Modifier.align(Alignment.BottomEnd).padding(end = 14.dp, bottom = 12.dp).rotate(-45f)
-            )
-        }
+/** Mock-up 11's tip card: words only, nothing to tap. */
+@Composable
+private fun WrenClipTipCard() {
+    val shape = RoundedCornerShape(10.dp)
+    Column(
+        Modifier.fillMaxWidth().heightIn(min = 79.6.dp).clip(shape)
+            .background(WrenPanelColors.Card, shape).border(0.5.dp, WrenPanelColors.CardBorder, shape)
+            .padding(start = 9.2.dp, end = 9.dp, top = 9.dp, bottom = 12.dp)
+    ) {
+        Text(stringResource(R.string.wren_clip_tip_title), color = WrenPanelColors.OrangeMuted, fontSize = 11.4.sp)
+        Spacer(Modifier.height(3.dp))
+        Text(stringResource(R.string.wren_clip_tip_pin), color = orange, style = TextStyle(fontSize = 13.5.sp, lineHeight = 17.8.sp))
     }
 }
 
