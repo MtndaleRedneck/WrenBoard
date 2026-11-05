@@ -206,6 +206,8 @@ fun SettingsNavigator(
             composable("credits") { CreditsScreen(navController) }
             composable("exportingcfg") { ExportingMenu(navController) }
             composable("kasroz") { KASROZMenu() }
+            // WrenBoard 1.6 (item 11): the Feedback page, opened from the Feedback & bugs card.
+            composable("feedback") { org.futo.inputmethod.updates.FeedbackScreen(navController) }
             dialog("update") {
                 UpdateDialog(navController = navController)
             }

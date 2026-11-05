@@ -10,7 +10,11 @@ import org.futo.inputmethod.latin.BuildConfig
 data class UpdateResult(
     val nextVersion: Int,
     val apkUrl: String,
-    val nextVersionString: String
+    val nextVersionString: String,
+    /** WrenBoard 1.6: the APK's published size in bytes (0 when unknown, e.g. a result saved by an older version). */
+    val size: Long = 0,
+    /** WrenBoard 1.6: lowercase hex SHA-256 GitHub published for the APK, or null when it published none. */
+    val sha256: String? = null
 ) {
     fun isNewer(): Boolean {
         return nextVersion > currentVersion()

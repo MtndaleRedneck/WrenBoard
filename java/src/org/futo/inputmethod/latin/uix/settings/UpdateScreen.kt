@@ -55,6 +55,7 @@ import org.futo.inputmethod.updates.LAST_UPDATE_CHECK_RESULT
 import org.futo.inputmethod.updates.SKIPPED_UPDATE_VERSION
 import org.futo.inputmethod.updates.UpdateAttempts
 import org.futo.inputmethod.updates.UpdateResult
+import org.futo.inputmethod.updates.UpdateVerify
 import org.futo.inputmethod.updates.openURI
 import java.io.ByteArrayOutputStream
 import java.net.HttpURLConnection
@@ -134,7 +135,7 @@ private suspend fun install(context: Context, attempt: Long, inputStream: InputS
                 if (lastProgressText != progressText) {
                     lastProgressText = progressText
 
-                    UpdateStatus.attempts.post(attempt, "Downloading... $progressText")
+                    UpdateStatus.attempts.post(attempt, "Preparing install... $progressText")
                 }
             }
             session.fsync(sessionStream)
@@ -165,51 +166,37 @@ private fun downloadAndInstall(context: Context, updateResult: UpdateResult) {
     Log.i("UpdateScreen", "Update attempt $attempt started")
 
     GlobalScope.launch(Dispatchers.IO) {
-        var inputStream: InputStream? = null
-        var connection: HttpURLConnection? = null
+        var file: java.io.File? = null
         try {
-            // WrenBoard 1.2: download the release APK inside the app (GitHub redirects the asset URL to its
-            // file host, so redirects are followed by hand), then hand it to Android's installer, which shows
-            // the system install prompt. Same release asset the update check found; nothing about the check changes.
-            var url = URL(updateResult.apkUrl)
-            var hops = 0
-            while (true) {
-                val c = (url.openConnection() as HttpURLConnection).apply {
-                    instanceFollowRedirects = false
-                    connectTimeout = 15000
-                    readTimeout = 30000
-                    setRequestProperty("User-Agent", "WrenBoard-Update")
-                    setRequestProperty("Accept", "application/octet-stream")
-                }
-                val code = c.responseCode
-                if (code in 300..399 && hops < 6) {
-                    val location = c.getHeaderField("Location") ?: throw Exception("redirect without a location")
-                    c.disconnect()
-                    url = URL(url, location)
-                    hops++
-                    continue
-                }
-                if (code !in 200..299) {
-                    c.disconnect()
-                    throw Exception("server answered $code")
-                }
-                connection = c
-                break
-            }
-
-            val dataLength = connection!!.contentLengthLong
-            if (dataLength <= 0L) throw Exception("download size unknown")
-            UpdateStatus.attempts.post(attempt, "Downloading... 0%")
+            // WrenBoard 1.6 (item 11, BingeMote's checks): download the release APK to the app's cache only from
+            // WrenBoard's GitHub releases (HTTPS, redirects only inside GitHub), check its size and published
+            // checksum, then check it is WrenBoard, newer, and signed by the same key as this app before Android's
+            // installer sees it. Any failed check deletes the file and says why.
             UpdateStatus.downloadedUpdate = null
-            inputStream = connection!!.inputStream
-            install(context, attempt, inputStream!!, dataLength)
+            UpdateStatus.attempts.post(attempt, "Downloading... 0%")
+            var lastProgressText = ""
+            val downloaded = UpdateVerify.download(context, updateResult) { progress ->
+                val progressText = "${(progress * 100.0f).toInt()}%"
+                if (lastProgressText != progressText) {
+                    lastProgressText = progressText
+                    UpdateStatus.attempts.post(attempt, "Downloading... $progressText")
+                }
+            }
+            file = downloaded
+            UpdateStatus.attempts.post(attempt, "Checking the download")
+            UpdateVerify.verify(context, downloaded)
+            downloaded.inputStream().use { input ->
+                install(context, attempt, input, downloaded.length())
+            }
+        } catch (e: UpdateVerify.Failure) {
+            Log.w("UpdateScreen", "Update attempt $attempt stopped: ${e.msg}")
+            UpdateStatus.attempts.fail(attempt, e.msg)
         } catch (e: Throwable) {
             Log.w("UpdateScreen", "Exception thrown while downloading and installing latest version of app.", e)
             // Stay in the app and say what failed (1.1 threw here and opened the browser).
             UpdateStatus.attempts.fail(attempt, "Download failed: ${e.message ?: e.javaClass.simpleName}")
         } finally {
-            try { inputStream?.close() } catch (_: Throwable) { }
-            connection?.disconnect()
+            try { file?.delete() } catch (_: Throwable) { }
             UpdateStatus.attempts.downloadEnded(attempt)
             withContext(Dispatchers.Main) { UpdateStatus.isDownloading.value = false }
         }
