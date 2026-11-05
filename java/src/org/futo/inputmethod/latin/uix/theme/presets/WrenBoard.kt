@@ -24,7 +24,8 @@ import org.futo.inputmethod.v2keyboard.KeyVisualStyle
 // WrenBoard default theme: dark charcoal board, gradient keys, orange accent.
 // Colors measured from the user's reference design.
 
-private val AccentOrange = Color(0xFFFF8A14)
+// Pixel spec v1.1 item 1: SwiftKey Pumpkin accent, measured ink #FF8710.
+private val AccentOrange = Color(0xFFFF8710)
 // WrenBoard 1.5 (item 10, candidate): SwiftKey's hint symbols are pure #FFFFFF.
 private val HintGrey = 0xFFFFFFFF.toInt()
 
@@ -53,8 +54,10 @@ private val darkScheme = extendedDarkColorScheme(
     surfaceContainerHighest=Color(0xFF4D4D4D),
     shadow=Color(0xFF000000).copy(alpha = 0.7f),
     keyboardSurface=Color(0xFF3C3C3C),
-    // WrenBoard 1.3 (SwiftKey list item 6): Pumpkin board gradient, from Tab's measured SwiftKey pixels.
-    keyboardBackgroundGradient=Brush.verticalGradient(listOf(Color(0xFF4C4C4C), Color(0xFF2A2A2A))),
+    // Pixel spec v1.1 item 22: board gradient #4C4C4C at the top to #2C2C2C at the bottom.
+    keyboardBackgroundGradient=Brush.verticalGradient(listOf(Color(0xFF4C4C4C), Color(0xFF2C2C2C))),
+    // Pixel spec v1.1 item 23: flat #3C3C3C under the keyboard, in the navigation bar area.
+    navigationBarColor=Color(0xFF3C3C3C),
     keyboardSurfaceDim=Color(0xFF3C3C3C),
     keyboardContainer=Color(0xFF232323),
     keyboardContainerVariant=Color(0xFF1C1C1C),
@@ -67,162 +70,124 @@ private val darkScheme = extendedDarkColorScheme(
     hintColor=Color(0xFFB0B0B0),
 )
 
-/** Lighten [c] toward white by [f] (0..1). */
-private fun lighten(c: Int, f: Float): Int {
-    val r = android.graphics.Color.red(c) + ((255 - android.graphics.Color.red(c)) * f).toInt()
-    val g = android.graphics.Color.green(c) + ((255 - android.graphics.Color.green(c)) * f).toInt()
-    val b = android.graphics.Color.blue(c) + ((255 - android.graphics.Color.blue(c)) * f).toInt()
-    return android.graphics.Color.rgb(r, g, b)
-}
-
-/** Gradient key box with SwiftKey's thin light line along the top edge (WrenBoard 1.3, teardown item 1).
- *  The line shade is interim, pending Tab's measured SwiftKey pixels. */
-private class TopLineGradientDrawable(
-    top: Int,
-    bottom: Int,
+/**
+ * WrenBoard key face, SwiftKey parity (pixel spec v1.1 items 24-34), built from dp so it renders the
+ * same at every density: a 0.4 dp hairline halo of black at 25% just outside the outline, a 0.4 dp outline,
+ * a vertical fill gradient, and a 0.4 dp inner highlight on a rounded rect inset 0.9 dp (radius 3.9 dp) that
+ * wraps the corners and fades from full strength at the top to ~10% at the bottom. Every hairline is
+ * rounded to at least one device pixel.
+ */
+private class WrenKeyDrawable(
+    private val fillTop: Int,
+    private val fillBottom: Int,
+    private val outlineColor: Int?,
+    private val highlightColor: Int?,
+    private val halo: Boolean,
     private val radiusPx: Float,
-    dm: android.util.DisplayMetrics,
-    private val chrome: Boolean
-) : GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, intArrayOf(top, bottom)) {
-    // SwiftKey list items 2+3: Tab's pixel measurements are off a ~420dpi phone; scale with density.
-    private val px420 = dm.density / 2.625f
-    // WrenBoard 1.5 item 5c (Tab's cosmetic values, candidate pending owner pixel sign-off): the halo
-    // is two crisp 1px rings just outside the key border - outer #393939 (9 levels under the #424242
-    // board), inner #2E2E2E (20 under). Replaces the PARITY 1 single blurred #353535 stroke.
-    private val haloPx = 1.0f * px420
-    private val haloOuterPaint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+    dm: android.util.DisplayMetrics
+) : android.graphics.drawable.Drawable() {
+    private fun dp(v: Float, dm: android.util.DisplayMetrics) = v * dm.density
+    private val hair = Math.round(dp(0.4f, dm)).coerceAtLeast(1).toFloat()
+    private val highlightInset = dp(0.9f, dm)
+    private val highlightRadius = dp(3.9f, dm)
+
+    private val fillPaint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply { isDither = true }
+    private val haloPaint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
         style = android.graphics.Paint.Style.STROKE
-        color = 0xFF393939.toInt()
-        strokeWidth = haloPx.coerceAtLeast(1f)
+        color = 0x40000000 // black at 25%
+        strokeWidth = hair
     }
-    private val haloInnerPaint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+    private val outlinePaint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
         style = android.graphics.Paint.Style.STROKE
-        color = 0xFF2E2E2E.toInt()
-        strokeWidth = haloPx.coerceAtLeast(1f)
+        strokeWidth = hair
     }
-    // PARITY 1: 1px side rim 2px inside the border, #616161 at the top fading to ~#0B0B0B.
-    // WrenBoard 1.5 (item 10, candidate): Tab measured SwiftKey's rim ~25 levels over the fill
-    // vs our ~14 - brighten the top stop.
-    private val rimPaint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+    private val highlightPaint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
         style = android.graphics.Paint.Style.STROKE
-        strokeWidth = (1.0f * px420).coerceAtLeast(1f)
+        strokeWidth = hair
     }
-    private val linePaint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
-        // WrenBoard 1.5 (item 10, candidate): SwiftKey's top highlight is a 2px soft line about
-        // #52-#58, not our hard 1px #6D6D6D.
-        color = 0xFF565656.toInt()
-        strokeWidth = (2.0f * px420).coerceAtLeast(1.5f)
-    }
+    private val rect = android.graphics.RectF()
+
     override fun draw(canvas: android.graphics.Canvas) {
-        if (!chrome) { super.draw(canvas); drawTopLine(canvas, bounds); return }
-        // WrenBoard 1.5 (item 10, candidate): inset 2px -> 1px so the halo hugs the border and the
-        // visible key-to-key gap tightens toward SwiftKey's 6px@420.
-        val inset = (1.0f * px420).toInt().coerceAtLeast(1)
-        val save = canvas.save()
-        canvas.clipRect(android.graphics.RectF(bounds))
-        canvas.translate(0f, 0f)
-        val orig = android.graphics.Rect(bounds)
-        bounds = android.graphics.Rect(orig).apply { inset(inset, inset) }
-        super.draw(canvas)
-        val inner = android.graphics.Rect(bounds)
-        bounds = orig
-        canvas.restoreToCount(save)
-        // two crisp halo rings just outside the border: inner ring 1px out, outer ring 2px out
-        val ringInner = android.graphics.RectF(inner).apply { inset(-haloPx, -haloPx) }
-        canvas.drawRoundRect(ringInner, radiusPx + haloPx, radiusPx + haloPx, haloInnerPaint)
-        val ringOuter = android.graphics.RectF(inner).apply { inset(-2.0f * haloPx, -2.0f * haloPx) }
-        canvas.drawRoundRect(ringOuter, radiusPx + 2.0f * haloPx, radiusPx + 2.0f * haloPx, haloOuterPaint)
-        // side rims: vertical gradient #616161 -> #0B0B0B, 2px inside the border
-        val rimX_l = inner.left + 2.0f * px420 + rimPaint.strokeWidth / 2f
-        val rimX_r = inner.right - 2.0f * px420 - rimPaint.strokeWidth / 2f
-        rimPaint.shader = android.graphics.LinearGradient(
-            0f, inner.top.toFloat(), 0f, inner.bottom.toFloat(),
-            0xFF707070.toInt(), 0xFF0B0B0B.toInt(), android.graphics.Shader.TileMode.CLAMP
+        val b = bounds
+        if (b.isEmpty) return
+        // The key body (outline's outer edge) sits one hairline inside the drawn rect so the halo fits.
+        val inset = if (halo) hair else 0f
+        val left = b.left + inset; val top = b.top + inset
+        val right = b.right - inset; val bottom = b.bottom - inset
+
+        if (halo) {
+            rect.set(left - hair / 2f, top - hair / 2f, right + hair / 2f, bottom + hair / 2f)
+            canvas.drawRoundRect(rect, radiusPx + hair / 2f, radiusPx + hair / 2f, haloPaint)
+        }
+
+        fillPaint.shader = android.graphics.LinearGradient(
+            0f, top, 0f, bottom, fillTop, fillBottom, android.graphics.Shader.TileMode.CLAMP
         )
-        canvas.drawLine(rimX_l, inner.top + radiusPx, rimX_l, inner.bottom - radiusPx, rimPaint)
-        canvas.drawLine(rimX_r, inner.top + radiusPx, rimX_r, inner.bottom - radiusPx, rimPaint)
-        drawTopLine(canvas, inner)
-        drawBorderNoBottom(canvas, inner)
-        drawBottomFade(canvas, inner)
+        rect.set(left, top, right, bottom)
+        canvas.drawRoundRect(rect, radiusPx, radiusPx, fillPaint)
+
+        highlightColor?.let { c ->
+            val hl = left + highlightInset + hair / 2f
+            val ht = top + highlightInset + hair / 2f
+            val hr = right - highlightInset - hair / 2f
+            val hb = bottom - highlightInset - hair / 2f
+            if (hr > hl && hb > ht) {
+                val faded = (c and 0x00FFFFFF) or (0x1A shl 24) // ~10% at the bottom
+                highlightPaint.shader = android.graphics.LinearGradient(
+                    0f, ht, 0f, hb, c or (0xFF shl 24), faded, android.graphics.Shader.TileMode.CLAMP
+                )
+                rect.set(hl, ht, hr, hb)
+                canvas.drawRoundRect(rect, highlightRadius, highlightRadius, highlightPaint)
+            }
+        }
+
+        outlineColor?.let { c ->
+            outlinePaint.color = c
+            rect.set(left + hair / 2f, top + hair / 2f, right - hair / 2f, bottom - hair / 2f)
+            canvas.drawRoundRect(rect, radiusPx - hair / 2f, radiusPx - hair / 2f, outlinePaint)
+        }
     }
 
-    // WrenBoard 1.5 (item 10, candidate): 1px #0C0C0C on top and sides only (was a full stroke);
-    // bottom edge fades into the gap over 3-4px instead.
-    private val borderPaint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
-        style = android.graphics.Paint.Style.STROKE
-        color = 0xFF0C0C0C.toInt()
-        strokeWidth = 1.0f
+    override fun setAlpha(alpha: Int) {
+        fillPaint.alpha = alpha; haloPaint.alpha = alpha * 0x40 / 255
+        outlinePaint.alpha = alpha; highlightPaint.alpha = alpha
     }
-    private fun drawBorderNoBottom(canvas: android.graphics.Canvas, b: android.graphics.Rect) {
-        // Rounded path, not straight full-length lines: the straight version squared the rounded
-        // corners. 1px stroke centred on the edge (half-px offset keeps it one crisp pixel);
-        // sides stop above the bottom fade.
-        val half = borderPaint.strokeWidth / 2f
-        // Straight sides must stop where the lower rounded corner begins, not project
-        // past its silhouette as dark feet. The clipped fade owns the bottom edge.
-        val stop = b.bottom - radiusPx
-        val r = radiusPx
-        val path = android.graphics.Path().apply {
-            moveTo(b.left + half, stop)
-            lineTo(b.left + half, b.top + r)
-            arcTo(android.graphics.RectF(b.left + half, b.top + half, b.left + half + 2 * r, b.top + half + 2 * r), 180f, 90f)
-            lineTo(b.right - half - r, b.top + half)
-            arcTo(android.graphics.RectF(b.right - half - 2 * r, b.top + half, b.right - half, b.top + half + 2 * r), 270f, 90f)
-            lineTo(b.right - half, stop)
-        }
-        canvas.drawPath(path, borderPaint)
+    override fun setColorFilter(colorFilter: android.graphics.ColorFilter?) {
+        fillPaint.colorFilter = colorFilter; outlinePaint.colorFilter = colorFilter; highlightPaint.colorFilter = colorFilter
     }
-    private val bottomFadePaint = android.graphics.Paint().apply { isDither = true }
-    private fun drawBottomFade(canvas: android.graphics.Canvas, b: android.graphics.Rect) {
-        val fadeH = 3.5f * px420
-        bottomFadePaint.shader = android.graphics.LinearGradient(
-            0f, b.bottom - fadeH, 0f, b.bottom.toFloat(),
-            intArrayOf(0x000C0C0C, 0x660C0C0C, 0xCC0C0C0C.toInt()),
-            floatArrayOf(0f, 0.6f, 1f),
-            android.graphics.Shader.TileMode.CLAMP
-        )
-        // Fade must stay inside the rounded fill, not leave square feet in the gap.
-        val saved = canvas.save()
-        val clip = android.graphics.Path().apply {
-            addRoundRect(android.graphics.RectF(b), radiusPx, radiusPx, android.graphics.Path.Direction.CW)
-        }
-        canvas.clipPath(clip)
-        canvas.drawRect(b.left.toFloat(), b.bottom - fadeH, b.right.toFloat(), b.bottom.toFloat(), bottomFadePaint)
-        canvas.restoreToCount(saved)
-    }
-    private fun drawTopLine(canvas: android.graphics.Canvas, b: android.graphics.Rect) {
-        // center lands 3 SwiftKey px from the key's top edge (1px border + 2px gap + half the 1px line)
-        val y = b.top + 3.0f * px420
-        canvas.drawLine(b.left + radiusPx, y, b.right - radiusPx, y, linePaint)
-    }
+    @Deprecated("Deprecated in Java")
+    override fun getOpacity(): Int = android.graphics.PixelFormat.TRANSLUCENT
 }
 
-private fun keyGradient(context: android.content.Context, top: Int, bottom: Int, chrome: Boolean = true): GradientDrawable {
-    val radiusPx = TypedValue.applyDimension(
-        TypedValue.COMPLEX_UNIT_DIP,
-        // WrenBoard 1.5 (item 10, candidate): Tab measured SwiftKey corners ~13-14px@420 (~5.3dp)
-        // vs our ~10px (4.0dp).
-        5.3f,
-        context.resources.displayMetrics
-    )
-    return TopLineGradientDrawable(top, bottom, radiusPx, context.resources.displayMetrics, chrome).apply {
-        shape = GradientDrawable.RECTANGLE
-        cornerRadius = radiusPx
-        // SwiftKey list item 2: 1px #0C0C0C key border lives on the gradient; KeyBackground outline is off.
-        // WrenBoard 1.5 (item 10, candidate): SwiftKey has NO hard bottom outline - the border draws on
-        // the top and sides only, and the bottom fades into the gap over 3-4px. The stroke here drops to
-        // the top+sides lines drawn in TopLineGradientDrawable; the fade lives there too.
-    }
-}
+private fun dpPx(context: android.content.Context, v: Float) =
+    TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, v, context.resources.displayMetrics)
+
+// Key outline radius: SwiftKey 4.6-4.8 dp measured on the visible arc; 5.3 dp on our outline path renders it.
+private const val KeyRadiusDp = 5.3f
+
+/** Letter and functional keys (items 25-29): fill #3F3F3F -> #020202, outline black 95%, highlight #6D6D6D. */
+private fun letterKey(context: android.content.Context) = WrenKeyDrawable(
+    0xFF3F3F3F.toInt(), 0xFF020202.toInt(), 0xF2000000.toInt(), 0xFF6D6D6D.toInt(), true,
+    dpPx(context, KeyRadiusDp), context.resources.displayMetrics)
+
+/** Number-row keys (items 30-33): fill #595959 -> #212121, outline #212121 at 95%, highlight #7E7E7E. */
+private fun numberKey(context: android.content.Context) = WrenKeyDrawable(
+    0xFF595959.toInt(), 0xFF212121.toInt(), 0xF2212121.toInt(), 0xFF7E7E7E.toInt(), true,
+    dpPx(context, KeyRadiusDp), context.resources.displayMetrics)
+
+/** Pressed, all keys (item 34): fill #656565 -> #373737, highlight #858585, outline black ~80%. */
+private fun pressedKey(context: android.content.Context, halo: Boolean = true) = WrenKeyDrawable(
+    0xFF656565.toInt(), 0xFF373737.toInt(), 0xCC000000.toInt(), 0xFF858585.toInt(), halo,
+    dpPx(context, KeyRadiusDp), context.resources.displayMetrics)
 
 private fun popupBox(context: android.content.Context): GradientDrawable {
     val dm = context.resources.displayMetrics
     return GradientDrawable().apply {
         shape = GradientDrawable.RECTANGLE
-        cornerRadius = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 6.0f, dm)
-        // SwiftKey list item 5: #333333 fill, 3px #BBBBBB border
+        // Pixel spec v1.1 item 57: #333333 fill, 1 dp #BBBBBB border (2 px on a 2.8x screen), 5.0 dp radius
+        cornerRadius = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 5.0f, dm)
         setColor(0xFF333333.toInt())
-        setStroke((3.0f * dm.density / 2.625f).toInt().coerceAtLeast(2), 0xFFBBBBBB.toInt())
+        setStroke(Math.round(TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 1.0f, dm)).coerceAtLeast(2), 0xFFBBBBBB.toInt())
     }
 }
 
@@ -246,15 +211,8 @@ private fun wrenKeyBackgrounds(context: android.content.Context) = KeyedBitmaps(
                 hintColor = HintGrey,
                 outlineColor = null,
                 // S4: flat dark grey fill (Tab measured the gradient, target flat #333333); light border stays
-                background = GradientDrawable().apply {
-                    shape = GradientDrawable.RECTANGLE
-                    cornerRadius = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 4.0f, context.resources.displayMetrics)
-                    setColor(0xFF333333.toInt())
-                    setStroke(
-                        TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 1.0f, context.resources.displayMetrics).toInt().coerceAtLeast(2),
-                        0xFFB4B4B4.toInt()
-                    )
-                }
+                // Pixel spec v1.1 item 57: same box as the hold bubble (1 dp #BBBBBB, 5.0 dp radius)
+                background = popupBox(context)
             )
         ),
         KeyedBitmap(
@@ -266,7 +224,7 @@ private fun wrenKeyBackgrounds(context: android.content.Context) = KeyedBitmaps(
                 outlineWidth = 1.dp,
                 // S7: selected cell inset so it doesn't paint over the panel outline (420dpi px in Rect)
                 padding = run { val d = context.resources.displayMetrics.density; android.graphics.Rect((5*d/2.625f).toInt(), (13*d/2.625f).toInt(), (5*d/2.625f).toInt(), (13*d/2.625f).toInt()) },
-                background = keyGradient(context, 0xFF626262.toInt(), 0xFF2A2A2A.toInt(), chrome = false)
+                background = pressedKey(context, halo = false)
             )
         ),
         KeyedBitmap(
@@ -279,27 +237,14 @@ private fun wrenKeyBackgrounds(context: android.content.Context) = KeyedBitmaps(
             )
         ),
         // Most-specific entries first: matcher returns the first match.
-        // Pressed top number row: lightened number gradient
-        KeyedBitmap(
-            qualifiers = setOf(
-                KeyQualifier.RowColSelector(RowColSelection.RowEq(0)),
-                KeyQualifier.Pressed
-            ),
-            bitmap = KeyBackground(
-                foregroundColor = AccentOrange.toArgb(),
-                hintColor = HintGrey,
-                outlineColor = null,
-                background = keyGradient(context, 0xFF767676.toInt(), 0xFF4A4A4A.toInt())
-            )
-        ),
-        // Pressed base keys: lightened charcoal gradient
+        // Pressed, every key including the number row (pixel spec v1.1 item 34)
         KeyedBitmap(
             qualifiers = setOf(KeyQualifier.Pressed),
             bitmap = KeyBackground(
                 foregroundColor = AccentOrange.toArgb(),
                 hintColor = HintGrey,
                 outlineColor = null,
-                background = keyGradient(context, 0xFF626262.toInt(), 0xFF363636.toInt())
+                background = pressedKey(context)
             )
         ),
         // Top number row: slightly lighter gradient
@@ -309,21 +254,27 @@ private fun wrenKeyBackgrounds(context: android.content.Context) = KeyedBitmaps(
                 foregroundColor = AccentOrange.toArgb(),
                 hintColor = HintGrey,
                 outlineColor = null,
-                // WrenBoard 1.5 (item 10, candidate): SwiftKey's number-row keys are visibly lighter
-                // (top #54-#5A); target top about #56, bottom unchanged.
-                background = keyGradient(context, 0xFF565656.toInt(), 0xFF242424.toInt())
+                background = numberKey(context)
             )
         ),
-        // Base letter/functional keys: charcoal vertical gradient with thin dark border
+        // Caps lock (StickyOn) keeps the normal dark key; only the glyph changes (pixel spec v1.1 items 35, 37)
+        KeyedBitmap(
+            qualifiers = setOf(KeyQualifier.VisualStyle(KeyVisualStyle.StickyOn)),
+            bitmap = KeyBackground(
+                foregroundColor = AccentOrange.toArgb(),
+                hintColor = HintGrey,
+                outlineColor = null,
+                background = letterKey(context)
+            )
+        ),
+        // Base letter/functional keys
         KeyedBitmap(
             qualifiers = emptySet(),
             bitmap = KeyBackground(
                 foregroundColor = AccentOrange.toArgb(),
                 hintColor = HintGrey,
                 outlineColor = null,
-                // WrenBoard 1.3 (teardown item 1): the old top (#3E3E3E) sat 2 levels off the #3C3C3C board,
-            // so the key top vanished. #4C4C4C keeps the charcoal look but reads as a full button box.
-            background = keyGradient(context, 0xFF3D3D3D.toInt(), 0xFF060606.toInt())
+                background = letterKey(context)
             )
         ),
     )

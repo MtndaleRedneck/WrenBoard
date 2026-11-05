@@ -261,6 +261,16 @@ fun BoxScope.KeyboardBackground(
                 .matchParentSize()
                 .background(backgroundBrush))
         }
+        // WrenBoard (pixel spec v1.1 items 22-23): a theme with both a board gradient and its own
+        // navigation-bar colour ends the gradient at the keyboard and fills the bar area flat, as
+        // SwiftKey does, instead of stretching the gradient under the navigation bar.
+        !useThumbnail && colorScheme.keyboardBackgroundGradient != null && colorScheme.navigationBarColor != null -> {
+            val navHeight = navBarHeight()
+            Column(Modifier.matchParentSize()) {
+                Box(Modifier.fillMaxWidth().weight(1f).background(backgroundBrush))
+                Box(Modifier.fillMaxWidth().height(navHeight).background(colorScheme.navigationBarColor!!))
+            }
+        }
         else -> Box(Modifier
             .background(backgroundBrush)
             .matchParentSize())
