@@ -119,6 +119,8 @@ public final class InputLogic {
     private final RecapitalizeStatus mRecapitalizeStatus = new RecapitalizeStatus();
 
     private int mDeleteCount;
+    // WrenBoard (item 7): true only while a held (repeating) backspace is being handled.
+    private boolean mKeepSuggestionStripOnReset = false;
     private long mLastKeyTime;
     public final TreeSet<Long> mCurrentlyPressedHardwareKeys = new TreeSet<>();
 
@@ -1422,6 +1424,21 @@ public final class InputLogic {
      */
     private void handleBackspaceEvent(final Event event, final InputTransaction inputTransaction,
             final int currentKeyboardScriptId) {
+        // WrenBoard (item 7): while backspace is HELD (key repeat), the word resets below must not
+        // blank the suggestion strip. Each repeat used to clear it, and the refreshed predictions
+        // always arrived after the next repeat had already cleared it again, so the row stayed
+        // empty for the whole hold. SwiftKey keeps the row filled; the strip now keeps its words
+        // until the next update replaces them.
+        mKeepSuggestionStripOnReset = event.isKeyRepeat();
+        try {
+            handleBackspaceEventInternal(event, inputTransaction, currentKeyboardScriptId);
+        } finally {
+            mKeepSuggestionStripOnReset = false;
+        }
+    }
+
+    private void handleBackspaceEventInternal(final Event event, final InputTransaction inputTransaction,
+            final int currentKeyboardScriptId) {
         mSpaceState = SpaceState.NONE;
         mDeleteCount++;
 
@@ -2505,7 +2522,7 @@ public final class InputLogic {
             final boolean clearSuggestionStrip) {
         final boolean shouldFinishComposition = mWordComposer.isComposingWord();
         resetComposingState(true /* alsoResetLastComposedWord */);
-        if (clearSuggestionStrip) {
+        if (clearSuggestionStrip && !mKeepSuggestionStripOnReset) {
             mSuggestionStripViewAccessor.setNeutralSuggestionStrip();
         }
         mConnection.resetCachesUponCursorMoveAndReturnSuccess(newSelStart, newSelEnd,
