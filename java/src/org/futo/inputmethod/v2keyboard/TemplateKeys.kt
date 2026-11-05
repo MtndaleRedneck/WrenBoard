@@ -182,8 +182,15 @@ data class EnterKey(
                     && !params.mId.passwordInput()
         val useShiftEnter = isShifted && hasOptionToMultiLine
 
+        // WrenBoard 1.6 (item 10, pixel spec v1.1 item 55): SwiftKey shows its plain return arrow, not a
+        // tick or a next arrow, in email / web address / number / phone fields. Go, search and send keep
+        // their own icons.
+        val swiftKeyFieldReturn = params.mId.mMode in SwiftKeyReturnArrowModes && params.mId.imeAction().let {
+            it == EditorInfo.IME_ACTION_DONE || it == EditorInfo.IME_ACTION_NEXT || it == EditorInfo.IME_ACTION_PREVIOUS
+        }
+
         // Icon, etc depend on editorInfo.
-        val icon = if (useShiftEnter)
+        val icon = if (useShiftEnter || swiftKeyFieldReturn)
             KeyboardIconsSet.NAME_ENTER_KEY
         else when (params.mId.imeAction()) {
             EditorInfo.IME_ACTION_UNSPECIFIED -> KeyboardIconsSet.NAME_ENTER_KEY
@@ -348,6 +355,55 @@ data class OptionalZWNJKey(
         return selectKey(params, keyboard)?.computeData(params, row, keyboard, coordinate)
     }
 }
+
+/**
+ * WrenBoard 1.6 (item 10): a bottom-row slot whose key depends on the field, as in SwiftKey's email
+ * layout. [emailOrUrl] is used in email and web-address fields, [default] everywhere else; a null key
+ * leaves the slot out.
+ */
+@Serializable
+@SerialName("wren_field_variant")
+data class FieldVariantKey(
+    val default: Key? = null,
+    val emailOrUrl: Key? = null
+) : AbstractKey {
+    private fun selectKey(params: KeyboardParams): Key? =
+        if (params.mId.isEmailOrUrlField()) emailOrUrl else default
+
+    override fun countsToKeyCoordinate(params: KeyboardParams, row: Row, keyboard: Keyboard): Boolean =
+        selectKey(params)?.countsToKeyCoordinate(params, row, keyboard) ?: false
+
+    override fun computeData(
+        params: KeyboardParams,
+        row: Row,
+        keyboard: Keyboard,
+        coordinate: KeyCoordinate
+    ): ComputedKeyData? = selectKey(params)?.computeData(params, row, keyboard, coordinate)
+}
+
+/** Modes in which the enter key shows the return arrow instead of done/next (item 10). */
+val SwiftKeyReturnArrowModes = setOf(
+    KeyboardId.MODE_EMAIL, KeyboardId.MODE_URL, KeyboardId.MODE_NUMBER, KeyboardId.MODE_PHONE
+)
+
+fun KeyboardId.isEmailOrUrlField(): Boolean = mMode == KeyboardId.MODE_EMAIL || mMode == KeyboardId.MODE_URL
+
+/**
+ * SwiftKey's email-field @ key, right of the narrower space bar (pixel spec v1.1 item 67). It does not count
+ * towards key coordinates, so the comma keeps the mic and the period keeps its own long-press. The "…" hint
+ * marks its long-press: common address endings.
+ */
+val WrenEmailAtKey = BaseKey(
+    spec = "@",
+    hint = "\u2026",
+    moreKeys = listOf("!hasLabels!", ".com", ".net", ".org", ".edu", ".gov"),
+    attributes = KeyAttributes(
+        width = KeyWidth.Regular,
+        style = KeyVisualStyle.Normal,
+        moreKeyMode = MoreKeyMode.OnlyExplicit,
+        useKeySpecShortcut = false
+    )
+)
 
 val TemplateEnterKey = EnterKey()
 val TemplateActionKey = ActionKey()

@@ -8,6 +8,7 @@ import org.futo.inputmethod.keyboard.KeyConsts
 import org.futo.inputmethod.keyboard.internal.KeyboardLayoutElement
 import org.futo.inputmethod.keyboard.internal.KeyboardLayoutKind
 import org.futo.inputmethod.keyboard.internal.KeyboardParams
+import org.futo.inputmethod.keyboard.internal.isAlphabet
 import org.futo.inputmethod.latin.R
 import org.futo.inputmethod.latin.common.Constants
 import org.futo.inputmethod.latin.uix.DynamicThemeProvider
@@ -197,6 +198,11 @@ data class LayoutEngine(
     private val maxFunctionalKeyWidth = (layoutWidth * (keyboard.overrideWidths[KeyWidth.FunctionalKey] ?: 0.15f))
 
     private val bottomRegularKeyWidth = 0.1f * layoutWidth
+
+    // WrenBoard 1.6 (item 10): the email/web-address variant of the default bottom row.
+    private fun isSwiftKeyEmailRow(row: Row): Boolean =
+        layoutParams.element.kind.isAlphabet && params.mId.isEmailOrUrlField()
+                && row.keys.any { it is FieldVariantKey }
 
 
     private fun computeRegularKeyWidth(layoutWidth: Int = this.layoutWidth): Float {
@@ -487,7 +493,11 @@ data class LayoutEngine(
                     row = it,
                     regularKeyWidth = rowRegularKeyWidths[i],
                     layoutWidth = rowLayoutWidths[i],
-                    functionalWidth = if (rows[i].isBottomRow && keyboard.bottomRowWidthMode.separateFunctional) {
+                    functionalWidth = if (rows[i].isBottomRow && isSwiftKeyEmailRow(rows[i])) {
+                        // WrenBoard 1.6 (item 10, pixel spec v1.1 item 67): 123 and return are 40.2 dp
+                        // (113 px of 1080) in SwiftKey's email row; the space bar takes what is left.
+                        layoutWidth * SwiftKeyEmailFunctionalWidth
+                    } else if (rows[i].isBottomRow && keyboard.bottomRowWidthMode.separateFunctional) {
                         maxOf(minimumBottomFunctionalKeyWidth, functionalWidth)
                     } else {
                         functionalWidth

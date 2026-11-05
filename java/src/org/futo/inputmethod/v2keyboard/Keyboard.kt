@@ -158,17 +158,35 @@ private val WrenBottomSymbolsKey = BaseKey(
     attributes = KeyAttributes(width = KeyWidth.Regular) + FunctionalAttributes
 )
 
+// WrenBoard 1.6 (item 10, pixel spec v1.1 item 67): SwiftKey's email (and web address) row is
+// 123 (113 px) | emoji | comma (mic kept) | space | @ | period | return (113 px). The 123 key keeps its
+// clipboard long-press and widens to the row's functional width (see LayoutEngine), the comma stays where
+// FUTO put the @, and the @ gets its own key right of the narrower space bar.
+private val WrenEmailBottomSymbolsKey = BaseKey(
+    spec = "!text/keylabel_to_symbol|!code/key_switch_alpha_symbol",
+    moreKeys = SymbolsMoreKeys,
+    attributes = KeyAttributes(width = KeyWidth.FunctionalKey) + FunctionalAttributes
+)
+
 val DefaultBottomRow = Row(
     bottom = listOf(
-        WrenBottomSymbolsKey,
+        FieldVariantKey(default = WrenBottomSymbolsKey, emailOrUrl = WrenEmailBottomSymbolsKey),
         TemplateActionKey,
-        ContextualKey(fallbackKey = BaseKey(",")),
+        FieldVariantKey(
+            default = ContextualKey(fallbackKey = BaseKey(",")),
+            emailOrUrl = BaseKey(",")
+        ),
         TemplateSpaceKey,
+        FieldVariantKey(emailOrUrl = WrenEmailAtKey),
         TemplateOptionalZWNJKey,
         TemplatePeriodKey,
         TemplateEnterKey
     )
 )
+
+// SwiftKey's email row: 123 and return are 113 px keys at 1080 px (pixel spec v1.1 item 67); as a layout
+// cell (key + gap) that is 0.1106 of the keyboard width.
+const val SwiftKeyEmailFunctionalWidth: Float = 0.1106f
 
 enum class NumberRowMode {
     UserConfigurable,
