@@ -107,7 +107,7 @@ public class MoreKeysKeyboardView extends KeyboardView implements MoreKeysPanel 
                     kdc.getTextColor(), kdc.getHintColor(),
                     kdc.getTextSize() * 1.8f, kdc.getHintSize(),
                     kdc.getTextTypeface(), kdc.getHintTypeface(),
-                    kdc.getCenteredHint(), kdc.getOutline());
+                    kdc.getCenteredHint(), kdc.getOutline(), false);
             canvas.save();
             canvas.translate(0, -keyHeight / 4.0f);
             super.onDrawKeyTopVisuals(key, canvas, paint, params, scaled, keyWidth, keyHeight);

@@ -47,4 +47,12 @@ data class AdvancedThemeOptions(
     /** Draw the small transformer/swipe source markers under suggestions. WrenBoard 1.3 (teardown item 5):
      *  Ezzy wants the orange transformer marker gone on the WrenBoard theme. */
     val showSuggestionSourceIndicators: Boolean = true,
+
+    /** WrenBoard SwiftKey parity (pixel spec v1.1 items 3-9): place letter, digit, hint and bottom-row labels
+     *  at SwiftKey's measured positions (fractions of the row pitch from the visible key top). */
+    val swiftKeyLabelGeometry: Boolean = false,
+    /** Explicit hint text size in dp (overrides hintSizeMultiplier), e.g. 13.2 for SwiftKey. */
+    val hintTextSizeDp: Float? = null,
+    /** Explicit size in dp for the letters-page "123" label and the ",!?" hint, e.g. 15.2 for SwiftKey. */
+    val switchLabelSizeDp: Float? = null,
 )
