@@ -39,6 +39,9 @@ import java.util.Locale;
 import java.util.Set;
 
 import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
+
+import kotlin.jvm.functions.Function1;
 
 /**
  * This class loads a dictionary and provides a list of suggestions for a given sequence of
@@ -164,6 +167,23 @@ public final class Suggest {
             final Locale locale, final SuggestionResults suggestionResults,
             final float autoCorrectionThreshold, final boolean numberRowActive
     ) {
+        return obtainNonBatchedInputSuggestedWords(wordComposer, inputStyleIfNotPrediction,
+                isCorrectionEnabled, sequenceNumber, locale, suggestionResults,
+                autoCorrectionThreshold, numberRowActive, null);
+    }
+
+    /**
+     * @param isValidWord WrenBoard (item 6): asks the dictionaries whether a word is known, so a
+     *                    swapped-letter typo can be corrected even when the swapped word is not in
+     *                    the suggestion list. May be null (then only the suggestion list is used).
+     */
+    public static SuggestedWords obtainNonBatchedInputSuggestedWords(
+            final WordComposer wordComposer, final int inputStyleIfNotPrediction,
+            final boolean isCorrectionEnabled, final int sequenceNumber,
+            final Locale locale, final SuggestionResults suggestionResults,
+            final float autoCorrectionThreshold, final boolean numberRowActive,
+            @Nullable final Function1<String, Boolean> isValidWord
+    ) {
         final String typedWordString = wordComposer.getTypedWord();
         final int trailingSingleQuotesCount =
                 StringUtils.getTrailingSingleQuotesCount(typedWordString);
@@ -203,7 +223,7 @@ public final class Suggest {
                 (SHOULD_AUTO_CORRECT_USING_NON_WHITE_LISTED_SUGGESTION || whitelistedWord != null)
                 || (consideredWord.length() > 1 && (sourceDictionaryOfRemovedWord == null));
 
-        final boolean hasAutoCorrection;
+        boolean hasAutoCorrection;
         // If correction is not enabled, we never auto-correct. This is for example for when
         // the setting "Auto-correction" is "off": we still suggest, but we don't auto-correct.
         if (!isCorrectionEnabled
@@ -271,6 +291,41 @@ public final class Suggest {
             }
         }
 
+        // WrenBoard (item 6): swapped-letter typos ("recieve" -> "receive", "teh" -> "the") are
+        // autocorrected like SwiftKey does, even when the score threshold above said no.
+        if (!hasAutoCorrection
+                && trailingSingleQuotesCount == 0
+                && firstOcurrenceOfTypedWordInSuggestions < 0
+                && sourceDictionaryOfRemovedWord == null
+                && isEligibleForSwappedLetterCorrection(wordComposer, typedWordString,
+                        isCorrectionEnabled, resultsArePredictions, numberRowActive)
+                && !isKnownWord(consideredWord, isValidWord)) {
+            final ArrayList<String> words = new ArrayList<>(suggestionsContainer.size());
+            for (final SuggestedWordInfo info : suggestionsContainer) {
+                words.add(info.isKindOf(SuggestedWordInfo.KIND_SHORTCUT)
+                        || info.isKindOf(SuggestedWordInfo.KIND_EMOJI_SUGGESTION) ? "" : info.mWord);
+            }
+            final int swapIndex = SwappedLetterCorrection.findInSuggestions(consideredWord, words);
+            SuggestedWordInfo swapped = null;
+            if (swapIndex >= 0) {
+                swapped = suggestionsContainer.remove(swapIndex);
+            } else if (isValidWord != null) {
+                final String swappedWord =
+                        SwappedLetterCorrection.findInDictionary(consideredWord, isValidWord);
+                if (swappedWord != null) {
+                    swapped = new SuggestedWordInfo(swappedWord, "" /* prevWordsContext */,
+                            SuggestedWordInfo.MAX_SCORE - 1, SuggestedWordInfo.KIND_CORRECTION,
+                            Dictionary.DICTIONARY_USER_TYPED,
+                            SuggestedWordInfo.NOT_AN_INDEX /* indexOfTouchPointOfSecondWord */,
+                            SuggestedWordInfo.NOT_A_CONFIDENCE /* autoCommitFirstWordConfidence */);
+                }
+            }
+            if (swapped != null) {
+                suggestionsContainer.add(0, swapped);
+                hasAutoCorrection = true;
+            }
+        }
+
         final SuggestedWordInfo typedWordInfo = new SuggestedWordInfo(typedWordString,
                 "" /* prevWordsContext */, SuggestedWordInfo.MAX_SCORE,
                 SuggestedWordInfo.KIND_TYPED,
@@ -308,6 +363,33 @@ public final class Suggest {
                 false /* isObsoleteSuggestions */, inputStyle, sequenceNumber);
     }
 
+    // WrenBoard (item 6): the same "typed with care" exclusions the normal autocorrect uses
+    // (correction off, predictions, dashes, digits, caps, resumed words, rejected swipes, URLs).
+    private static boolean isEligibleForSwappedLetterCorrection(final WordComposer wordComposer,
+            final String typedWordString, final boolean isCorrectionEnabled,
+            final boolean resultsArePredictions, final boolean numberRowActive) {
+        return isCorrectionEnabled
+                && !resultsArePredictions
+                && typedWordString.length() >= SwappedLetterCorrection.MIN_LENGTH
+                && !wordComposer.hasDashes()
+                && !(wordComposer.hasDigits() && !numberRowActive)
+                && !wordComposer.isEntirelyDigits()
+                && !wordComposer.startsWithDigit()
+                && !wordComposer.isAttachedToNonWord()
+                && !wordComposer.isMostlyCaps()
+                && !wordComposer.isResumed()
+                && wordComposer.getRejectedBatchModeSuggestion() == null
+                && !StringUtils.lastPartLooksLikeURL(typedWordString);
+    }
+
+    private static boolean isKnownWord(final String word,
+            @Nullable final Function1<String, Boolean> isValidWord) {
+        if (isValidWord == null) return false;
+        if (Boolean.TRUE.equals(isValidWord.invoke(word))) return true;
+        final String lower = word.toLowerCase(Locale.ROOT);
+        return !lower.equals(word) && Boolean.TRUE.equals(isValidWord.invoke(lower));
+    }
+
     // Returns whether the provided codepoint should trigger an autocorrection
     public static boolean shouldCodePointAutocorrect(final int codePoint) {
         // Dash will never autocorrect because the autocorrect currently doesn't take the dash
@@ -336,7 +418,7 @@ public final class Suggest {
         callback.onGetSuggestedWords(
             obtainNonBatchedInputSuggestedWords(wordComposer, inputStyleIfNotPrediction,
                 isCorrectionEnabled, sequenceNumber, locale, suggestionResults, mAutoCorrectionThreshold,
-                    keyboard.mId.mNumberRow)
+                    keyboard.mId.mNumberRow, mDictionaryFacilitator::isValidSpellingWord)
         );
     }
 
