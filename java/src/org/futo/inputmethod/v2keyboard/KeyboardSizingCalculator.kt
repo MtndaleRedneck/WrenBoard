@@ -622,7 +622,10 @@ class KeyboardSizingCalculator(val context: Context, val uixManager: UixManager)
         when {
             uixManager.actionsExpanded
                     && (uixManager.currWindowActionWindow.value == null)
-                    && (context.getSetting(OldStyleActionsBar) == false) -> dp(2 * calculateSuggestionBarHeightDp())
+                    && (context.getSetting(OldStyleActionsBar) == false) ->
+                // SwiftKey parity (item 44): the toolbar row is 44.1 dp (ToolbarRowHeight) instead of a second
+                // 41 dp strip; keep the strip's 5 dp of slack on top of it.
+                dp(calculateSuggestionBarHeightDp() + 44.1f + (calculateSuggestionBarHeightDp() - 41.0f))
             else -> dp(calculateSuggestionBarHeightDp())
         }
 }
