@@ -47,7 +47,6 @@ import org.futo.inputmethod.latin.uix.StarterWordsSetting
 import org.futo.inputmethod.latin.uix.actions.throwIfDebug
 import org.futo.inputmethod.latin.uix.getSetting
 import org.futo.inputmethod.latin.uix.isDirectBootUnlocked
-import org.futo.inputmethod.latin.utils.AsyncResultHolder
 import org.futo.inputmethod.latin.xlm.LanguageModelFacilitator
 import org.futo.inputmethod.v2keyboard.KeyboardLayoutSetV2
 import java.util.concurrent.atomic.AtomicInteger
@@ -489,8 +488,17 @@ class GeneralIME(val helper: IMEHelper) : IMEInterface, WordLearner, SuggestionS
         var dictResult: SuggestedWords? = null
         var lmResult: ArrayList<SuggestedWordInfo>? = null
         if(predictionInputValues != null) {
+            // WrenBoard 1.6: the LM wait can be cut short by a space/punctuation commit
+            // (ensureSuggestionsCompleted), so the word's autocorrection is never lost to a late LM.
+            val passStart = System.currentTimeMillis()
+            val lmResultHolder = WrenLmWait<ArrayList<SuggestedWordInfo>>(
+                sequenceNumber,
+                WrenLmWait.deadlineFor(passStart, if (commitSequence == sequenceNumber) commitLmDeadline else null),
+                { System.currentTimeMillis() }
+            )
+            activeLmWait = lmResultHolder
+
             // This runs asynchronously
-            val lmResultHolder = AsyncResultHolder<ArrayList<SuggestedWordInfo>?>("LMSuggest")
             lmUpdateJob?.cancel()
             lmUpdateJob = helper.lifecycleScope.launch(languageModelFacilitator.languageModelScope) {
                 val result = languageModelFacilitator.getLanguageModelSuggestions(predictionInputValues)
@@ -507,8 +515,11 @@ class GeneralIME(val helper: IMEHelper) : IMEInterface, WordLearner, SuggestionS
             ) { suggestedWords -> dictResult = suggestedWords }
 
             // Wait for LM to report result
-            lmResult = lmResultHolder.get(null, 350L)
-            if(lmResult == null) languageModelFacilitator.reportTimeout()
+            val (lmOutcome, lmValue) = lmResultHolder.await()
+            if (activeLmWait === lmResultHolder) activeLmWait = null
+            lmResult = lmValue
+            if(WrenLmWait.countsAsLmTimeout(lmOutcome)) languageModelFacilitator.reportTimeout()
+            if(BuildConfig.DEBUG && lmOutcome == WrenLmWait.Outcome.CUT_SHORT) Log.i("WBDBG", "LMWAIT cut short seq=$sequenceNumber after ${System.currentTimeMillis() - passStart}ms (dictionary decides)")
         } else {
             inputLogic.getSuggestedWords(
                 settings.current,
@@ -589,6 +600,8 @@ class GeneralIME(val helper: IMEHelper) : IMEInterface, WordLearner, SuggestionS
                 computationMutex.withLock {
                     // double check in case sequence id incremented after we acquired scope
                     if (sequenceId.get() > seqId) return@withContext
+                    // WrenBoard 1.6: a commit (ensureSuggestionsCompleted) already did this pass
+                    if (sequenceIdCompleted.get() >= seqId) return@withContext
 
                     val t0 = System.currentTimeMillis()
                     updateSuggestionsDictionaryInternal(inputStyle, seqId)
@@ -603,11 +616,31 @@ class GeneralIME(val helper: IMEHelper) : IMEInterface, WordLearner, SuggestionS
         }
     }
 
+    // WrenBoard 1.6 (review finding 2): the sequence a space/punctuation is committing, and the
+    // moment its pass must stop waiting for the LM. Read by the pass when it starts waiting.
+    @Volatile private var commitSequence = -1
+    @Volatile private var commitLmDeadline = Long.MAX_VALUE
+    @Volatile private var activeLmWait: WrenLmWait<ArrayList<SuggestedWordInfo>>? = null
+
     fun ensureSuggestionsCompleted(): Boolean {
         val currJob = updateSuggestionJob
 
         val seqId = sequenceId.get()
         if(sequenceIdCompleted.get() < seqId) {
+            val waitStart = android.os.SystemClock.uptimeMillis()
+
+            // WrenBoard 1.6: passes run one at a time. Typed continuously, the space lands while the
+            // last letter's pass is still waiting for the LM; this commit used to queue a second
+            // pass behind it, wait for the LM twice, miss the budget and commit the typed word
+            // uncorrected. Now the word's pass may wait for the LM only until the commit's LM
+            // deadline, an older pass stops waiting at once, and the dictionary result decides.
+            val now = System.currentTimeMillis()
+            commitLmDeadline = now + WrenLmWait.COMMIT_LM_BUDGET_MS
+            commitSequence = seqId
+            activeLmWait?.let {
+                it.shortenTo(WrenLmWait.commitDeadlineForWaitingPass(it.sequenceNumber, seqId, now, commitLmDeadline))
+            }
+
             currJob?.cancel()
 
             val newJob = helper.lifecycleScope.launch(NonCancellable + dictionaryScope) {
@@ -619,9 +652,8 @@ class GeneralIME(val helper: IMEHelper) : IMEInterface, WordLearner, SuggestionS
 
             updateSuggestionJob = newJob
 
-            val waitStart = android.os.SystemClock.uptimeMillis()
             val completed = runBlocking {
-                (withTimeoutOrNull(450L) {
+                (withTimeoutOrNull(WrenLmWait.COMMIT_WAIT_MS) {
                     newJob.join()
                     true
                 } == true)
