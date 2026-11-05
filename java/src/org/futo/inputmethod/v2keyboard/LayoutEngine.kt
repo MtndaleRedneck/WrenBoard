@@ -136,8 +136,9 @@ data class LayoutEngine(
                     (it.numRowMode.displayWhenExplicitlyInactive && !params.mId.mNumberRow)
         }
 
+        // WrenBoard 1.6 (item 10, pixel spec v1.1 item 64): SwiftKey's number/phone pad has no arrow row.
         val finalRows = filteredRows +
-                if(params.mId.mArrowRow) { listOf(ArrowRow) } else { emptyList() }
+                if(params.mId.mArrowRow && !layoutParams.element.kind.isSwiftKeyPad) { listOf(ArrowRow) } else { emptyList() }
 
         finalRows
     }

@@ -184,6 +184,10 @@ val DefaultBottomRow = Row(
     )
 )
 
+// WrenBoard 1.6 (item 10): the field keyboards drawn as SwiftKey's compact 4x6 pad (number and phone fields).
+val KeyboardLayoutKind.isSwiftKeyPad: Boolean
+    get() = this == KeyboardLayoutKind.NumberBasic || this == KeyboardLayoutKind.Phone
+
 // SwiftKey's email row: 123 and return are 113 px keys at 1080 px (pixel spec v1.1 item 67); as a layout
 // cell (key + gap) that is 0.1106 of the keyboard width.
 const val SwiftKeyEmailFunctionalWidth: Float = 0.1106f

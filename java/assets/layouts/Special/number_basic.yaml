@@ -1,8 +1,19 @@
 name: Numbers (Basic)
+# WrenBoard 1.6 (item 10, pixel spec v1.1 items 64-65, Ezzy's approved mock-ups 13/14): SwiftKey's compact
+# 4 x 6 pad, the same for number and phone fields (number, date and time fields use this file). No letters on the keys, no arrow row,
+# no prediction strip or toolbar (UixManager), 576 px tall at 1080x2316 (KeyboardSizingCalculator).
+# Columns at 1080 px: three 216 px cells, then 140 / 141 / 151 px (keys 210, 134, 135, 145 px + gaps).
 numberRowMode: AlwaysDisabled
 bottomRowHeightMode: Flexible
+bottomRowWidthMode: Identical
+rowHeightMode: FillHeight
+overrideWidths:
+  Custom1: 0.2
+  Custom2: 0.12963
+  Custom3: 0.13056
+  Custom4: 0.13981
 attributes: &globalAttrs
-  width: Grow
+  width: Custom1
   showPopup: false
   moreKeyMode: OnlyExplicit
   useKeySpecShortcut: false
@@ -11,30 +22,38 @@ attributes: &globalAttrs
   labelFlags:
     alignLabelOffCenter: false
     hasHintLabel: false
-rowHeightMode: FillHeight
 rows:
   - letters:
       - "1"
-      - {type: base, spec: "2"}
-      - {type: base, spec: "3"}
-      - {type: base, spec: "-", attributes: &functional { style: Functional, labelFlags: {} }}
+      - "2"
+      - "3"
+      - {type: base, spec: "(", attributes: {width: Custom2}}
+      - {type: base, spec: ")", attributes: {width: Custom3}}
+      - {type: base, spec: ",", attributes: {width: Custom4}}
     splittable: false
   - letters:
-      - {type: base, spec: "4"}
-      - {type: base, spec: "5"}
-      - {type: base, spec: "6"}
-      - {type: base, spec: "!icon/space_key_for_number_layout|!code/key_space", attributes: { style: Functional, labelFlags: {}, longPressEnabled: true }}
+      - "4"
+      - "5"
+      - "6"
+      - {type: base, spec: "+", attributes: {width: Custom2}}
+      - {type: base, spec: "-", attributes: {width: Custom3}}
+      - {type: base, spec: ";", moreKeys: [":"], attributes: {width: Custom4}}
     splittable: false
   - letters:
-      - {type: base, spec: "7"}
-      - {type: base, spec: "8"}
-      - {type: base, spec: "9"}
-      - {type: base, spec: "!icon/delete_key|!code/key_delete", attributes: *functional}
+      - "7"
+      - "8"
+      - "9"
+      - {type: base, spec: "/", attributes: {width: Custom2}}
+      - {type: base, spec: "N", attributes: {width: Custom3}}
+      - {type: delete, attributes: {width: Custom4}}
     splittable: false
   - bottom:
-      - {type: contextual, fallbackKey: ","}
+      - {type: base, spec: "*"}
       - {type: base, spec: "0", moreKeys: "!noPanelAutoMoreKey!,+"}
-      - {type: base, spec: "."}
-      - {type: enter, attributes: { width: Grow }}
+      - {type: base, spec: "#"}
+      - {type: base, spec: ".", attributes: {width: Custom2}}
+      # SwiftKey's blank key: a space with no glyph
+      - {type: base, spec: " |!code/key_space", attributes: {width: Custom3, longPressEnabled: false}}
+      - {type: enter, attributes: {width: Custom4}}
     attributes: *globalAttrs
     splittable: false
