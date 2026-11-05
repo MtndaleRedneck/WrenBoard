@@ -209,7 +209,7 @@ public class KeyboardView extends View {
     public void setKeyboard(@Nonnull final Keyboard keyboard) {
         mKeyboard = keyboard;
         final int keyHeight = keyboard.mMostCommonKeyHeight - keyboard.mVerticalGap;
-        final int keyWidth = keyboard.mMostCommonKeyWidth;
+        final int keyWidth = labelReferenceKeyWidth(keyboard);
 
         mKeyDrawParams.updateParams(keyWidth, Math.min(keyWidth, keyHeight), mKeyVisualAttributes);
         mKeyDrawParams.updateParams(keyWidth, Math.min(keyWidth, keyHeight), keyboard.mKeyVisualAttributes);
@@ -236,8 +236,22 @@ public class KeyboardView extends View {
         return mKeyDrawParams;
     }
 
+    /**
+     * WrenBoard 1.6 (approved mock-up 05): label sizes follow the narrower of key width and height. Symbols
+     * page 2 has 9 keys per row instead of 10, so its wider keys drew every symbol about 20% bigger than
+     * on page 1 and the letters. Size page 2 as if it had 10 keys per row, like SwiftKey.
+     */
+    private static int labelReferenceKeyWidth(@Nonnull final Keyboard keyboard) {
+        final int keyWidth = keyboard.mMostCommonKeyWidth;
+        if (keyboard.mId != null && keyboard.mId.mElementId == KeyboardId.ELEMENT_SYMBOLS_SHIFTED
+                && keyboard.mBaseWidth > 0) {
+            return Math.min(keyWidth, keyboard.mBaseWidth / 10);
+        }
+        return keyWidth;
+    }
+
     protected void updateKeyDrawParams(final int keyHeight) {
-        final int keyWidth = mKeyboard.mMostCommonKeyWidth;
+        final int keyWidth = labelReferenceKeyWidth(mKeyboard);
         mKeyDrawParams.updateParams(keyWidth, Math.min(keyWidth, keyHeight), mKeyVisualAttributes);
     }
 
