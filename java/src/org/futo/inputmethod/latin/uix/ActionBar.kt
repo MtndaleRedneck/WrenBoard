@@ -200,7 +200,10 @@ val ActionBarScrollOffsetSetting = SettingsKey(
 
 val ActionBarExpanded = SettingsKey(
     booleanPreferencesKey("actionExpanded"),
-    false // WrenBoard 1.2: toolbar tucked behind the chevron by default (Ezzy Oct 29/30); it opens as a row above the strip
+    // SwiftKey parity (approved item 3, Nov 4; difference list item 1): the icon row shows above the predictions
+    // by default, as in SwiftKey; the chevron still hides it and the choice is remembered. (WrenBoard 1.2-1.5
+    // tucked it away by default, Ezzy Oct 29/30.)
+    true
 )
 
 val OldStyleActionsBar = SettingsKey(
