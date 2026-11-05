@@ -304,6 +304,14 @@ fun HomeScreen(navController: NavHostController = rememberNavController()) {
                 textAlign = TextAlign.Center
             )
             Spacer(modifier = Modifier.height(if(wrenStyle) 12.dp else 32.dp))
+            if(wrenStyle) {
+                // WrenBoard 1.6 (Ezzy, Nov 5: "Match the mockup"): home has no fixed band above the try-keyboard
+                // button; the list runs under it. Only the end of the list gets padding, so the Updates card can
+                // still be scrolled clear of the button: 16 + 12 dp above, plus 56 dp here, is the mock-up's
+                // 84 dp = 12 dp gap + the button's 72 dp (56 dp + 16 dp margin).
+                val fabInset = org.futo.inputmethod.latin.uix.settings.LocalSettingsFabInset.current
+                if(fabInset > 0.dp) Spacer(modifier = Modifier.height(fabInset - 16.dp))
+            }
         }
     }
 }
