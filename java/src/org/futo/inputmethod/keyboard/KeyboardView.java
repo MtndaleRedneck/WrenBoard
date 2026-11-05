@@ -658,10 +658,10 @@ public class KeyboardView extends View {
             if (key.getCode() == Constants.CODE_SPACE && icon instanceof NinePatchDrawable) {
                 iconWidth = (int)(keyWidth * mSpacebarIconWidthRatio);
             } else if (KeyboardIconsSet.NAME_SPACE_KEY_FOR_NUMBER_LAYOUT.equals(key.getIconId())) {
-                // WrenBoard 1.5 item 5e (Tab's cosmetic value, candidate): number-layout space
-                // glyph is a bracket 24dp wide x 6dp tall (2dp stroke lives in the vector).
-                iconWidth = (int)(24.0f * iconDm);
-                iconHeightOverride = (int)(6.0f * iconDm);
+                // SwiftKey parity (spec v1.1 item 56, measured on Ezzy's S22 Ultra): the symbols-page
+                // space glyph is a bracket 32.0 dp wide x 9.2 dp tall (3 dp stroke lives in the vector).
+                iconWidth = Math.round(32.0f * iconDm);
+                iconHeightOverride = Math.round(9.2f * iconDm);
             } else if (KeyboardIconsSet.NAME_EMOJI_NORMAL_KEY.equals(key.getIconId())
                     || KeyboardIconsSet.NAME_EMOJI_ACTION_KEY.equals(key.getIconId())
                     || "action_emoji".equals(key.getIconId())

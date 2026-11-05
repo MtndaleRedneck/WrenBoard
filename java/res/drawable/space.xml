@@ -1,15 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- WrenBoard 1.5 item 5e (Tab's cosmetic value, candidate): number-layout space glyph is a
-     bracket 24dp wide x 6dp tall, 2dp stroke. Tinted to the key label colour at draw time. -->
+<!-- Symbols/number-layout space glyph: an open bracket. SwiftKey parity (spec v1.1 item 56), measured on
+     Ezzy's S22 Ultra SwiftKey symbols page: 32.0 dp wide x 9.2 dp tall, 3.0 dp stroke, square ends.
+     Original drawing. Tinted to the key label colour at draw time. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="24dp"
-    android:height="6dp"
-    android:viewportWidth="24"
-    android:viewportHeight="6">
+    android:width="32dp"
+    android:height="9.2dp"
+    android:viewportWidth="32"
+    android:viewportHeight="9.2">
   <path
-      android:pathData="M1,3 L1,5 L23,5 L23,3"
-      android:strokeWidth="2"
+      android:pathData="M1.5,0 L1.5,7.7 L30.5,7.7 L30.5,0"
+      android:strokeWidth="3"
       android:strokeColor="#FFFFFF"
       android:strokeLineCap="butt"
+      android:strokeLineJoin="miter"
       android:fillColor="#00000000"/>
 </vector>
