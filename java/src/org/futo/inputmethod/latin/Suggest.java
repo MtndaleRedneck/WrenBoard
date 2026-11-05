@@ -291,6 +291,40 @@ public final class Suggest {
             }
         }
 
+        // WrenBoard (item 6): a few swapped-letter typos are listed as words by the dictionary
+        // ("teh", "adn"), so the general rule below never sees them; SwiftKey corrects them anyway.
+        final String knownTypoTarget = SwappedLetterCorrection.knownTypoTarget(consideredWord);
+        if (!hasAutoCorrection
+                && knownTypoTarget != null
+                && trailingSingleQuotesCount == 0
+                && sourceDictionaryOfRemovedWord == null
+                && isEligibleForSwappedLetterCorrection(wordComposer, typedWordString,
+                        isCorrectionEnabled, resultsArePredictions, numberRowActive)) {
+            int targetIndex = -1;
+            for (int i = 0; i < suggestionsContainer.size(); i++) {
+                if (knownTypoTarget.equalsIgnoreCase(suggestionsContainer.get(i).mWord)) {
+                    targetIndex = i;
+                    break;
+                }
+            }
+            SuggestedWordInfo target = null;
+            if (targetIndex >= 0) {
+                target = suggestionsContainer.remove(targetIndex);
+            } else if (isKnownWord(knownTypoTarget, isValidWord)) {
+                target = new SuggestedWordInfo(knownTypoTarget, "" /* prevWordsContext */,
+                        SuggestedWordInfo.MAX_SCORE - 1, SuggestedWordInfo.KIND_CORRECTION,
+                        Dictionary.DICTIONARY_USER_TYPED,
+                        SuggestedWordInfo.NOT_AN_INDEX /* indexOfTouchPointOfSecondWord */,
+                        SuggestedWordInfo.NOT_A_CONFIDENCE /* autoCommitFirstWordConfidence */);
+            }
+            if (target != null) {
+                suggestionsContainer.add(0, target);
+                hasAutoCorrection = true;
+            }
+            if (BuildConfig.DEBUG) Log.i("WBDBG", "SWAPFIX known-typo " + consideredWord + " -> "
+                    + knownTypoTarget + " inSuggestions=" + targetIndex + " applied=" + (target != null));
+        }
+
         // WrenBoard (item 6): swapped-letter typos ("recieve" -> "receive", "teh" -> "the") are
         // autocorrected like SwiftKey does, even when the score threshold above said no.
         if (!hasAutoCorrection
