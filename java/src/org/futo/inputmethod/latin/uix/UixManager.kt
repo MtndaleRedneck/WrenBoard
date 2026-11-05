@@ -867,7 +867,7 @@ class UixManager(private val latinIME: LatinIME) {
                             currWindowActionWindow.value?.fixedWindowHeight ?: ((latinIME
                                 .getInputViewHeight()
                                 .toFloat() / heightDiv.toFloat()).toDp() +
-                                    if (actionsExpanded) ActionBarHeight else 0.dp)
+                                    if (actionsExpanded) (if (isKeyStyledTheme()) ToolbarRowHeight else ActionBarHeight) else 0.dp)
                         })
                         .safeKeyboardPadding()
                 ) {
@@ -1195,7 +1195,7 @@ class UixManager(private val latinIME: LatinIME) {
             Column(modifier = Modifier
                 .matchParentSize()
                 .absolutePadding(
-                    top = if (isActionsExpanded.value) ActionBarHeight else 0.dp
+                    top = if (isActionsExpanded.value) (if (isKeyStyledTheme()) ToolbarRowHeight else ActionBarHeight) else 0.dp
                 ), horizontalAlignment = when(size.direction) {
                 // Aligned opposite of the keyboard
                 OneHandedDirection.Left -> Alignment.End

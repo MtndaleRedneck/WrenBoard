@@ -185,6 +185,8 @@ import kotlin.math.roundToInt
  */
 
 val ActionBarHeight = 41.dp
+/** SwiftKey parity (pixel spec v1.1 item 44): the toolbar row above the strip is 44.1 dp on key-styled themes. */
+val ToolbarRowHeight = 44.1.dp
 
 val ActionBarScrollIndexSetting = SettingsKey(
     intPreferencesKey("action_bar_scroll_index"),
@@ -678,7 +680,7 @@ fun RowScope.SuggestionItems(words: SuggestedWords, onClick: (i: Int) -> Unit, o
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun LazyItemScope.ActionItem(idx: Int, action: Action, onSelect: (Action) -> Unit, onLongSelect: (Action) -> Unit, width: androidx.compose.ui.unit.Dp = 56.dp) {
+fun LazyItemScope.ActionItem(idx: Int, action: Action, onSelect: (Action) -> Unit, onLongSelect: (Action) -> Unit, width: androidx.compose.ui.unit.Dp = 56.dp, swiftKeyIcons: Boolean = false) {
 
     val wbView = LocalView.current
     val wbName = stringResource(action.name)
@@ -694,12 +696,23 @@ fun LazyItemScope.ActionItem(idx: Int, action: Action, onSelect: (Action) -> Uni
         .combinedClickable(
             onLongClick = action.altPressImpl?.let { { onLongSelect(action) } },
             onClick = { onSelect(action) }), contentAlignment = Center) {
-        Icon(
-            painter = painterResource(id = action.icon),
-            contentDescription = stringResource(action.name),
-            tint = contentCol,
-            modifier = Modifier.size(20.dp),
-        )
+        if (swiftKeyIcons && action == MoreActionsAction) {
+            // SwiftKey parity (item 45): "..." at the right end, 12.4 x 2.8 dp, no circle
+            Icon(
+                painter = painterResource(id = R.drawable.wren_more_dots),
+                contentDescription = stringResource(action.name),
+                tint = contentCol,
+                modifier = Modifier.size(12.4.dp, 2.8.dp),
+            )
+        } else {
+            Icon(
+                painter = painterResource(id = action.icon),
+                contentDescription = stringResource(action.name),
+                tint = contentCol,
+                // SwiftKey parity (item 46): 21.3 dp icon box on key-styled themes
+                modifier = Modifier.size(if (swiftKeyIcons) 21.3.dp else 20.dp),
+            )
+        }
     }
 }
 
@@ -808,6 +821,24 @@ fun ActionItems(onSelect: (Action) -> Unit, onLongSelect: (Action) -> Unit) {
                 && (lazyListState.layoutInfo.visibleItemsInfo.lastOrNull()?.key != actionItems.lastOrNull()?.name)
     } }
 
+    val swiftKeySlots = isKeyStyledTheme()
+    if (swiftKeySlots) {
+        // SwiftKey parity (pixel spec v1.1 item 45): seven fixed slots at a 52.8 dp pitch, centred, the first
+        // six chosen buttons and "..." (More) always in the last slot; the rest are behind More.
+        BoxWithConstraints(Modifier.safeKeyboardPadding().fillMaxSize()) {
+            val pitch = if (maxWidth >= 52.8.dp * 7) 52.8.dp else maxWidth / 7
+            val shown = actionItems.filter { it != MoreActionsAction }.take(6) + MoreActionsAction
+            Row(Modifier.fillMaxHeight().align(Alignment.Center)) {
+                LazyRow(userScrollEnabled = false) {
+                    items(shown.size, key = { shown[it].name }) {
+                        ActionItem(it, shown[it], onSelect, onLongSelect, pitch, swiftKeyIcons = true)
+                    }
+                }
+            }
+        }
+        return
+    }
+
     BoxWithConstraints(Modifier.safeKeyboardPadding()) {
         // WrenBoard 1.2: the approved toolbar spreads up to seven chosen buttons plus More (always last)
         // evenly across the row; more than that falls back to FUTO's scrolling row with More first.
@@ -876,18 +907,17 @@ fun ExpandActionsButton(isActionsOpen: Boolean, onClick: () -> Unit) {
     val bgCol = LocalKeyboardScheme.current.keyboardContainer
     val fgCol = LocalKeyboardScheme.current.onKeyboardContainer
 
-    // SwiftKey nit: 14dp radius, centre x ~50px at 420dpi (38dp-wide button)
-    val circleRadius = with(LocalDensity.current) {
-        14.dp.toPx()
-    }
-
     val styled = isKeyStyledTheme()
-    val strokePx = with(LocalDensity.current) { 1.5.dp.toPx() }
+    // SwiftKey parity (pixel spec v1.1 item 43): 29.9 dp circle at x 3.2-32.7 dp, 1.2 dp ring, fill #655341
+    val circleRadius = with(LocalDensity.current) {
+        (if (styled) 14.95.dp else 14.dp).toPx()
+    }
+    val strokePx = with(LocalDensity.current) { (if (styled) 1.2.dp else 1.5.dp).toPx() }
     val wbView = LocalView.current
     IconButton(
         onClick = onClick,
         modifier = Modifier
-            .width(38.dp)
+            .width(if (styled) 35.9.dp else 38.dp)
             .onGloballyPositioned { c -> if (org.futo.inputmethod.latin.BuildConfig.DEBUG) { val loc = IntArray(2); wbView.getLocationOnScreen(loc); val p = c.positionInRoot(); WbDebug.logWindow("CHEVRON open=$isActionsOpen cx=${(loc[0] + p.x + c.size.width / 2).toInt()} cy=${(loc[1] + p.y + c.size.height / 2).toInt()}") } }
             .rotate(
                 // WrenBoard: chevron points UP while the toolbar is tucked away and DOWN while it is open
@@ -900,7 +930,7 @@ fun ExpandActionsButton(isActionsOpen: Boolean, onClick: () -> Unit) {
             .fillMaxHeight()
             .drawBehind {
                 drawCircle(
-                    color = if(styled) Color(0xFF4A3B2C) else bgCol,
+                    color = if(styled) Color(0xFF655341) else bgCol,
                     radius = circleRadius,
                     style = Fill
                 )
@@ -916,7 +946,7 @@ fun ExpandActionsButton(isActionsOpen: Boolean, onClick: () -> Unit) {
         colors = IconButtonDefaults.iconButtonColors(contentColor = fgCol)
     ) {
         Icon(
-            painter = painterResource(id = if(styled) R.drawable.chevron_up else R.drawable.chevron_right),
+            painter = painterResource(id = if(styled) R.drawable.wren_chevron_thin_up else R.drawable.chevron_right),
             contentDescription = stringResource(
                 if (!isActionsOpen) R.string.keyboard_actionbar_expand_actions_talkback
                 else R.string.keyboard_actionbar_collapse_actions_talkback
@@ -1018,22 +1048,20 @@ fun ActionBar(
 
     val useDoubleHeight = isActionsExpanded && oldActionBar.value == false
 
+    val styledToolbar = isKeyStyledTheme()
+    val toolbarRowHeight = if (styledToolbar) ToolbarRowHeight else ActionBarHeight
     Column(Modifier
         .height(
-            ActionBarHeight * (if (useDoubleHeight) 2 else 1).let {
-                if(needToUseExpandableSuggestionUi) {
-                    it - 1
-                } else {
-                    it
-                }
-            }
+            (if (useDoubleHeight) toolbarRowHeight else 0.dp) +
+                    (if (needToUseExpandableSuggestionUi) 0.dp else ActionBarHeight)
         )
         .semantics {
             testTag = "ActionBar"
             testTagsAsResourceId = true
         }) {
         if(isActionsExpanded && !oldActionBar.value) {
-            ActionSep()
+            // SwiftKey parity (item 44): no line on top of the toolbar row on key-styled themes
+            if (!styledToolbar) ActionSep()
 
             Surface(
                 modifier = Modifier

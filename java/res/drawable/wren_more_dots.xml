@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Toolbar "more" glyph: three dots, 12.4 x 2.8 dp overall (SwiftKey parity, pixel spec v1.1 item 45).
+     Original drawing. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="12.4dp"
+    android:height="2.8dp"
+    android:viewportWidth="12.4"
+    android:viewportHeight="2.8">
+  <path
+      android:fillColor="#FFFFFFFF"
+      android:pathData="M1.4,0 A1.4,1.4 0,1 1,1.4,2.8 A1.4,1.4 0,1 1,1.4,0 Z M6.2,0 A1.4,1.4 0,1 1,6.2,2.8 A1.4,1.4 0,1 1,6.2,0 Z M11,0 A1.4,1.4 0,1 1,11,2.8 A1.4,1.4 0,1 1,11,0 Z"/>
+</vector>
