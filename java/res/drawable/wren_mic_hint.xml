@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- WrenBoard 1.6 (item 51): mic on the comma key at its own size, drawn by Tab from the approved mock-up 01 (20 x 40 px at 450 dpi). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="7.11dp"
+    android:height="14.22dp"
+    android:viewportWidth="20"
+    android:viewportHeight="40">
+  <path android:fillColor="#FFFFFFFF" android:pathData="M10,0a5.6,5.6 0,0 1,5.6 5.6v11.8a5.6,5.6 0,0 1,-11.2 0v-11.8a5.6,5.6 0,0 1,5.6 -5.6z"/>
+  <path android:fillColor="#00000000" android:strokeColor="#FFFFFFFF" android:strokeWidth="3.3" android:strokeLineCap="round" android:pathData="M1.65,17Q1.65,30.5 10,30.5Q18.35,30.5 18.35,17"/>
+  <path android:fillColor="#00000000" android:strokeColor="#FFFFFFFF" android:strokeWidth="3.3" android:strokeLineCap="round" android:pathData="M10,30.5L10,38.35M4,38.35L16,38.35"/>
+</vector>
