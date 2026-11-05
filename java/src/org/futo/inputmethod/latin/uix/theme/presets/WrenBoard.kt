@@ -306,6 +306,12 @@ val WrenBoardTheme = ThemeOption(
                 showSuggestionSourceIndicators = false,
                 // Symbols sit centred above the letter, as on Ezzy's phone, SwiftKey and the approved render.
                 centerHints = true,
+                // Pixel spec v1.1 items 3-9: SwiftKey's label positions, 13.2 dp Regular (400) hints,
+                // 15.2 dp "123" and ",!?".
+                swiftKeyLabelGeometry = true,
+                hintTextSizeDp = 13.2f,
+                switchLabelSizeDp = 15.2f,
+                hintWeight = 400f,
                 keyBorders = true,
                 keyBackgrounds = wrenKeyBackgrounds(context)
             )
