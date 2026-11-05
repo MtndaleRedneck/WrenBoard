@@ -3,6 +3,9 @@ package org.futo.inputmethod.latin.uix.settings
 import androidx.annotation.DrawableRes
 import androidx.annotation.StringRes
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Box
 import androidx.compose.ui.Modifier
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -135,26 +138,37 @@ fun UserSettingsMenu.render(showBack: Boolean = true, showTitle: Boolean = true)
 @Composable
 fun UserSettingsMenuScreen(menu: UserSettingsMenu) {
     // WrenBoard 1.6 (item 11): in the WrenBoard look every menu page is the mock-up's flat list on #141414:
-    // top bar, orange section labels for WrenBoard's grouped pages, flat rows. FUTO's look is unchanged.
+    // a fixed top bar, orange section labels for WrenBoard's grouped pages, flat rows. FUTO's look is unchanged.
     val wren = useDataStoreValue(WrenSettingsStyle)
-    val sections = if (wren) org.futo.inputmethod.latin.uix.settings.pages.WrenMenuSections[menu.navPath] else null
-    ScrollableList(modifier = if (!wren) Modifier else Modifier.background(wrenPageBrush)) {
-        if (!wren) {
+    if (!wren) {
+        ScrollableList {
             menu.render()
-        } else CompositionLocalProvider(LocalWrenFlatRows provides true) {
-            if (sections == null) {
-                menu.render()
-            } else {
-                ScreenTitle(stringResource(menu.title), showBack = true, LocalNavController.current)
-                sections.forEach { (label, items) ->
-                    val shown = items.filter { it.visibilityCheck?.invoke() != false }
-                    if (shown.isNotEmpty()) {
-                        if (label != 0) WrenFlatSectionLabel(stringResource(label))
-                        shown.forEach { it.component() }
+            BottomSpacer()
+        }
+        return
+    }
+    val sections = org.futo.inputmethod.latin.uix.settings.pages.WrenMenuSections[menu.navPath]
+    val nav = LocalNavController.current
+    Column(Modifier.fillMaxSize().background(wrenPageBrush)) {
+        WrenTopBar(stringResource(menu.title), onBack = { nav?.navigateUp() },
+            titleIcon = if (menu.navPath == "wren_futo") org.futo.inputmethod.latin.R.drawable.wren_ic_futo_mark else null)
+        Box(Modifier.weight(1f)) {
+            ScrollableList {
+                CompositionLocalProvider(LocalWrenFlatRows provides true) {
+                    if (sections == null) {
+                        menu.render(showTitle = false)
+                    } else {
+                        sections.forEach { (label, items) ->
+                            val shown = items.filter { it.visibilityCheck?.invoke() != false }
+                            if (shown.isNotEmpty()) {
+                                if (label != 0) WrenFlatSectionLabel(stringResource(label))
+                                shown.forEach { it.component() }
+                            }
+                        }
                     }
                 }
+                BottomSpacer()
             }
         }
-        BottomSpacer()
     }
 }

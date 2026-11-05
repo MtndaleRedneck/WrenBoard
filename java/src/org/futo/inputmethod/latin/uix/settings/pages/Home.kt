@@ -219,22 +219,23 @@ fun HomeScreen(navController: NavHostController = rememberNavController()) {
         }
     }
 
+    val wrenLook = useDataStoreValue(org.futo.inputmethod.latin.uix.settings.WrenSettingsStyle)
     Column {
+        if(wrenLook) {
+            // WrenBoard 1.6 (item 11, mock-up 01): a fixed top bar with back and search; the list scrolls under it.
+            org.futo.inputmethod.latin.uix.settings.WrenTopBar(
+                stringResource(R.string.wren_home_title),
+                onBack = { context.findActivity()?.finish() },
+                onSearch = { navController.navigate("search") }
+            )
+        }
         Column(
             modifier = Modifier
                 .weight(1.0f)
                 .fillMaxWidth()
                 .verticalScroll(scrollState)
         ) {
-            val wrenLook = useDataStoreValue(org.futo.inputmethod.latin.uix.settings.WrenSettingsStyle)
-            if(wrenLook) {
-                // WrenBoard 1.6 (item 11, mock-up 01): the top bar with back and search, then the flat list.
-                org.futo.inputmethod.latin.uix.settings.WrenTopBar(
-                    stringResource(R.string.wren_home_title),
-                    onBack = { context.findActivity()?.finish() },
-                    onSearch = { navController.navigate("search") }
-                )
-            } else {
+            if(!wrenLook) {
                 Spacer(modifier = Modifier.height(24.dp))
                 Row(Modifier.padding(16.dp)) {
                     Text(stringResource(R.string.english_ime_settings),
@@ -267,7 +268,6 @@ fun HomeScreen(navController: NavHostController = rememberNavController()) {
                 WrenHomeList()
                 // WrenBoard 1.6 (Ezzy, 10:33 PM): his Feedback & bugs and Updates cards sit directly at the bottom of
                 // the home page, Feedback first, then Updates with the version line. Not in a sub-page, not in FUTO.
-                Spacer(modifier = Modifier.height(4.dp))
                 WrenFeedbackCard(navController)
                 WrenUpdatesCard(navController)
             } else {
