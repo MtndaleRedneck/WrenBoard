@@ -734,6 +734,10 @@
     <string name="wren_clip_paste">Paste</string>
     <string name="wren_clip_edit">Edit</string>
     <string name="wren_clip_delete">Delete</string>
+    <string name="wren_clip_menu">Clip options</string>
+    <string name="wren_clip_pinned_marker">Pinned</string>
+    <string name="wren_clip_tip_title">Tip</string>
+    <string name="wren_clip_tip_pin">Pin a clip to keep it here for good</string>
     <string name="wren_emoji_tab">Emoji</string>
     <string name="wren_gif_tab">GIF</string>
     <string name="wren_cd_back">Back</string>
