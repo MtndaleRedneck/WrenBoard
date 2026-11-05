@@ -15,6 +15,30 @@ object SwappedLetterCorrection {
     /** Shortest typed word this applies to ("teh" is 3 letters). */
     const val MIN_LENGTH = 3
 
+    /**
+     * Swapped-letter typos that some web-built dictionaries list as words ("teh", "adn"), so the
+     * "typed word is not a known word" test lets them through. SwiftKey corrects these every time.
+     * Each maps to its one intended word, which is used only when it is itself a known word.
+     * (Emulator, 5b81a99: "teh " stayed "teh" three times out of three.)
+     */
+    private val KNOWN_TYPOS = mapOf(
+        "teh" to "the", "hte" to "the", "adn" to "and", "taht" to "that", "waht" to "what",
+        "jsut" to "just", "yuo" to "you", "tihs" to "this", "thsi" to "this", "wnat" to "want",
+        "konw" to "know", "liek" to "like", "mroe" to "more", "nto" to "not"
+    )
+
+    /**
+     * The intended word for a listed swapped-letter typo ([KNOWN_TYPOS]), with the typed
+     * capitalisation ("Teh" -> "The"), or null when [typed] is not one of them.
+     */
+    @JvmStatic
+    fun knownTypoTarget(typed: String): String? {
+        val target = KNOWN_TYPOS[typed.lowercase(Locale.ROOT)] ?: return null
+        if (!isAdjacentSwap(typed, target)) return null
+        return if (typed.isNotEmpty() && Character.isUpperCase(typed[0]))
+            target.replaceFirstChar { it.titlecase(Locale.ROOT) } else target
+    }
+
     /** Every distinct word made by swapping one pair of neighbouring, different letters. */
     @JvmStatic
     fun adjacentSwaps(word: String): List<String> {
