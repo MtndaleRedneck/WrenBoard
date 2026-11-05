@@ -366,6 +366,20 @@ Stack trace: ${e.stackTrace.map { it.toString() }}
     }
 }
 
+/**
+ * WrenBoard 1.6 (item 10): fields that open SwiftKey's compact number/phone pad (number_basic / phone
+ * layouts, see KeyboardState.onLoadKeyboard). Those fields get no prediction strip, no toolbar and the
+ * pad's own height.
+ */
+fun isSwiftKeyPadField(editorInfo: EditorInfo?): Boolean {
+    if (editorInfo == null) return false
+    return when (getKeyboardMode(editorInfo)) {
+        KeyboardId.MODE_NUMBER, KeyboardId.MODE_PHONE,
+        KeyboardId.MODE_DATE, KeyboardId.MODE_TIME, KeyboardId.MODE_DATETIME -> true
+        else -> false
+    }
+}
+
 public fun getKeyboardMode(editorInfo: EditorInfo): Int {
     val inputType = editorInfo.inputType
     val variation = inputType and InputType.TYPE_MASK_VARIATION

@@ -39,6 +39,9 @@ const val LetterRowPitchDp: Float = 55.1f
 /** SwiftKey parity (spec v1.1 item 18): 4.6 dp from the arrow-row outline to the nav bar = this padding plus
  *  half of the 2.5 dp row gap that the last row's pitch already carries. */
 const val WrenBottomPaddingDp: Float = 3.35f
+/** WrenBoard 1.6 (item 10, pixel spec v1.1 item 65): SwiftKey's number/phone pad is 204.8 dp (576 px at
+ *  1080x2316 @450 dpi) from its top to the nav bar, bottom padding included: four 50.5 dp row pitches. */
+const val SwiftKeyPadHeightDp: Float = 204.8f
 
 val OldKeyboardHeightMultiplierSetting = SettingsKey(floatPreferencesKey("keyboardHeightMultiplier"), 1.0f)
 val OldKeyboardBottomOffsetSetting = SettingsKey(floatPreferencesKey("keyboardOffset"), 0.0f)
@@ -424,9 +427,14 @@ class KeyboardSizingCalculator(val context: Context, val uixManager: UixManager)
         return width
     }
 
+    // WrenBoard 1.6 (item 10): whether the last computed size was for SwiftKey's number/phone pad.
+    private var sizedForPadField: Boolean? = null
+    private fun isPadField(): Boolean = isSwiftKeyPadField((context as? LatinIME)?.currentInputEditorInfo)
+
     fun didMaybeChange(oldSize: ComputedKeyboardSize?): Boolean {
         if(oldSize == null) return true
         if(oldSize is FloatingKeyboardSize) return false
+        if(sizedForPadField != isPadField()) return true
 
         return getDefaultKeyboardWidth() != oldSize.width
     }
@@ -512,6 +520,13 @@ class KeyboardSizingCalculator(val context: Context, val uixManager: UixManager)
         // (a 4 dp top padding shrank every row by ~2 px in run 41939692871).
         val recommendedHeight = numRows * singularRowHeight + padding.bottom + (if(isPortraitPhone) padding.top else 0)
 
+        // WrenBoard 1.6 (item 10): number/phone fields get SwiftKey's pad height in portrait (576 px at
+        // 1080x2316) instead of the letters height; the user's height setting still scales it.
+        val padField = isPadField()
+        sizedForPadField = padField
+        val padHeight = ((displayMetrics.density * (SwiftKeyPadHeightDp - WrenBottomPaddingDp) + heightAddition) *
+                savedSettings.heightMultiplier.guardNaN(1.0f) + padding.bottom + padding.top).toDouble()
+
         val foldState = foldStateProvider.foldState.feature
 
         val width = getDefaultKeyboardWidth()
@@ -589,7 +604,7 @@ class KeyboardSizingCalculator(val context: Context, val uixManager: UixManager)
             else ->
                 RegularKeyboardSize(
                     width = width.coerceInLoosely(dp(48), displayWidth),
-                    height = recommendedHeight.roundToInt(),
+                    height = (if(padField && isPortraitPhone) padHeight else recommendedHeight).roundToInt(),
                     singleRowHeight = singularRowHeight.roundToInt(),
                     padding = padding,
                 )
@@ -620,6 +635,8 @@ class KeyboardSizingCalculator(val context: Context, val uixManager: UixManager)
 
     fun calculateTotalActionBarHeightPx(): Int =
         when {
+            // WrenBoard 1.6 (item 10): no strip or toolbar above SwiftKey's number/phone pad.
+            isPadField() -> 0
             uixManager.actionsExpanded
                     && (uixManager.currWindowActionWindow.value == null)
                     && (context.getSetting(OldStyleActionsBar) == false) ->

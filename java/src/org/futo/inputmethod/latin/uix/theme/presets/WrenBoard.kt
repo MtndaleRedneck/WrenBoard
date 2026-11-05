@@ -9,6 +9,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import org.futo.inputmethod.keyboard.internal.KeyboardLayoutKind
 import org.futo.inputmethod.latin.R
 import org.futo.inputmethod.latin.uix.extendedDarkColorScheme
 import org.futo.inputmethod.latin.uix.theme.AdvancedThemeOptions
@@ -245,6 +246,17 @@ private fun wrenKeyBackgrounds(context: android.content.Context) = KeyedBitmaps(
                 hintColor = HintGrey,
                 outlineColor = null,
                 background = pressedKey(context)
+            )
+        ),
+        // WrenBoard 1.6 (item 10): SwiftKey's number/phone pad has no lighter top row; every pad key is the
+        // normal dark key (approved mock-ups 13/14).
+        KeyedBitmap(
+            qualifiers = setOf(KeyQualifier.ElementKind(setOf(KeyboardLayoutKind.NumberBasic, KeyboardLayoutKind.Phone))),
+            bitmap = KeyBackground(
+                foregroundColor = AccentOrange.toArgb(),
+                hintColor = HintGrey,
+                outlineColor = null,
+                background = letterKey(context)
             )
         ),
         // Top number row: slightly lighter gradient
