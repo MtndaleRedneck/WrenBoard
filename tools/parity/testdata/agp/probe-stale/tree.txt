@@ -1,0 +1,9 @@
+2026-11-06T12:46:00.7575391960 204 ./intermediates/compatible_screen_manifest/stableDebug/createStableDebugCompatibleScreenManifests/output-metadata.json
+2026-11-06T12:46:01.9055508250 5599 ./outputs/apk/stable/debug/probe-stable-debug.apk
+2026-11-06T12:46:01.9095508660 428 ./outputs/apk/stable/debug/output-metadata.json
+2026-11-06T12:46:18.6057191140 406 ./intermediates/merged_manifests/stableDebug/processStableDebugManifest/output-metadata.json
+2026-11-06T12:46:18.6577196380 408 ./intermediates/packaged_manifests/stableDebug/processStableDebugManifestForPackage/output-metadata.json
+2026-11-06T12:46:18.8177212480 447 ./intermediates/linked_resources_binary_format/stableDebug/processStableDebugResources/output-metadata.json
+2026-11-06T12:46:18.9697227790 5611 ./intermediates/apk/stable/debug/probe-stable-debug.apk
+2026-11-06T12:46:18.9737228190 428 ./intermediates/apk/stable/debug/output-metadata.json
+2026-11-06T12:46:18.9977230610 77 ./intermediates/apk_ide_redirect_file/stableDebug/createStableDebugApkListingFileRedirect/redirect.txt
