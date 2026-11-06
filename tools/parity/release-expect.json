@@ -1,0 +1,11 @@
+{
+ "_note": "Expected identity of each release the release leg may smoke-test. The signer is the SHA-256 of the v1.5.0 signing certificate as read back from the signed release build.",
+ "v1.5.0": {
+  "asset": "WrenBoard-1.5.apk",
+  "package": "com.wrenboard.keyboard",
+  "version_name": "1.5.0",
+  "version_code": "6",
+  "abi": "x86_64",
+  "signer_sha256": "ad41ab713027aca87389019721d102d67cacaae349cc625aa14f76240801f7fc"
+ }
+}

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Parity-harness test app: one plain text field that mirrors its text to logcat. Not part of WrenBoard. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.wrenboard.imetarget">
+    <uses-sdk android:minSdkVersion="26" android:targetSdkVersion="34"/>
+    <application android:label="IME target" android:theme="@android:style/Theme.Material.Light.NoActionBar">
+        <activity android:name=".TestInput" android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>
