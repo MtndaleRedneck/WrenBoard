@@ -1,0 +1,193 @@
+{
+  "schema": 2,
+  "note": "Required comparison legs. run_legs.py executes every leg listed for its role, in this order, by default (crash_anr_gate last so it covers the whole pass). verdict.py fails the run unless every required leg for every expected role reports pass. inconclusive is never a pass.",
+  "statuses": [
+    "pass",
+    "fail",
+    "inconclusive"
+  ],
+  "roles": [
+    "baseline",
+    "candidate",
+    "reference",
+    "release"
+  ],
+  "legs": [
+    {
+      "name": "unit_suite",
+      "stage": "build",
+      "roles": [
+        "baseline",
+        "candidate"
+      ],
+      "required_roles": [
+        "candidate"
+      ],
+      "assert": "JUnit XML present and well-formed; every suite's counts are nonnegative integers with skipped <= tests and failures+errors <= tests-skipped (and match its <testcase> elements when listed); total tests - skipped > 0 (an all-skipped suite fails); 0 failures and 0 errors"
+    },
+    {
+      "name": "release_provenance",
+      "stage": "build",
+      "roles": [
+        "release"
+      ],
+      "required_roles": [
+        "release"
+      ],
+      "assert": "exactly one named asset; package, versionName, x86_64 native code and signer SHA-256 equal release-expect.json"
+    },
+    {
+      "name": "glide",
+      "stage": "device",
+      "roles": [
+        "baseline",
+        "candidate",
+        "reference"
+      ],
+      "required_roles": [
+        "baseline",
+        "candidate",
+        "reference"
+      ],
+      "assert": "each glided word (hello, world, keyboard, thanks) is the last word in the field afterwards"
+    },
+    {
+      "name": "backspace_hold",
+      "stage": "device",
+      "roles": [
+        "baseline",
+        "candidate",
+        "reference"
+      ],
+      "required_roles": [
+        "baseline",
+        "candidate",
+        "reference"
+      ],
+      "assert": "a 3 s hold on delete removes at least 20 characters in at least 5 separate field changes"
+    },
+    {
+      "name": "cursor_drag",
+      "stage": "device",
+      "roles": [
+        "baseline",
+        "candidate",
+        "reference"
+      ],
+      "required_roles": [
+        "baseline",
+        "candidate",
+        "reference"
+      ],
+      "assert": "after a leftward space-bar drag, a typed x lands before the end of the text"
+    },
+    {
+      "name": "toolbar_toggle",
+      "stage": "device",
+      "roles": [
+        "baseline",
+        "candidate"
+      ],
+      "required_roles": [
+        "baseline",
+        "candidate"
+      ],
+      "assert": "the action-bar chevron flips close/open on each tap and typing still reaches the field; a baseline build with no Open/Close Action Bar control is inconclusive (choose a compatible baseline, v1.5.0 or later), never a pass; for the candidate it is a fail"
+    },
+    {
+      "name": "continuous_typing",
+      "stage": "device",
+      "roles": [
+        "baseline",
+        "candidate",
+        "reference"
+      ],
+      "required_roles": [
+        "baseline",
+        "candidate",
+        "reference"
+      ],
+      "hooks": "optional",
+      "assert": "every tap of the fixed sentence is delivered at 60, 80 and 100 ms per key, and the recorded key-down gaps meet typing_eval.py's pace bounds (median within -3/+8 ms, mean within -2/+6 ms, >=95% of gaps within +/-15 ms, none over +60 ms); the field settles, no change removes more than 1 character, per-word outcomes recorded; results carry the app SHA"
+    },
+    {
+      "name": "release_smoke",
+      "stage": "device",
+      "roles": [
+        "release"
+      ],
+      "required_roles": [
+        "release"
+      ],
+      "assert": "the signed release installs, becomes the default IME, and tapped keys reach the field"
+    },
+    {
+      "name": "model_corrupt",
+      "stage": "device",
+      "roles": [
+        "candidate"
+      ],
+      "required_roles": [
+        "candidate"
+      ],
+      "variant": "corrupt",
+      "assert": "encoder replaced by same-size random bytes (passes SwipeModelGate, fails to load). Per the app source (SwipeDecoderDictionary.kt, DictionaryFacilitatorImpl.java at f4288fe) neural swipe disables and gesture input takes the LEGACY decoder call path. Two separately recorded results, both required: (a) graceful_disable: the leg's preserved log holds 'Swipe model failed in ...; swipe model disabled' by the end of the glide, tapped keys still type 'ok', the keyboard keeps one live pid from activation to the end, and no crash or ANR block for the keyboard or test app falls in the leg; (b) fallback_recognition: the glide output is recorded and must be exactly 'hello', a first-run harness qualification target, not an app-source guarantee; a miss (empty included) is fallback_recognition_target_missed, a test qualification finding to diagnose from the output, screenshot and causal logs, not automatically an app regression. A build without WBDBG hooks is inconclusive",
+      "hooks": "required"
+    },
+    {
+      "name": "model_truncated",
+      "stage": "device",
+      "roles": [
+        "candidate"
+      ],
+      "required_roles": [
+        "candidate"
+      ],
+      "variant": "truncated",
+      "assert": "encoder cut to 1000 bytes (below SwipeModelGate.MIN_MODEL_BYTES): as model_corrupt, but the disable log is 'Swipe model not usable (...); swipe model disabled'",
+      "hooks": "required"
+    },
+    {
+      "name": "model_missing",
+      "stage": "device",
+      "roles": [
+        "candidate"
+      ],
+      "required_roles": [
+        "candidate"
+      ],
+      "variant": "missing",
+      "assert": "encoder entry removed from the APK: as model_corrupt, but the disable log is 'Swipe model not usable (...); swipe model disabled'",
+      "hooks": "required"
+    },
+    {
+      "name": "crash_anr_gate",
+      "stage": "device",
+      "roles": [
+        "baseline",
+        "candidate",
+        "reference",
+        "release"
+      ],
+      "required_roles": [
+        "baseline",
+        "candidate",
+        "reference",
+        "release"
+      ],
+      "assert": "the FULL crash, events and main buffers and /data/anr traces are saved; every crash/ANR entry block (whole, with stack) tied to the keyboard or test-input package by name or pid is a finding, attributed to the setup or leg window it fell in; any finding fails this leg (and the leg it fell in)"
+    },
+    {
+      "name": "compare_continuous_typing",
+      "stage": "verdict",
+      "roles": [
+        "verdict"
+      ],
+      "required_roles": [
+        "verdict"
+      ],
+      "assert": "baseline and candidate results carry exactly the requested app SHAs and matched typing evidence (same sentence, exactly one complete paced run per 60/80/100 ms, same tap and word denominators, valid integer counts); candidate word accuracy >= baseline at every interval; unmatched evidence is inconclusive"
+    }
+  ],
+  "baseline_guidance": "Choose app_baseline_sha so the baseline can run every baseline-required leg: it must expose the Open/Close Action Bar control (v1.5.0, 4094f96e1e0ce789ce727263fad392482e8f8051, and later do). WBDBG debug hooks are optional for the baseline (keys fall back to accessibility labels); the model_* legs are candidate-only because SwipeModelGate does not exist before 1.6. A baseline that lacks a required capability reports inconclusive, so the run cannot pass; candidate requirements are never reduced."
+}

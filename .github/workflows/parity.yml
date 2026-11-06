@@ -1,0 +1,332 @@
+# Manual parity comparison: WrenBoard baseline vs candidate (and optionally SwiftKey and the signed
+# release) on GitHub-hosted emulators. The harness is always this workflow's own commit; the app
+# builds come from the two exact SHAs given. Read-only token, no secrets, no push trigger.
+name: parity
+on:
+  workflow_dispatch:
+    inputs:
+      app_baseline_sha:
+        description: "Full 40-character app commit SHA for the baseline build"
+        required: true
+        type: string
+      app_candidate_sha:
+        description: "Full 40-character app commit SHA for the candidate build"
+        required: true
+        type: string
+      reference:
+        description: "Reference keyboard (SwiftKey is fetched at run time and never uploaded)"
+        type: choice
+        options: [swiftkey, none]
+        default: swiftkey
+      release_tag:
+        description: "Release to smoke-test (listed in tools/parity/release-expect.json), or none"
+        type: string
+        default: v1.5.0
+      release_asset:
+        description: "Exact .apk asset name in that release (empty when release_tag is none)"
+        type: string
+        default: WrenBoard-1.5.apk
+      wm_size:
+        description: "Emulator display WIDTHxHEIGHT (portrait)"
+        type: string
+        default: 1080x2400
+      wm_density:
+        description: "Emulator display density, 240-640"
+        type: string
+        default: "420"
+      nav:
+        description: "Navigation mode"
+        type: choice
+        options: [gesture, 3button]
+        default: gesture
+
+permissions:
+  contents: read
+
+concurrency:
+  group: parity
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      app_baseline_sha: ${{ steps.v.outputs.app_baseline_sha }}
+      app_candidate_sha: ${{ steps.v.outputs.app_candidate_sha }}
+      reference: ${{ steps.v.outputs.reference }}
+      release_tag: ${{ steps.v.outputs.release_tag }}
+      release_asset: ${{ steps.v.outputs.release_asset }}
+      wm_size: ${{ steps.v.outputs.wm_size }}
+      wm_density: ${{ steps.v.outputs.wm_density }}
+      nav: ${{ steps.v.outputs.nav }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: tools/parity
+      - name: Validate inputs (values arrive only as environment variables)
+        id: v
+        env:
+          IN_APP_BASELINE_SHA: ${{ inputs.app_baseline_sha }}
+          IN_APP_CANDIDATE_SHA: ${{ inputs.app_candidate_sha }}
+          IN_REFERENCE: ${{ inputs.reference }}
+          IN_RELEASE_TAG: ${{ inputs.release_tag }}
+          IN_RELEASE_ASSET: ${{ inputs.release_asset }}
+          IN_WM_SIZE: ${{ inputs.wm_size }}
+          IN_WM_DENSITY: ${{ inputs.wm_density }}
+          IN_NAV: ${{ inputs.nav }}
+        run: python3 tools/parity/validate_inputs.py
+
+  app:
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    strategy:
+      fail-fast: false
+      matrix:
+        role: [baseline, candidate]
+    env:
+      ROLE: ${{ matrix.role }}
+      APP_SHA: ${{ matrix.role == 'baseline' && needs.validate.outputs.app_baseline_sha || needs.validate.outputs.app_candidate_sha }}
+      WM_SIZE: ${{ needs.validate.outputs.wm_size }}
+      WM_DENSITY: ${{ needs.validate.outputs.wm_density }}
+      NAV: ${{ needs.validate.outputs.nav }}
+    steps:
+      - name: Check out the harness (this workflow's commit)
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.sha }}
+          path: harness
+          persist-credentials: false
+          sparse-checkout: tools/parity
+      - name: Check out the app at the exact SHA
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ env.APP_SHA }}
+          path: app
+          persist-credentials: false
+          submodules: false
+      - name: Confirm the app checkout is the requested SHA
+        run: test "$(git -C app rev-parse HEAD)" = "$APP_SHA"
+      - name: Init build submodules (including the swipe model, needed by the glide and model legs)
+        run: |
+          git lfs install
+          git -C app submodule update --init --depth 1 java/assets/themes java/res-large libs translations voiceinput-shared/src/main/ml java/assets/futo-swipe
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Install NDK (runner-provided Android SDK)
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;28.2.13676358"
+      - uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4.4.3
+      - name: Unit suite (recorded as the unit_suite leg; never passes on a missing, empty or failing report)
+        working-directory: app
+        run: |
+          rc=0
+          ./gradlew --no-daemon testStableDebugUnitTest -Pandroid.injected.build.abi=x86_64 || rc=$?
+          python3 ../harness/tools/parity/unit_summary.py build/test-results/testStableDebugUnitTest --json "$RUNNER_TEMP/unit.json" || true
+          if [ "$rc" -ne 0 ]; then
+            printf '{"ok": false, "tests": 0, "problems": ["gradle test task exited %d"]}\n' "$rc" > "$RUNNER_TEMP/unit.json"
+          fi
+          mkdir -p "$RUNNER_TEMP/out/$ROLE/unit"
+          cp build/test-results/testStableDebugUnitTest/*.xml "$RUNNER_TEMP/out/$ROLE/unit/" 2>/dev/null || true
+      - name: Build the debug app (exactly one APK, kept in RUNNER_TEMP)
+        working-directory: app
+        run: |
+          ./gradlew --no-daemon assembleStableDebug -Pandroid.injected.build.abi=x86_64
+          shopt -s nullglob
+          apks=(build/outputs/apk/stable/debug/*.apk)
+          [ "${#apks[@]}" -eq 1 ] || { echo "::error::expected one debug APK, found ${#apks[@]}"; exit 1; }
+          mkdir -p "$RUNNER_TEMP/app"
+          cp "${apks[0]}" "$RUNNER_TEMP/app/app-debug.apk"
+          python3 ../harness/tools/parity/check_apk.py "$RUNNER_TEMP/app/app-debug.apk" --package com.wrenboard.keyboard --abi x86_64
+      - name: Build the test-input app and the typing tool from source
+        run: |
+          bash harness/tools/parity/ime-target/build.sh "$RUNNER_TEMP/imetarget/imetarget.apk"
+          bash harness/tools/parity/build_typer.sh "$RUNNER_TEMP/typer/typer.dex"
+      - name: Make the broken-model test copies (candidate only; a failure here leaves those legs inconclusive)
+        if: matrix.role == 'candidate'
+        continue-on-error: true
+        run: |
+          mkdir -p "$RUNNER_TEMP/variants"
+          bash harness/tools/parity/model_variant.sh "$RUNNER_TEMP/app/app-debug.apk" corrupt "$RUNNER_TEMP/variants/corrupt.apk"
+          bash harness/tools/parity/model_variant.sh "$RUNNER_TEMP/app/app-debug.apk" truncated "$RUNNER_TEMP/variants/truncated.apk"
+          bash harness/tools/parity/model_variant.sh "$RUNNER_TEMP/app/app-debug.apk" missing "$RUNNER_TEMP/variants/missing.apk"
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Run the legs
+        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
+        env:
+          PARITY_TARGET_APK: ${{ runner.temp }}/imetarget/imetarget.apk
+          PARITY_TYPER_DEX: ${{ runner.temp }}/typer/typer.dex
+        with:
+          api-level: 34
+          target: google_apis
+          arch: x86_64
+          disable-animations: true
+          script: python3 harness/tools/parity/run_legs.py --role "$ROLE" --out "$RUNNER_TEMP/out/$ROLE" --apk "$RUNNER_TEMP/app/app-debug.apk" --app-sha "$APP_SHA" --unit-json "$RUNNER_TEMP/unit.json" --variant-corrupt "$RUNNER_TEMP/variants/corrupt.apk" --variant-truncated "$RUNNER_TEMP/variants/truncated.apk" --variant-missing "$RUNNER_TEMP/variants/missing.apk"
+      - name: Filter artifacts (screenshots, logs and results only; no APKs)
+        id: filter_app
+        if: always()
+        run: mkdir -p "$RUNNER_TEMP/out/$ROLE" "$RUNNER_TEMP/upload" && bash harness/tools/parity/filter_artifacts.sh "$RUNNER_TEMP/out/$ROLE" "$RUNNER_TEMP/upload/$ROLE"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always() && steps.filter_app.outcome == 'success'
+        with:
+          name: parity-${{ matrix.role }}
+          path: ${{ runner.temp }}/upload/${{ matrix.role }}
+          if-no-files-found: error
+          retention-days: 7
+
+  reference:
+    needs: validate
+    if: needs.validate.outputs.reference == 'swiftkey'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      WM_SIZE: ${{ needs.validate.outputs.wm_size }}
+      WM_DENSITY: ${{ needs.validate.outputs.wm_density }}
+      NAV: ${{ needs.validate.outputs.nav }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.sha }}
+          path: harness
+          persist-credentials: false
+          sparse-checkout: tools/parity
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Build the test-input app and the typing tool from source
+        run: |
+          bash harness/tools/parity/ime-target/build.sh "$RUNNER_TEMP/imetarget/imetarget.apk"
+          bash harness/tools/parity/build_typer.sh "$RUNNER_TEMP/typer/typer.dex"
+      - name: Fetch SwiftKey into RUNNER_TEMP and verify every split's certificate
+        run: python3 harness/tools/parity/fetch_swiftkey.py --abi x86_64
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Run the legs
+        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
+        env:
+          PARITY_TARGET_APK: ${{ runner.temp }}/imetarget/imetarget.apk
+          PARITY_TYPER_DEX: ${{ runner.temp }}/typer/typer.dex
+        with:
+          api-level: 34
+          target: google_apis
+          arch: x86_64
+          disable-animations: true
+          script: python3 harness/tools/parity/run_legs.py --role reference --out "$RUNNER_TEMP/out/reference"
+      - name: Filter artifacts (screenshots, logs and results only; no APKs)
+        id: filter_reference
+        if: always()
+        run: mkdir -p "$RUNNER_TEMP/out/reference" "$RUNNER_TEMP/upload" && bash harness/tools/parity/filter_artifacts.sh "$RUNNER_TEMP/out/reference" "$RUNNER_TEMP/upload/reference"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always() && steps.filter_reference.outcome == 'success'
+        with:
+          name: parity-reference
+          path: ${{ runner.temp }}/upload/reference
+          if-no-files-found: error
+          retention-days: 7
+
+  release:
+    needs: validate
+    if: needs.validate.outputs.release_tag != 'none'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      RELEASE_TAG: ${{ needs.validate.outputs.release_tag }}
+      RELEASE_ASSET: ${{ needs.validate.outputs.release_asset }}
+      WM_SIZE: ${{ needs.validate.outputs.wm_size }}
+      WM_DENSITY: ${{ needs.validate.outputs.wm_density }}
+      NAV: ${{ needs.validate.outputs.nav }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.sha }}
+          path: harness
+          persist-credentials: false
+          sparse-checkout: tools/parity
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Download exactly the named release asset into RUNNER_TEMP and check its identity
+        run: |
+          mkdir -p "$RUNNER_TEMP/rel"
+          curl -fsSL --proto '=https' --max-filesize 209715200 -o "$RUNNER_TEMP/rel/$RELEASE_ASSET" "https://github.com/$GITHUB_REPOSITORY/releases/download/$RELEASE_TAG/$RELEASE_ASSET"
+          python3 harness/tools/parity/check_apk.py --release "$RELEASE_TAG" --dir "$RUNNER_TEMP/rel"
+      - name: Build the test-input app from source
+        run: bash harness/tools/parity/ime-target/build.sh "$RUNNER_TEMP/imetarget/imetarget.apk"
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Run the legs
+        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
+        env:
+          PARITY_TARGET_APK: ${{ runner.temp }}/imetarget/imetarget.apk
+        with:
+          api-level: 34
+          target: google_apis
+          arch: x86_64
+          disable-animations: true
+          script: python3 harness/tools/parity/run_legs.py --role release --out "$RUNNER_TEMP/out/release" --apk "$RUNNER_TEMP/rel/$RELEASE_ASSET" --release-tag "$RELEASE_TAG"
+      - name: Filter artifacts (screenshots, logs and results only; no APKs)
+        id: filter_release
+        if: always()
+        run: mkdir -p "$RUNNER_TEMP/out/release" "$RUNNER_TEMP/upload" && bash harness/tools/parity/filter_artifacts.sh "$RUNNER_TEMP/out/release" "$RUNNER_TEMP/upload/release"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always() && steps.filter_release.outcome == 'success'
+        with:
+          name: parity-release
+          path: ${{ runner.temp }}/upload/release
+          if-no-files-found: error
+          retention-days: 7
+
+  verdict:
+    needs: [validate, app, reference, release]
+    if: always() && needs.validate.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      BASELINE_SHA: ${{ needs.validate.outputs.app_baseline_sha }}
+      CANDIDATE_SHA: ${{ needs.validate.outputs.app_candidate_sha }}
+      REFERENCE: ${{ needs.validate.outputs.reference }}
+      RELEASE: ${{ needs.validate.outputs.release_tag != 'none' && 'yes' || 'no' }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.sha }}
+          path: harness
+          persist-credentials: false
+          sparse-checkout: tools/parity
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          pattern: parity-*
+          path: ${{ runner.temp }}/all
+      - name: Verdict (fails unless every expected role passed every required leg)
+        run: |
+          mkdir -p "$RUNNER_TEMP/all"
+          python3 harness/tools/parity/verdict.py --dir "$RUNNER_TEMP/all" --out "$RUNNER_TEMP/verdict" --baseline-sha "$BASELINE_SHA" --candidate-sha "$CANDIDATE_SHA" --reference "$REFERENCE" --release "$RELEASE"
+      - name: Filter artifacts
+        id: filter_verdict
+        if: always()
+        run: mkdir -p "$RUNNER_TEMP/verdict" "$RUNNER_TEMP/upload" && bash harness/tools/parity/filter_artifacts.sh "$RUNNER_TEMP/verdict" "$RUNNER_TEMP/upload/verdict"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always() && steps.filter_verdict.outcome == 'success'
+        with:
+          name: parity-verdict
+          path: ${{ runner.temp }}/upload/verdict
+          if-no-files-found: error
+          retention-days: 7
