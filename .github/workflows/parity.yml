@@ -90,6 +90,10 @@ jobs:
     env:
       ROLE: ${{ matrix.role }}
       APP_SHA: ${{ matrix.role == 'baseline' && needs.validate.outputs.app_baseline_sha || needs.validate.outputs.app_candidate_sha }}
+      # The app's build.gradle reads VERSION_CODE / VERSION_NAME from the environment (build.yml sets them the
+      # same way, as job env). Without them it falls back to git, which a shallow checkout cannot answer:
+      # versionCode -1 failed configuration in the first run. VERSION_NAME is set below from APP_SHA.
+      VERSION_CODE: "1"
       WM_SIZE: ${{ needs.validate.outputs.wm_size }}
       WM_DENSITY: ${{ needs.validate.outputs.wm_density }}
       NAV: ${{ needs.validate.outputs.nav }}
@@ -110,6 +114,10 @@ jobs:
           submodules: false
       - name: Confirm the app checkout is the requested SHA
         run: test "$(git -C app rev-parse HEAD)" = "$APP_SHA"
+      - name: Set the app version name (parity-<short app SHA>)
+        run: |
+          [[ "$APP_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::APP_SHA is not a 40-character SHA"; exit 1; }
+          printf 'VERSION_NAME=parity-%s\n' "${APP_SHA:0:7}" >> "$GITHUB_ENV"
       - name: Init build submodules (including the swipe model, needed by the glide and model legs)
         run: |
           git lfs install
@@ -126,6 +134,7 @@ jobs:
       - name: Unit suite (recorded as the unit_suite leg; never passes on a missing, empty or failing report)
         working-directory: app
         run: |
+          bash ../harness/tools/parity/check_version_env.sh
           rc=0
           ./gradlew --no-daemon testStableDebugUnitTest -Pandroid.injected.build.abi=x86_64 || rc=$?
           python3 ../harness/tools/parity/unit_summary.py build/test-results/testStableDebugUnitTest --json "$RUNNER_TEMP/unit.json" || true
@@ -137,6 +146,7 @@ jobs:
       - name: Build the debug app (exactly one APK, kept in RUNNER_TEMP)
         working-directory: app
         run: |
+          bash ../harness/tools/parity/check_version_env.sh
           ./gradlew --no-daemon assembleStableDebug -Pandroid.injected.build.abi=x86_64
           shopt -s nullglob
           apks=(build/outputs/apk/stable/debug/*.apk)
@@ -170,7 +180,9 @@ jobs:
           api-level: 34
           target: google_apis
           arch: x86_64
+          avd-name: test
           disable-animations: true
+          pre-emulator-launch-script: bash harness/tools/parity/avd_config.sh test
           script: python3 harness/tools/parity/run_legs.py --role "$ROLE" --out "$RUNNER_TEMP/out/$ROLE" --apk "$RUNNER_TEMP/app/app-debug.apk" --app-sha "$APP_SHA" --unit-json "$RUNNER_TEMP/unit.json" --variant-corrupt "$RUNNER_TEMP/variants/corrupt.apk" --variant-truncated "$RUNNER_TEMP/variants/truncated.apk" --variant-missing "$RUNNER_TEMP/variants/missing.apk"
       - name: Filter artifacts (screenshots, logs and results only; no APKs)
         id: filter_app
@@ -208,8 +220,10 @@ jobs:
         run: |
           bash harness/tools/parity/ime-target/build.sh "$RUNNER_TEMP/imetarget/imetarget.apk"
           bash harness/tools/parity/build_typer.sh "$RUNNER_TEMP/typer/typer.dex"
-      - name: Fetch SwiftKey into RUNNER_TEMP and verify every split's certificate
-        run: python3 harness/tools/parity/fetch_swiftkey.py --abi x86_64
+      - name: Fetch SwiftKey into RUNNER_TEMP and verify every split's certificate and its native x86_64 code
+        # Pinned native build: 9.13.18.4 (versionCode 1236402240), the plain universal APK the mirror lists
+        # when asked for x86_64 only; the first run's default bundle carried arm64 code only.
+        run: python3 harness/tools/parity/fetch_swiftkey.py --abi x86_64 --source apkpure-universal --version-code 1236402240
       - name: Enable KVM
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
@@ -224,7 +238,9 @@ jobs:
           api-level: 34
           target: google_apis
           arch: x86_64
+          avd-name: test
           disable-animations: true
+          pre-emulator-launch-script: bash harness/tools/parity/avd_config.sh test
           script: python3 harness/tools/parity/run_legs.py --role reference --out "$RUNNER_TEMP/out/reference"
       - name: Filter artifacts (screenshots, logs and results only; no APKs)
         id: filter_reference
@@ -280,7 +296,9 @@ jobs:
           api-level: 34
           target: google_apis
           arch: x86_64
+          avd-name: test
           disable-animations: true
+          pre-emulator-launch-script: bash harness/tools/parity/avd_config.sh test
           script: python3 harness/tools/parity/run_legs.py --role release --out "$RUNNER_TEMP/out/release" --apk "$RUNNER_TEMP/rel/$RELEASE_ASSET" --release-tag "$RELEASE_TAG"
       - name: Filter artifacts (screenshots, logs and results only; no APKs)
         id: filter_release
