@@ -715,11 +715,11 @@ def leg_model(variant):
 
         op("install", lambda: (d.uninstall(), d.install([apk])))
         op("activate", d.activate)
-        op("open_target", lambda: d.open_target(keyboard="record"))
+        op("open_target", lambda: d.open_target(keyboard="require"))
         op("keymap", lambda: setattr(d, "km", d.keymap("model_" + variant)))
         if not d.hooks:
             return "inconclusive", {"reason": "no WBDBG hooks in this build", "ops": ops}
-        op("open_target_2", lambda: d.open_target(keyboard="record"))
+        op("open_target_2", lambda: d.open_target(keyboard="require"))
         g = op("glide_hello", lambda: d.glide("hello"))
         glided = d.settle()[0]
         g["field_after"] = glided

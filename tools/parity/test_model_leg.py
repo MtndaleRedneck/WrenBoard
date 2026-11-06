@@ -133,5 +133,64 @@ A = FakeA({"variant": "corrupt"}); RL.A = A
 d = FakeDevice(A, {"variant": "corrupt", "glide_commit": "hello"}); d.hooks = False
 st, ev = RL.leg_model("corrupt")(d, {"variants": {"corrupt": "/etc/hostname"}})
 check(st == "inconclusive", "no WBDBG hooks stays inconclusive (%s)" % ev.get("reason"))
+# Fresh Q1 regression, authored from reviewed a18c6baa (not an unreadable packet).
+# Drive the REAL Device.open_target/focus/wait_ui against scripted run-2 XML.
+# Hidden WBDBG geometry is deliberately available if keymap is ever reached.
+import testkit as K
+old_A, old_sleep = RL.A, RL.time.sleep
+RL.time.sleep = lambda seconds: None
+try:
+    class ModelScriptA(K.ScriptA, FakeA):
+        def __init__(self, sc, ime):
+            K.ScriptA.__init__(self, ime=ime)
+            FakeA.__init__(self, sc)
+
+    class ReadinessDevice(FakeDevice, RL.Device):
+        open_target = RL.Device.open_target
+        def __init__(self, A, sc, hide_at_second):
+            FakeDevice.__init__(self, A, sc)
+            self.ime = RL.WPKG + "/.LatinIME"
+            self.hide_at_second, self.calls = hide_at_second, []
+        def keymap(self, tag):
+            self.calls.append("keymap")
+            if self.hide_at_second:
+                self.A.ime = None
+            # Coordinates may exist even for an instantiated, hidden view.
+            return {"h": (1, 2000)}
+        def glide(self, word):
+            self.calls.append("glide")
+            return FakeDevice.glide(self, word)
+        def type_keys(self, text):
+            self.calls.append("type_keys")
+            return FakeDevice.type_keys(self, text)
+
+    for variant in ("missing", "truncated", "corrupt"):
+        for hide_at_second in (False, True):
+            sc = {"variant": variant, "glide_commit": "hello"}
+            A = ModelScriptA(sc, RL.WPKG if hide_at_second else None)
+            RL.A = A
+            d = ReadinessDevice(A, sc, hide_at_second)
+            result, reason = None, None
+            try:
+                result = RL.leg_model(variant)(d, {"variants": {variant: "/etc/hostname"}})
+            except RL.Inconclusive as exc:
+                reason = str(exc)
+            label = "%s model open_target%s" % (variant, "_2" if hide_at_second else "")
+            check(reason is not None and "readiness[keyboard_not_visible]" in reason,
+                  label + ": absent IME is readiness-inconclusive")
+            check(result is None,
+                  label + ": no model FAIL/result or recognition/graceful-disable categories")
+            check(d.calls == (["keymap"] if hide_at_second else []),
+                  label + ": hidden WBDBG coordinates cannot bypass visibility; no later geometry/glide/key taps")
+            taps = [c for c in A.cmds if c.startswith("input tap ")]
+            check(taps and all(int(c.split()[-1]) < 1290 for c in taps),
+                  label + ": only bounded field-focus taps, no keyboard-coordinate taps")
+    A = FakeA({"variant": "missing"}); RL.A = A
+    d = FakeDevice(A, {"variant": "missing", "log": [("activate", NOT_USABLE)], "glide_commit": "hello"})
+    RL.leg_model("missing")(d, {"variants": {"missing": "/etc/hostname"}})
+    check(d.open_modes == ["require", "require"], "both model calls explicitly require visible IME")
+finally:
+    RL.A, RL.time.sleep = old_A, old_sleep
+
 print("RESULT", "FAIL" if fails else "PASS", len(fails), "failures")
 sys.exit(1 if fails else 0)
