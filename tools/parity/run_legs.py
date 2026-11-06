@@ -8,6 +8,7 @@ fetch_swiftkey.py), release (the signed release asset named in release-expect.js
 All text typed is a fixed synthetic sentence; nothing personal is entered or shown.
 Usage: run_legs.py --role ROLE --out DIR [--apk APK] [--app-sha SHA] [--unit-json F]
                    [--release-tag TAG] [--variant-corrupt APK] [--variant-truncated APK]
+                   [--reference-ime ime-component.json]
 """
 import argparse, hashlib, json, os, re, struct, sys, time, traceback
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -19,7 +20,8 @@ import visual as V
 
 WPKG = "com.wrenboard.keyboard"
 SWPKG = "com.touchtype.swiftkey"
-SWIME = SWPKG + "/com.touchtype.KeyboardService"
+# The reference IME component is not written here: fetch_swiftkey.resolve_ime() derives it from the fetched
+# base APK's manifest (pinned aapt2) and run_legs gets it through --reference-ime (ime-component.json).
 GLIDE_WORDS = ("hello", "world", "keyboard", "thanks")
 BKSP_TEXT = "the quick brown fox jumps over the lazy dog and then some more words to delete here "
 SPEED_TYPED = T.SENTENCE
@@ -115,6 +117,12 @@ KEYBOARD_VIEW = {WPKG: WPKG + ":id/keyboard_view"}
 # Letter rows: 10 keys from the left edge; 9 keys offset half a key; z..m offset 1.5 keys with BKSP at
 # the right end; SPACE at the centre of the row below. Only a tapped-and-verified position is ever used.
 QWERTY_LAYOUTS = {"rows4": (4, 0), "rows5_number_row": (5, 1)}
+ROWS = ("qwertyuiop", "asdfghjkl", "zxcvbnm")
+# Tap-to-text budgets for one keymap (each probe = clear the field, tap, settled read, about 2.5 s on the
+# run-3 emulator): at most KEYMAP_PROBE_BUDGET probes in all, of which the full re-probe of every letter row
+# after a row-model mismatch takes at most REPROBE_BUDGET = rows x (sources + 1).
+KEYMAP_PROBE_BUDGET = 140
+REPROBE_BUDGET = len(ROWS) * (len(QWERTY_LAYOUTS) + 2)
 
 
 def keyboard_area(root, pkg):
@@ -184,16 +192,74 @@ def geometry_keys(area, layout):
     return km
 
 
+def keymap_geometry(root, area):
+    """Diagnostics only (never used to accept a key): the IME window bounds, the keyboard area, and for
+    each QWERTY_LAYOUTS entry the row bands [top, bottom] it assumes and the computed key rects
+    [l, t, r, b] (the tapped centre +/- half a key cell, floored) around the centres geometry_keys taps."""
+    ime_win = None
+    if root is not None:
+        for w in root.iter("window"):
+            if w.get("type") == "TYPE_INPUT_METHOD":
+                ime_win = list(A.bounds(w))
+    out = {"ime_window": ime_win, "keyboard_area": list(area) if area else None, "layouts": {}}
+    for name, (rows, _q) in QWERTY_LAYOUTS.items():
+        km = geometry_keys(area, name)
+        if not km:
+            out["layouts"][name] = None
+            continue
+        hw, hh = (area[2] - area[0]) / 20.0, (area[3] - area[1]) / (2.0 * rows)
+        rects = {k: [int(x - hw), int(y - hh), int(x + hw), int(y + hh)] for k, (x, y) in sorted(km.items())}
+        rects["row_bands"] = [[round(area[1] + 2 * hh * i, 1), round(area[1] + 2 * hh * (i + 1), 1)] for i in range(rows)]
+        out["layouts"][name] = rects
+    return out
+
+
 def installed_abi(pkg):
     """The ABI the package manager chose for an installed package (dumpsys primaryCpuAbi), or None."""
     m = re.search(r"primaryCpuAbi=(\S+)", A.sh("dumpsys package %s" % pkg, 60, check=False))
     return m.group(1) if m and m.group(1) != "null" else None
 
 
+def full_component(cid):
+    """ "pkg/.Name" (the short form `ime list -s` may print) -> "pkg/pkg.Name"; anything else unchanged."""
+    p, _, c = cid.partition("/")
+    return "%s/%s%s" % (p, p, c) if c.startswith(".") else cid
+
+
+def reference_ime(path):
+    """The SwiftKey IME component fetch_swiftkey.resolve_ime() derived from the fetched base APK's manifest.
+    Raises Inconclusive when the file is missing or unreadable, or the component is unresolved or ambiguous."""
+    if not path or not os.path.isfile(path):
+        raise Inconclusive("reference IME component unresolved: no ime-component.json from the fetch")
+    try:
+        rec = json.load(open(path))
+    except ValueError as e:
+        raise Inconclusive("reference IME component unresolved: unreadable ime-component.json (%s)" % e)
+    comp = rec.get("component") if isinstance(rec, dict) else None
+    if not isinstance(comp, str) or not IME_ID.fullmatch(comp) or not comp.startswith(SWPKG + "/"):
+        raise Inconclusive("reference IME component %s" % ((rec.get("reason") if isinstance(rec, dict) else None) or "unresolved"))
+    return comp
+
+
+def app_debug_role(role):
+    """The roles whose APK is a WrenBoard debug build (AGP marks it testOnly under the injected ABI):
+    only these installs get `adb install -t`."""
+    return role in ("baseline", "candidate")
+
+
+def is_emulator():
+    return "1" in (A.sh("getprop ro.boot.qemu", check=False).strip(), A.sh("getprop ro.kernel.qemu", check=False).strip())
+
+
 class Device:
-    def __init__(self, kbpkg):
+    def __init__(self, kbpkg, app_debug=False):
         self.pkg, self.ime, self.km, self.hooks, self.readback = kbpkg, None, {}, False, None
         self.keyboard_visible = None
+        # app_debug: the baseline / candidate role, whose WrenBoard debug APKs (and the model variants re-signed
+        # from them) AGP marks android:testOnly under the injected ABI. Only those installs get `-t`, and only on
+        # an emulator; the reference (SwiftKey) and the release install never do.
+        self.app_debug = app_debug
+        self.ime_expect = None  # reference role: the SwiftKey component from ime-component.json
 
     def setup(self, wm_size, wm_density, nav):
         A.run(["adb", "wait-for-device"], 180)
@@ -234,7 +300,12 @@ class Device:
             raise Inconclusive("display readback mismatch %s" % json.dumps(self.readback["mismatch"])[:1500])
 
     def install(self, apks):
-        out = A.run(["adb", "install-multiple" if len(apks) > 1 else "install", "-r", "-g"] + list(apks), 600)
+        flags = ["-r", "-g"]
+        if self.app_debug:
+            if self.pkg != WPKG or not is_emulator():
+                raise Inconclusive("test-only install (-t) is allowed only for the WrenBoard debug build on an emulator")
+            flags.append("-t")
+        out = A.run(["adb", "install-multiple" if len(apks) > 1 else "install"] + flags + list(apks), 600)
         if "Success" not in out:
             raise Inconclusive("install did not report Success")
         A.log("installed", [os.path.basename(a) for a in apks], [sha256(a) for a in apks])
@@ -243,19 +314,30 @@ class Device:
         A.run(["adb", "uninstall", self.pkg], 120, check=False)
 
     def activate(self):
+        # The same bounded wait (40 polls, 2 s apart) for every keyboard: `ime enable` only once the IME is
+        # in `ime list -a -s` (run 3: an enable 0.4 s after install gave "Unknown input method ... cannot be
+        # enabled for user #0"). SwiftKey: self.ime_expect is the component derived from the fetched APK's
+        # manifest; exactly that component, and no other of the package, must be listed (a "pkg/.Name" short
+        # form compares as "pkg/pkg.Name"). Unresolved, ambiguous on the device or never listed: inconclusive.
+        expect = self.ime_expect
+        if self.pkg == SWPKG and not (isinstance(expect, str) and IME_ID.fullmatch(expect)):
+            raise Inconclusive("reference IME component unresolved")
         ime = None
-        if self.pkg == SWPKG:
-            ime = SWIME
-        else:
-            for _ in range(40):
-                for l in A.sh("ime list -a -s").split():
-                    if l.startswith(self.pkg + "/") and IME_ID.fullmatch(l):
-                        ime = l
-                if ime:
-                    break
-                time.sleep(2)
+        listed = []
+        for _ in range(40):
+            listed = [l for l in A.sh("ime list -a -s").split() if l.startswith(self.pkg + "/") and IME_ID.fullmatch(l)]
+            if self.pkg == SWPKG:
+                if any(full_component(l) == expect for l in listed):
+                    if len(listed) != 1:
+                        raise Inconclusive("ime list shows %s for %s, not exactly %s" % (listed, self.pkg, expect))
+                    ime = listed[0]
+            elif listed:
+                ime = listed[-1]
+            if ime:
+                break
+            time.sleep(2)
         if not ime:
-            raise Inconclusive("keyboard IME never appeared in ime list")
+            raise Inconclusive("keyboard IME never appeared in ime list" + (" (expected %s; listed %s)" % (expect, listed) if self.pkg == SWPKG else ""))
         for _ in range(15):
             A.sh("ime enable %s" % ime); A.sh("ime set %s" % ime); time.sleep(2)
             if A.sh("settings get secure default_input_method").strip() == ime:
@@ -439,7 +521,12 @@ class Device:
             # the toolbar excluded), then the bounded QWERTY geometry table for what is still missing.
             # Every such key counts only after tap-to-text proves it types its own character.
             root = A.dump_windows("keys_" + tag)
+            try:  # diagnostic frame of the keyboard at keymap time (png/keymap_<tag>.png); never a gate
+                A.shot("keymap_" + tag)
+            except Exception as e:
+                A.log("keymap screenshot failed:", str(e)[:200])
             area = keyboard_area(root, self.pkg)
+            A.log("keymap geometry", tag, json.dumps(keymap_geometry(root, area), separators=(",", ":")))
             cand = {}
             for d, n in key_nodes(root, self.pkg, area):
                 dl = d.lower()
@@ -466,45 +553,106 @@ class Device:
         A.sh("; ".join("input tap %d %d" % (int(x), int(y)) for x, y in pts), 60)
         return self.settle(6)[0]
 
+    def tap_seq(self, groups):
+        """Clear the field, then tap each group of points in turn; the settled field text after each group."""
+        A.clear_field()
+        out = []
+        for pts in groups:
+            A.sh("; ".join("input tap %d %d" % (int(x), int(y)) for x, y in pts), 60)
+            out.append(self.settle(6)[0])
+        return out
+
     def verify_keys(self, cand, area):
-        """Tap-to-text: a letter key counts only when tapping it types that letter (case-insensitive),
-        SPACE only when o, k, SPACE types "ok ", BKSP only when o, k, BKSP leaves "o". Sources tried in
-        order: accessibility nodes, then each layout of QWERTY_LAYOUTS inside the keyboard area. Returns
-        (verified keys, evidence); anything left unverified is simply absent, so keymap() is inconclusive."""
+        """Tap-to-text. A key counts only when tapping it types its own character (case-insensitive); a key
+        that typed anything else is never accepted. Sources, in order: accessibility nodes, then each layout
+        of QWERTY_LAYOUTS inside the keyboard area.
+        1. Per source and letter row: the row's open keys tapped together must type exactly those letters.
+           On a mismatch (a row-model mismatch: run 3's rows4 q row typed digits, 1 for q, 3 for e), each key is
+           tapped alone and the ones that typed their own letter count only if, tapped together again, they
+           type exactly those letters.
+        2. After ANY row-model mismatch, ALL letter rows are re-probed (not only the keys that failed): for
+           each row, every source holding the whole row is tried in order and the first whose whole row types
+           exactly that row is taken; a row no source types whole keeps only its step-1 keys that, tapped
+           together again, type exactly themselves. Fixed budget REPROBE_BUDGET probes (rows x (sources + 1)).
+        3. All verified letters tapped in one sequence must type exactly themselves, else no letter counts.
+        4. SPACE: after the verified o, k, tapping SPACE must grow the text by exactly " ". BKSP: after o, k,
+           tapping BKSP must delete exactly one character.
+        Every probe (clear, taps, settled read) counts against KEYMAP_PROBE_BUDGET; past it nothing more is
+        accepted. Anything unverified is absent, so keymap() is inconclusive (fail closed)."""
         ok, src, tried = {}, {}, []
-        sources = [("a11y", cand)] + [("geometry:" + name, geometry_keys(area, name)) for name in QWERTY_LAYOUTS]
+        sources = [(s, k) for s, k in [("a11y", cand)] + [("geometry:" + name, geometry_keys(area, name)) for name in QWERTY_LAYOUTS] if k]
+        left = {"all": KEYMAP_PROBE_BUDGET, "reprobe": REPROBE_BUDGET}
+
+        def probe(sname, keys, pts, phase="probe"):
+            if left["all"] <= 0 or (phase == "reprobe" and left["reprobe"] <= 0):
+                tried.append({"source": sname, "keys": "".join(keys), "typed": None, "phase": phase, "skipped": "budget"})
+                return None
+            left["all"] -= 1
+            if phase == "reprobe":
+                left["reprobe"] -= 1
+            got = self.tap_text(pts)
+            tried.append({"source": sname, "keys": "".join(keys), "typed": got, "phase": phase})
+            return got
+
+        def same(got, keys):
+            return got is not None and got.lower() == "".join(keys)
+
+        mismatch = []
         for sname, km in sources:
-            if not km:
-                continue
-            todo = [k for k in LETTERS if k in km and k not in ok]
-            if todo:
-                got = self.tap_text([km[k] for k in todo])
-                tried.append({"source": sname, "keys": "".join(todo), "typed": got})
-                if got.lower() == "".join(todo):
+            for row in ROWS:
+                todo = [k for k in row if k in km and k not in ok]
+                if not todo:
+                    continue
+                got = probe(sname, todo, [km[k] for k in todo])
+                if same(got, todo):
                     good = todo
                 else:
-                    good = []
-                    for k in todo:
-                        g1 = self.tap_text([km[k]])
-                        if g1.lower() == k:
-                            good.append(k)
-                        else:
-                            tried.append({"source": sname, "keys": k, "typed": g1})
+                    mismatch.append({"source": sname, "keys": "".join(todo), "typed": got})
+                    single = [k for k in todo if same(probe(sname, [k], [km[k]]), [k])]
+                    good = single if single and same(probe(sname, single, [km[k] for k in single], "confirm"), single) else []
                 for k in good:
                     ok[k], src[k] = km[k], sname
-            if "o" in ok and "k" in ok:
-                for key, want in (("SPACE", "ok "), ("BKSP", "o")):
-                    if key in ok or key not in km:
+        reprobe = []
+        if mismatch:
+            for row in ROWS:
+                took = None
+                for sname, km in sources:
+                    if all(k in km for k in row) and same(probe(sname, list(row), [km[k] for k in row], "reprobe"), row):
+                        took = sname
+                        for k in row:
+                            ok[k], src[k] = km[k], sname
+                        break
+                if took is None:
+                    keep = [k for k in row if k in ok]
+                    if keep and not same(probe("step1", keep, [ok[k] for k in keep], "reprobe"), keep):
+                        keep = []
+                    for k in row:
+                        if k in ok and k not in keep:
+                            del ok[k], src[k]
+                reprobe.append({"row": row, "taken_from": took})
+        letters = [k for k in LETTERS if k in ok]
+        final = None
+        if letters:
+            final = probe("verified", letters, [ok[k] for k in letters], "final")
+            if not same(final, letters):
+                for k in letters:
+                    del ok[k], src[k]
+        if "o" in ok and "k" in ok:
+            for key in ("SPACE", "BKSP"):
+                for sname, km in sources:
+                    if key in ok or key not in km or left["all"] <= 0:
                         continue
-                    got = self.tap_text([ok["o"], ok["k"], km[key]])
-                    tried.append({"source": sname, "keys": "ok+" + key, "typed": got})
-                    if got.lower() == want:
+                    left["all"] -= 1
+                    t1, t2 = self.tap_seq([[ok["o"], ok["k"]], [km[key]]])
+                    want = (t1 + " ") if key == "SPACE" else t1[:-1]
+                    good = (t1 or "").lower() == "ok" and t2 == want
+                    tried.append({"source": sname, "keys": "ok+" + key, "typed": t2, "before": t1, "want": want, "phase": "special"})
+                    if good:
                         ok[key], src[key] = km[key], sname
-            if all(k in ok for k in REQUIRED_KEYS):
-                break
         A.clear_field()
-        return ok, {"keyboard_area": list(area) if area else None, "verified_by": src, "tap_to_text": tried[:80],
-                    "unverified": [k for k in REQUIRED_KEYS if k not in ok]}
+        return ok, {"keyboard_area": list(area) if area else None, "verified_by": src, "tap_to_text": tried[:200],
+                    "row_model_mismatch": mismatch, "reprobe": reprobe, "final_confirm": final,
+                    "probes_left": dict(left), "unverified": [k for k in REQUIRED_KEYS if k not in ok]}
 
     def type_keys(self, s):
         cmds = ["input tap %d %d" % self.km["SPACE" if ch == " " else ch] for ch in s.lower()]
@@ -808,20 +956,31 @@ def leg_release_smoke(d, ctx):
     return ("pass" if last_word(got) == "ok" else "fail"), {"field": got, "version": d.version()}
 
 
-def save_buffers(tag):
-    """Keep the FULL crash, events and main buffers plus /data/anr traces as artifacts."""
+def save_buffers(tag, traces=None):
+    """Keep the FULL crash, events and main buffers plus /data/anr traces as artifacts. traces: an optional
+    dict that receives {file name: text} of every trace saved."""
     for b in ("crash", "events", "main"):
         A.save("sys/full/%s_%s.txt" % (tag, b), A.logs(b))
     names = A.sh("ls /data/anr", check=False).split()
     for n in names:
         if re.fullmatch(r"[A-Za-z0-9_.-]{1,80}", n):
-            A.save("sys/full/anr/%s.txt" % n, A.sh("cat /data/anr/%s" % n, 60, check=False))
+            txt = A.sh("cat /data/anr/%s" % n, 60, check=False)
+            A.save("sys/full/anr/%s.txt" % n, txt)
+            if traces is not None:
+                traces[n] = txt
     return names
 
 
 def leg_crash_anr_gate(d, ctx):
-    anr_files = save_buffers("final")
+    traces = {}
+    anr_files = save_buffers("final", traces)
     fs = CL.attribute(d.findings(), ctx["windows"])
+    # An ANR trace whose subject process is the keyboard's or the test-input app's is a finding too
+    # (crashlog.anr_trace_findings: the "dumping pid" subject and its Cmd line, never another dumped process).
+    for pkg in (d.pkg, A.TPKG):
+        for f in CL.anr_trace_findings(pkg, traces):
+            f["package"], f["window"] = pkg, "anr_trace"
+            fs.append(f)
     A.save("sys/crash_anr_findings.json", json.dumps(fs, indent=1))
     lines = ["[%s] %s %s %s pid %s (%d lines)\n%s\n" % (f["window"], f["package"], f["kind"], f["buffer"], f["pid"], f["lines"], f["text"]) for f in fs]
     A.save("sys/crash_anr.txt", "\n".join(lines) + "\n")
@@ -867,6 +1026,7 @@ def main():
     ap.add_argument("--unit-json"); ap.add_argument("--release-tag")
     for v in VARIANTS:
         ap.add_argument("--variant-" + v)
+    ap.add_argument("--reference-ime", help="ime-component.json written by fetch_swiftkey.py (reference role)")
     o = ap.parse_args()
     if o.role in ("baseline", "candidate") and not (o.app_sha and re.fullmatch(r"[0-9a-f]{40}", o.app_sha)):
         ap.error("--app-sha must be a 40-character SHA for %s" % o.role)
@@ -881,7 +1041,7 @@ def main():
     res = R.Results(os.path.join(o.out, "results.json"), o.role, "swiftkey" if o.role == "reference" else "wrenboard", o.app_sha)
     ctx = {"app_sha": o.app_sha, "apk": o.apk, "unit_json": o.unit_json, "release_tag": o.release_tag, "role": o.role,
            "variants": {v: getattr(o, "variant_" + v) for v in VARIANTS}, "windows": []}
-    d = Device(SWPKG if o.role == "reference" else WPKG)
+    d = Device(SWPKG if o.role == "reference" else WPKG, app_debug=app_debug_role(o.role))
     setup_error = None
     needs_device = any(l["name"] not in NO_DEVICE for l in legs)
     if needs_device:
@@ -899,6 +1059,8 @@ def main():
                 res.note("swiftkey primaryCpuAbi %s" % abi)
                 if abi != "x86_64":  # never time an ARM-translated reference as if it were native
                     raise Inconclusive("SwiftKey installed with primaryCpuAbi %s, not native x86_64" % abi)
+                d.ime_expect = reference_ime(o.reference_ime)  # before activation: unresolved -> inconclusive
+                res.note("swiftkey IME component from the fetched manifest %s" % d.ime_expect)
                 d.activate()
                 res.note("swiftkey %s" % json.dumps(d.version()))
             elif o.role in ("baseline", "candidate"):

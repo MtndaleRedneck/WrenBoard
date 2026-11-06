@@ -17,6 +17,13 @@ fails closed unless its size matches the listing, its package and versionCode ar
 requested ones, aapt2 lists x86_64 native code, the APK holds at least one lib/x86_64/*.so and every
 such file is an ELF64 x86-64 object (checked from the bytes, not the file name), and it carries exactly
 one signer equal to the same certificate pin. No ARM-translated or ABI-less build can pass.
+The reference IME component is never hardcoded: resolve_ime() reads the fetched base APK's own
+AndroidManifest.xml with the same pinned aapt2 (`dump xmltree --file AndroidManifest.xml`) and takes the
+one <service> that declares android:permission="android.permission.BIND_INPUT_METHOD" and an
+intent-filter action "android.view.InputMethod" (a relative ".Name" is expanded against the manifest
+package). It writes ime-component.json: {"component": "<package>/<class>"} when exactly one such service
+exists, else component null with the reason (unresolved, ambiguous); run_legs.py --reference-ime reads it,
+and an unresolved component makes every reference device leg inconclusive.
 Usage: fetch_swiftkey.py [--abi x86_64] [--source xapk|apkpure-universal] [--version-code N] [--selftest]
 """
 import argparse, base64, glob, json, os, re, struct, subprocess, sys, urllib.parse, urllib.request, zipfile
@@ -33,6 +40,95 @@ OPTIONAL = ("config.en.apk", "config.xxhdpi.apk", "LanguagesBundled.apk", "Langu
 
 class FetchError(Exception):
     pass
+
+
+IME_PERMISSION = "android.permission.BIND_INPUT_METHOD"
+IME_ACTION = "android.view.InputMethod"
+_XT_EL = re.compile(r"^(\s*)E: (\S+)")
+_XT_AT = re.compile(r"^(\s*)A: (?:http://schemas\.android\.com/apk/res/android:|android:)?([A-Za-z_]+)(?:\(0x[0-9a-fA-F]+\))?=(.*)$")
+
+
+def _xt_value(v):
+    m = re.match(r'"((?:[^"\\]|\\.)*)"', v.strip())
+    return m.group(1) if m else v.strip()
+
+
+def parse_xmltree(text):
+    """aapt2 `dump xmltree` text -> nested {"tag", "attrs", "children"} by indentation. Lines that are
+    neither an element (E:) nor an attribute (A:) - N: namespace lines, blanks - are ignored."""
+    root = {"tag": None, "attrs": {}, "children": [], "depth": -1}
+    stack = [root]
+    for line in (text or "").splitlines():
+        m = _XT_EL.match(line)
+        if m:
+            depth = len(m.group(1))
+            while stack[-1]["depth"] >= depth:
+                stack.pop()
+            el = {"tag": m.group(2), "attrs": {}, "children": [], "depth": depth}
+            stack[-1]["children"].append(el)
+            stack.append(el)
+            continue
+        m = _XT_AT.match(line)
+        if m and len(stack) > 1:
+            stack[-1]["attrs"].setdefault(m.group(2), _xt_value(m.group(3)))
+    return root
+
+
+def _walk(el):
+    yield el
+    for c in el["children"]:
+        yield from _walk(c)
+
+
+def ime_services(text):
+    """(manifest package, [component, ...]) for every <service> with the BIND_INPUT_METHOD permission
+    and an intent-filter action android.view.InputMethod. The component is "<package>/<class>", with a
+    relative name (".Name", or a bare "Name") expanded against the manifest package."""
+    root = parse_xmltree(text)
+    man = next((e for e in _walk(root) if e["tag"] == "manifest"), None)
+    pkg = man["attrs"].get("package") if man else None
+    comps = []
+    for e in _walk(root):
+        if e["tag"] != "service" or e["attrs"].get("permission") != IME_PERMISSION:
+            continue
+        acts = [a["attrs"].get("name") for f in e["children"] if f["tag"] == "intent-filter"
+                for a in f["children"] if a["tag"] == "action"]
+        if IME_ACTION not in acts:
+            continue
+        name = e["attrs"].get("name") or ""
+        if pkg and name.startswith("."):
+            name = pkg + name
+        elif pkg and name and "." not in name:
+            name = pkg + "." + name
+        comps.append("%s/%s" % (pkg, name))
+    return pkg, comps
+
+
+def resolve_ime(apk, out):
+    """Write OUT/ime-component.json from the base APK's manifest (pinned aapt2). Never raises for an
+    unresolved or ambiguous component: that is recorded, and run_legs makes the reference inconclusive."""
+    rec = {"component": None, "candidates": [], "reason": None, "apk": os.path.basename(apk),
+           "reader": "aapt2 dump xmltree --file AndroidManifest.xml (build-tools %s)" % apksig.BUILD_TOOLS}
+    try:
+        rc, txt = run([tool("aapt2"), "dump", "xmltree", "--file", "AndroidManifest.xml", apk])
+        pkg, comps = ime_services(txt) if rc == 0 else (None, [])
+        rec["manifest_package"], rec["candidates"] = pkg, comps
+        if rc != 0:
+            rec["reason"] = "unresolved: aapt2 exit %d" % rc
+        elif pkg != PKG:
+            rec["reason"] = "unresolved: manifest package %r, expected %s" % (pkg, PKG)
+        elif not comps:
+            rec["reason"] = "unresolved: no service with %s and action %s" % (IME_PERMISSION, IME_ACTION)
+        elif len(comps) > 1:
+            rec["reason"] = "ambiguous: %d IME services %s" % (len(comps), comps)
+        else:
+            rec["component"] = comps[0]
+    except (FetchError, OSError, subprocess.TimeoutExpired) as e:
+        rec["reason"] = "unresolved: %s" % e
+    with open(os.path.join(out, "ime-component.json"), "w") as f:
+        json.dump(rec, f, indent=1)
+    print("IME COMPONENT %s" % (rec["component"] or rec["reason"]), flush=True)
+    return rec
 
 
 def choose(names, abi):
@@ -128,6 +224,7 @@ def fetch(out, abi):
         verify_split(p, vc)
     for p in paths:
         print("CERT OK %s" % os.path.basename(p))
+    resolve_ime(paths[0], out)  # paths[0] is the base APK (choose())
     with open(os.path.join(out, "install-list.txt"), "w") as f:
         f.write("\n".join(paths) + "\n")
     info = {"package": PKG, "version_name": man.get("version_name"), "version_code": vc,
@@ -228,6 +325,7 @@ def fetch_universal(out, abi, version_code):
             os.remove(apk)
         raise
     print("CERT OK %s" % os.path.basename(apk))
+    resolve_ime(apk, out)
     with open(os.path.join(out, "install-list.txt"), "w") as f:
         f.write(apk + "\n")
     info = {"package": PKG, "version_code": vc, "splits": [os.path.basename(apk)], "x86_64_libs": libs,
@@ -287,8 +385,9 @@ def main():
         info = fetch(out, o.abi) if o.source == "xapk" else fetch_universal(out, o.abi, o.version_code)
     except (FetchError, OSError, ValueError, subprocess.TimeoutExpired) as e:
         print("::error::SwiftKey fetch failed: %s" % e)
-        if os.path.exists(os.path.join(out, "install-list.txt")):
-            os.remove(os.path.join(out, "install-list.txt"))
+        for n in ("install-list.txt", "ime-component.json"):
+            if os.path.exists(os.path.join(out, n)):
+                os.remove(os.path.join(out, n))
         return 1
     print("SWIFTKEY READY %s" % json.dumps(info))
     return 0
