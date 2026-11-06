@@ -9,7 +9,7 @@ All text typed is a fixed synthetic sentence; nothing personal is entered or sho
 Usage: run_legs.py --role ROLE --out DIR [--apk APK] [--app-sha SHA] [--unit-json F]
                    [--release-tag TAG] [--variant-corrupt APK] [--variant-truncated APK]
 """
-import argparse, hashlib, json, os, re, sys, time, traceback
+import argparse, hashlib, json, os, re, struct, sys, time, traceback
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import results as R
@@ -45,23 +45,164 @@ def sha256(p):
     return h.hexdigest()
 
 
+NAV_OVERLAY = {"3button": "com.android.internal.systemui.navbar.threebutton",
+               "gesture": "com.android.internal.systemui.navbar.gestural"}
+NAV_MODE = {"3button": "0", "gesture": "2"}  # Settings.Secure.NAVIGATION_MODE values (2-button is 1)
+
+
+def wm_value(out, kind):
+    """(physical, override) from `wm size` / `wm density` output; override None when not set."""
+    pat = r"\d+x\d+" if kind == "size" else r"\d+"
+    p = re.search(r"Physical %s: (%s)" % (kind, pat), out)
+    o = re.search(r"Override %s: (%s)" % (kind, pat), out)
+    return (p.group(1) if p else None), (o.group(1) if o else None)
+
+
+def png_size(path):
+    with open(path, "rb") as f:
+        h = f.read(24)
+    if len(h) < 24 or h[:8] != b"\x89PNG\r\n\x1a\n" or h[12:16] != b"IHDR":
+        return None
+    return "%dx%d" % struct.unpack(">II", h[16:24])
+
+
+def display_readback(wm_size, wm_density, nav, tries=8):
+    """Read back what the device is after setup: wm size, wm density, navigation mode and enabled nav
+    overlay, and an actual screenshot's pixel size. Every value must equal the requested one (a wm
+    override, if any, must equal it too); otherwise `mismatch` lists requested and observed values."""
+    want = {"size": "%dx%d" % wm_size, "density": str(wm_density), "nav_mode": NAV_MODE[nav]}
+    for i in range(tries):
+        nm = A.sh("settings get secure navigation_mode", check=False).strip()
+        if nm == want["nav_mode"]:
+            break
+        time.sleep(1.5)
+    sp, so = wm_value(A.sh("wm size"), "size")
+    dp, do = wm_value(A.sh("wm density"), "density")
+    ov = [l.strip() for l in A.sh("cmd overlay list android", check=False).splitlines() if "navbar" in l]
+    shot = png_size(A.shot("setup_readback"))
+    rb = {"requested": dict(want, nav=nav), "wm_size_physical": sp, "wm_size_override": so,
+          "wm_density_physical": dp, "wm_density_override": do, "navigation_mode": nm,
+          "nav_overlays": ov, "screenshot_px": shot}
+    mm = {}
+    for key, got, w in (("wm_size_physical", sp, want["size"]), ("wm_density_physical", dp, want["density"]),
+                        ("navigation_mode", nm, want["nav_mode"]), ("screenshot_px", shot, want["size"])):
+        if got != w:
+            mm[key] = {"requested": w, "observed": got}
+    for key, got, w in (("wm_size_override", so, want["size"]), ("wm_density_override", do, want["density"])):
+        if got is not None and got != w:
+            mm[key] = {"requested": w, "observed": got}
+    if not any(("[x] " + NAV_OVERLAY[nav]) in l for l in ov):
+        mm["nav_overlay"] = {"requested": "[x] " + NAV_OVERLAY[nav], "observed": ov}
+    rb["mismatch"] = mm
+    return rb
+
+
+LETTERS = "abcdefghijklmnopqrstuvwxyz"
+REQUIRED_KEYS = list(LETTERS) + ["SPACE", "BKSP"]
+# Accessibility nodes under any of these ids (the suggestion strip's chips, the toolbar) are never keys:
+# in the first run the release keymap matched 'i' to the "I" suggestion chip.
+NOT_KEY_ID = re.compile(r"suggestion|candidate|actionbar|toolbar", re.I)
+KEYBOARD_VIEW = {WPKG: WPKG + ":id/keyboard_view"}
+# Bounded QWERTY layout table for builds without hooks: (rows in the keyboard area, index of the q-row).
+# Letter rows: 10 keys from the left edge; 9 keys offset half a key; z..m offset 1.5 keys with BKSP at
+# the right end; SPACE at the centre of the row below. Only a tapped-and-verified position is ever used.
+QWERTY_LAYOUTS = {"rows4": (4, 0), "rows5_number_row": (5, 1)}
+
+
+def keyboard_area(root, pkg):
+    """Bounds of the innermost keyboard_view of the keyboard package (WrenBoard), or, for a keyboard
+    whose view id is not known (SwiftKey), the input-method window; None when neither is found."""
+    if root is None:
+        return None
+    best = None
+    vid = KEYBOARD_VIEW.get(pkg)
+    for n in root.iter("node"):
+        if vid and n.get("package") == pkg and n.get("resource-id") == vid:
+            b = A.bounds(n)
+            a = (b[2] - b[0]) * (b[3] - b[1])
+            if a > 0 and (best is None or a < best[0]):
+                best = (a, b)
+    if best:
+        return best[1]
+    if vid:
+        return None
+    for w in root.iter("window"):
+        if w.get("type") == "TYPE_INPUT_METHOD":
+            b = A.bounds(w)
+            if (b[2] - b[0]) * (b[3] - b[1]) > 0:
+                return b
+    return None
+
+
+def key_nodes(root, pkg, area):
+    """(label, node) for labelled nodes of pkg whose centre lies inside area and which are not under a
+    suggestion / candidate / toolbar node (checked on the node and every ancestor)."""
+    out = []
+    if root is None or not area:
+        return out
+    def walk(n, banned):
+        banned = banned or bool(NOT_KEY_ID.search(n.get("resource-id") or ""))
+        if n.tag == "node" and not banned and n.get("package") == pkg:
+            d = (n.get("content-desc") or n.get("text") or "").strip()
+            x, y = A.centre(n)
+            if d and area[0] <= x < area[2] and area[1] <= y < area[3]:
+                out.append((d, n))
+        for c in n:
+            walk(c, banned)
+    walk(root, False)
+    return out
+
+
+def geometry_keys(area, layout):
+    """Key centres for one QWERTY_LAYOUTS entry inside area; None when the area is implausibly small."""
+    if not area:
+        return None
+    l, t, r, b = area
+    w, h = r - l, b - t
+    rows, q = QWERTY_LAYOUTS[layout]
+    if w < 300 or h < 200:
+        return None
+    kw, rh = w / 10.0, h / float(rows)
+    y = lambda i: int(t + (q + i + 0.5) * rh)
+    km = {}
+    for j, c in enumerate("qwertyuiop"):
+        km[c] = (int(l + (j + 0.5) * kw), y(0))
+    for j, c in enumerate("asdfghjkl"):
+        km[c] = (int(l + (j + 1.0) * kw), y(1))
+    for j, c in enumerate("zxcvbnm"):
+        km[c] = (int(l + (j + 2.0) * kw), y(2))
+    km["BKSP"] = (int(r - 0.75 * kw), y(2))
+    km["SPACE"] = (int(l + w / 2.0), y(3))
+    return km
+
+
+def installed_abi(pkg):
+    """The ABI the package manager chose for an installed package (dumpsys primaryCpuAbi), or None."""
+    m = re.search(r"primaryCpuAbi=(\S+)", A.sh("dumpsys package %s" % pkg, 60, check=False))
+    return m.group(1) if m and m.group(1) != "null" else None
+
+
 class Device:
     def __init__(self, kbpkg):
-        self.pkg, self.ime, self.km, self.hooks = kbpkg, None, {}, False
+        self.pkg, self.ime, self.km, self.hooks, self.readback = kbpkg, None, {}, False, None
 
     def setup(self, wm_size, wm_density, nav):
         A.run(["adb", "wait-for-device"], 180)
         A.run(["adb", "root"], 30, check=False); time.sleep(4); A.run(["adb", "wait-for-device"], 60)
         A.log("device:", A.sh("getprop ro.product.cpu.abilist").strip(), "sdk", A.sh("getprop ro.build.version.sdk").strip())
-        A.sh("wm size %dx%d" % wm_size); A.sh("wm density %d" % wm_density)
-        if nav == "3button":
-            A.sh("cmd overlay enable-exclusive --category com.android.internal.systemui.navbar.threebutton")
+        # Size and density come from the AVD itself (avd_config.sh writes hw.lcd.* before boot); no wm
+        # override is applied, so the readback below sees what the device really is.
+        A.sh("cmd overlay enable-exclusive --category %s" % NAV_OVERLAY[nav])
         for c in ("settings put system screen_off_timeout 1800000", "svc power stayon true",
                   "settings put system accelerometer_rotation 0", "settings put system user_rotation 0",
                   "input keyevent KEYCODE_WAKEUP", "wm dismiss-keyguard",
                   "settings put secure show_ime_with_hard_keyboard 1"):
             A.sh(c)
         A.sh("pm disable-user --user 0 com.google.android.inputmethod.latin", check=False)
+        self.readback = display_readback(wm_size, wm_density, nav)
+        A.save("sys/display_readback.json", json.dumps(self.readback, indent=1))
+        if self.readback["mismatch"]:
+            raise Inconclusive("display readback mismatch %s" % json.dumps(self.readback["mismatch"]))
         # 32M keeps a full main-buffer dump under the artifact gate's 50 MB per-file cap; each leg's own
         # window is saved as it ends (sys/main/<leg>.txt), so ring wrap later cannot lose leg evidence.
         A.run(["adb", "logcat", "-G", "32M"], 20)
@@ -152,23 +293,78 @@ class Device:
                 elif code == CODE_DELETE:
                     km["BKSP"] = c
             self.hooks = bool(km)
+        detail = {}
         if not self.hooks:
-            for d, n in A.labelled(A.dump_windows("keys_" + tag), self.pkg):
+            # No hooks: keys only from accessibility nodes inside the keyboard area (suggestion chips and
+            # the toolbar excluded), then the bounded QWERTY geometry table for what is still missing.
+            # Every such key counts only after tap-to-text proves it types its own character.
+            root = A.dump_windows("keys_" + tag)
+            area = keyboard_area(root, self.pkg)
+            cand = {}
+            for d, n in key_nodes(root, self.pkg, area):
                 dl = d.lower()
                 dl = dl[8:] if dl.startswith("capital ") else dl
                 if len(dl) == 1 and dl.isalpha():
-                    km[dl] = A.centre(n)
+                    cand[dl] = A.centre(n)
                 elif dl in ("space", "space bar"):
-                    km["SPACE"] = A.centre(n)
+                    cand["SPACE"] = A.centre(n)
                 elif dl in ("delete", "backspace"):
-                    km["BKSP"] = A.centre(n)
-        A.save("geom/%s_keys.json" % tag, json.dumps({"hooks": self.hooks, "keys": km}, indent=0))
-        missing = [k for k in list("abcdefghijklmnopqrstuvwxyz") + ["SPACE", "BKSP"] if k not in km]
+                    cand["BKSP"] = A.centre(n)
+            km, detail = self.verify_keys(cand, area)
+        A.save("geom/%s_keys.json" % tag, json.dumps(dict({"hooks": self.hooks, "keys": km}, **detail), indent=0))
+        missing = [k for k in REQUIRED_KEYS if k not in km]
         if missing:
-            raise Inconclusive("keymap %s lacks %s (hooks %s)" % (tag, missing, self.hooks))
+            raise Inconclusive("keymap %s lacks %s (hooks %s%s)" % (tag, missing, self.hooks,
+                               "; unverified by tap-to-text" if not self.hooks else ""))
         self.km = km
-        A.log("keymap", tag, "hooks" if self.hooks else "a11y", len(km), "keys")
+        A.log("keymap", tag, "hooks" if self.hooks else "verified a11y/geometry", len(km), "keys")
         return km
+
+    def tap_text(self, pts):
+        """Clear the field, tap the given points, and return the settled field text."""
+        A.clear_field()
+        A.sh("; ".join("input tap %d %d" % (int(x), int(y)) for x, y in pts), 60)
+        return self.settle(6)[0]
+
+    def verify_keys(self, cand, area):
+        """Tap-to-text: a letter key counts only when tapping it types that letter (case-insensitive),
+        SPACE only when o, k, SPACE types "ok ", BKSP only when o, k, BKSP leaves "o". Sources tried in
+        order: accessibility nodes, then each layout of QWERTY_LAYOUTS inside the keyboard area. Returns
+        (verified keys, evidence); anything left unverified is simply absent, so keymap() is inconclusive."""
+        ok, src, tried = {}, {}, []
+        sources = [("a11y", cand)] + [("geometry:" + name, geometry_keys(area, name)) for name in QWERTY_LAYOUTS]
+        for sname, km in sources:
+            if not km:
+                continue
+            todo = [k for k in LETTERS if k in km and k not in ok]
+            if todo:
+                got = self.tap_text([km[k] for k in todo])
+                tried.append({"source": sname, "keys": "".join(todo), "typed": got})
+                if got.lower() == "".join(todo):
+                    good = todo
+                else:
+                    good = []
+                    for k in todo:
+                        g1 = self.tap_text([km[k]])
+                        if g1.lower() == k:
+                            good.append(k)
+                        else:
+                            tried.append({"source": sname, "keys": k, "typed": g1})
+                for k in good:
+                    ok[k], src[k] = km[k], sname
+            if "o" in ok and "k" in ok:
+                for key, want in (("SPACE", "ok "), ("BKSP", "o")):
+                    if key in ok or key not in km:
+                        continue
+                    got = self.tap_text([ok["o"], ok["k"], km[key]])
+                    tried.append({"source": sname, "keys": "ok+" + key, "typed": got})
+                    if got.lower() == want:
+                        ok[key], src[key] = km[key], sname
+            if all(k in ok for k in REQUIRED_KEYS):
+                break
+        A.clear_field()
+        return ok, {"keyboard_area": list(area) if area else None, "verified_by": src, "tap_to_text": tried[:80],
+                    "unverified": [k for k in REQUIRED_KEYS if k not in ok]}
 
     def type_keys(self, s):
         cmds = ["input tap %d %d" % self.km["SPACE" if ch == " " else ch] for ch in s.lower()]
@@ -558,7 +754,12 @@ def main():
                 lst = os.path.join(os.environ.get("RUNNER_TEMP", ""), "sk", "install-list.txt")
                 if not os.path.isfile(lst):
                     raise Inconclusive("SwiftKey was not fetched and verified")
-                d.install(open(lst).read().split()); d.activate()
+                d.install(open(lst).read().split())
+                abi = installed_abi(SWPKG)
+                res.note("swiftkey primaryCpuAbi %s" % abi)
+                if abi != "x86_64":  # never time an ARM-translated reference as if it were native
+                    raise Inconclusive("SwiftKey installed with primaryCpuAbi %s, not native x86_64" % abi)
+                d.activate()
                 res.note("swiftkey %s" % json.dumps(d.version()))
             elif o.role in ("baseline", "candidate"):
                 if not o.apk or not os.path.isfile(o.apk):
@@ -571,6 +772,8 @@ def main():
         except (Exception, SystemExit) as e:
             setup_error = "%s: %s" % (type(e).__name__, e)
             A.log("SETUP FAILED", setup_error, traceback.format_exc()[-800:])
+        if d.readback is not None:
+            res.note("display readback %s" % json.dumps(d.readback))
         try:
             t_end = A.mark("setup_end")
             ctx["windows"].append(("setup", t_setup if t_setup is not None else 0.0, t_end))
