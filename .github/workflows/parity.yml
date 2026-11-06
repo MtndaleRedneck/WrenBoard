@@ -242,7 +242,7 @@ jobs:
           avd-name: test
           disable-animations: true
           pre-emulator-launch-script: bash harness/tools/parity/avd_config.sh test
-          script: python3 harness/tools/parity/run_legs.py --role reference --out "$RUNNER_TEMP/out/reference"
+          script: python3 harness/tools/parity/run_legs.py --role reference --out "$RUNNER_TEMP/out/reference" --reference-ime "$RUNNER_TEMP/sk/ime-component.json"
       - name: Filter artifacts (screenshots, logs and results only; no APKs)
         id: filter_reference
         if: always()

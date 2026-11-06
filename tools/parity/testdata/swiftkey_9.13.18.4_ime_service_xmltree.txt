@@ -1,0 +1,16 @@
+N: android=http://schemas.android.com/apk/res/android (line=2)
+  E: manifest (line=2)
+    A: http://schemas.android.com/apk/res/android:versionCode(0x0101021b)=1236402240
+    A: package="com.touchtype.swiftkey" (Raw: "com.touchtype.swiftkey")
+      E: application (line=0)
+          E: service (line=0)
+            A: http://schemas.android.com/apk/res/android:name(0x01010003)="com.touchtype.KeyboardService" (Raw: "com.touchtype.KeyboardService")
+            A: http://schemas.android.com/apk/res/android:permission(0x01010006)="android.permission.BIND_INPUT_METHOD" (Raw: "android.permission.BIND_INPUT_METHOD")
+            A: http://schemas.android.com/apk/res/android:exported(0x01010010)=true
+            A: http://schemas.android.com/apk/res/android:directBootAware(0x01010505)=true
+              E: intent-filter (line=237)
+                  E: action (line=238)
+                    A: http://schemas.android.com/apk/res/android:name(0x01010003)="android.view.InputMethod" (Raw: "android.view.InputMethod")
+              E: meta-data (line=241)
+                A: http://schemas.android.com/apk/res/android:name(0x01010003)="android.view.im" (Raw: "android.view.im")
+                A: http://schemas.android.com/apk/res/android:resource(0x01010025)=@0x7f180006
