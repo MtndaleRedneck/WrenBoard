@@ -1,0 +1,3 @@
+2026-11-06T12:49:03.9233792380 143296403 build/intermediates/apk/stable/debug/app-stable-debug.apk
+2026-11-06T12:49:03.9753797620 428 build/intermediates/apk/stable/debug/output-metadata.json
+2026-11-06T12:49:04.1833818600 77 build/intermediates/apk_ide_redirect_file/stableDebug/createStableDebugApkListingFileRedirect/redirect.txt

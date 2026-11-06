@@ -35,7 +35,8 @@ def apk(path, libs):
 
 
 def tools(root, native="'arm64-v8a' 'x86_64'", pkg=F.PKG, vc="1236402240", signer=F.EXPECT):
-    bt = os.path.join(root, "build-tools", "99.0.0"); os.makedirs(bt, exist_ok=True)
+    bt = os.path.join(root, "build-tools", F.apksig.BUILD_TOOLS); os.makedirs(bt, exist_ok=True)
+    open(os.path.join(bt, "source.properties"), "w").write("Pkg.Revision=%s\n" % F.apksig.BUILD_TOOLS)
     for name, body in (("aapt2", "echo \"package: name='%s' versionCode='%s' versionName='9.0'\"\necho \"native-code: %s\"" % (pkg, vc, native)),
                        ("apksigner", "echo 'Signer #1 certificate SHA-256 digest: %s'" % signer)):
         p = os.path.join(bt, name)

@@ -15,6 +15,7 @@ sys.path.insert(0, HERE)
 import results as R
 import typing_eval as T
 import crashlog as CL
+import visual as V
 
 WPKG = "com.wrenboard.keyboard"
 SWPKG = "com.touchtype.swiftkey"
@@ -66,10 +67,12 @@ def png_size(path):
     return "%dx%d" % struct.unpack(">II", h[16:24])
 
 
-def display_readback(wm_size, wm_density, nav, tries=8):
+def display_readback(wm_size, wm_density, nav, tries=8, frame=None):
     """Read back what the device is after setup: wm size, wm density, navigation mode and enabled nav
     overlay, and an actual screenshot's pixel size. Every value must equal the requested one (a wm
-    override, if any, must equal it too); otherwise `mismatch` lists requested and observed values."""
+    override, if any, must equal it too); otherwise `mismatch` lists requested and observed values.
+    frame: Device.setup_frame()'s contemporaneous capture (screenshot between two UI dumps, checked by
+    visual.frame_check); its pixel size is the screenshot_px, and any frame problem is a mismatch."""
     want = {"size": "%dx%d" % wm_size, "density": str(wm_density), "nav_mode": NAV_MODE[nav]}
     for i in range(tries):
         nm = A.sh("settings get secure navigation_mode", check=False).strip()
@@ -79,7 +82,7 @@ def display_readback(wm_size, wm_density, nav, tries=8):
     sp, so = wm_value(A.sh("wm size"), "size")
     dp, do = wm_value(A.sh("wm density"), "density")
     ov = [l.strip() for l in A.sh("cmd overlay list android", check=False).splitlines() if "navbar" in l]
-    shot = png_size(A.shot("setup_readback"))
+    shot = png_size(A.shot("setup_readback")) if frame is None else frame.get("px")
     rb = {"requested": dict(want, nav=nav), "wm_size_physical": sp, "wm_size_override": so,
           "wm_density_physical": dp, "wm_density_override": do, "navigation_mode": nm,
           "nav_overlays": ov, "screenshot_px": shot}
@@ -93,6 +96,11 @@ def display_readback(wm_size, wm_density, nav, tries=8):
             mm[key] = {"requested": w, "observed": got}
     if not any(("[x] " + NAV_OVERLAY[nav]) in l for l in ov):
         mm["nav_overlay"] = {"requested": "[x] " + NAV_OVERLAY[nav], "observed": ov}
+    if frame is not None:
+        rb["setup_frame"] = frame
+        if frame.get("problems"):
+            mm["setup_frame"] = {"requested": "settled frame: test field shown, %s nav controls visible, agreeing with the UI dumps" % nav,
+                                 "observed": [p["category"] for p in frame["problems"]]}
     rb["mismatch"] = mm
     return rb
 
@@ -185,6 +193,7 @@ def installed_abi(pkg):
 class Device:
     def __init__(self, kbpkg):
         self.pkg, self.ime, self.km, self.hooks, self.readback = kbpkg, None, {}, False, None
+        self.keyboard_visible = None
 
     def setup(self, wm_size, wm_density, nav):
         A.run(["adb", "wait-for-device"], 180)
@@ -199,10 +208,6 @@ class Device:
                   "settings put secure show_ime_with_hard_keyboard 1"):
             A.sh(c)
         A.sh("pm disable-user --user 0 com.google.android.inputmethod.latin", check=False)
-        self.readback = display_readback(wm_size, wm_density, nav)
-        A.save("sys/display_readback.json", json.dumps(self.readback, indent=1))
-        if self.readback["mismatch"]:
-            raise Inconclusive("display readback mismatch %s" % json.dumps(self.readback["mismatch"]))
         # 32M keeps a full main-buffer dump under the artifact gate's 50 MB per-file cap; each leg's own
         # window is saved as it ends (sys/main/<leg>.txt), so ring wrap later cannot lose leg evidence.
         A.run(["adb", "logcat", "-G", "32M"], 20)
@@ -212,6 +217,21 @@ class Device:
         if not os.path.isfile(tgt):
             raise Inconclusive("test-input app not built (PARITY_TARGET_APK)")
         A.run(["adb", "install", "-r", "-g", tgt], 180)
+        # The display readback is taken only once the system is ready (boot complete, the launcher focused,
+        # no system dialog) and the test field is on screen and focused, from ONE settled capture: UI dump,
+        # screenshot, UI dump (run 2's setup PNG was a black frame with one pill while later dumps said
+        # 3-button). A dialog that keeps coming back, or a frame that contradicts its dumps, is a setup
+        # failure: every device leg of the role is then inconclusive.
+        frame = None
+        try:
+            self.system_ready()
+            frame = self.setup_frame(wm_size, nav)
+        except Inconclusive as e:
+            frame = {"px": None, "problems": [{"category": "not_ready", "detail": str(e)[:400]}]}
+        self.readback = display_readback(wm_size, wm_density, nav, frame=frame)
+        A.save("sys/display_readback.json", json.dumps(self.readback, indent=1))
+        if self.readback["mismatch"]:
+            raise Inconclusive("display readback mismatch %s" % json.dumps(self.readback["mismatch"])[:1500])
 
     def install(self, apks):
         out = A.run(["adb", "install-multiple" if len(apks) > 1 else "install", "-r", "-g"] + list(apks), 600)
@@ -249,13 +269,133 @@ class Device:
         vn = re.search(r"versionName=(\S+)", d); vc = re.search(r"versionCode=(\d+)", d)
         return {"version_name": vn.group(1) if vn else None, "version_code": vc.group(1) if vc else None}
 
-    def open_target(self):
+    def open_target(self, keyboard="require"):
+        """Start the test-input app and, before any key geometry or tap, prove readiness from a bounded
+        wait (wait_ui): no system dialog, the test field focused in the focused window and, with
+        keyboard="require", this keyboard's IME window visible; otherwise Inconclusive. keyboard="record"
+        (model legs) records IME visibility in self.keyboard_visible and leaves the verdict to the leg's own
+        graceful-disable checks, whose semantics are unchanged."""
         A.sh("am start -S -W -n %s/.TestInput" % A.TPKG, 30); time.sleep(1.5)
         A.tap(540, 300, 2.0)
         self.dismiss()
         if self.ime and A.sh("settings get secure default_input_method").strip() != self.ime:
             A.sh("ime set %s" % self.ime); time.sleep(1.5); A.tap(540, 300, 2.0)
+        st = self.focus("field", need_ime=(keyboard == "require"))
+        self.keyboard_visible = bool(st.get("ime_bounds"))
         A.clear_field()
+
+    # ---- readiness (bounded; no emulator restart, no retry chain, no other image or target) ----
+    READY_LIMIT_S, FOCUS_LIMIT_S, MAX_DISMISS, MAX_FOCUS_TAPS = 120.0, 45.0, 3, 3
+
+    def current_focus(self):
+        m = re.search(r"mCurrentFocus=Window\{\S+ \S+ ([^}]*)\}", A.sh("dumpsys window", 60, check=False))
+        return m.group(1).strip() if m else None
+
+    def wait_ui(self, tag, want, limit, on_miss=None):
+        """Poll windows dumps until want(state) returns None on two consecutive dumps. A system dialog
+        (ANR or crash, in the dump or as the focused window) gets "Wait" (else BACK) and is re-checked;
+        after MAX_DISMISS dismissals of a dialog that keeps returning, or past `limit` seconds or 40
+        polls, raise Inconclusive naming the last reason. Every dump is saved as ui/ready_<tag>_<n>.xml."""
+        t0, clean, dismissed, why = time.time(), 0, [], "no dump yet"
+        for i in range(40):
+            if time.time() - t0 > limit:
+                break
+            st = V.ui_state(A.dump_windows("ready_%s_%d" % (tag, i)), self.pkg)
+            cf = self.current_focus()
+            st["current_focus"] = cf
+            if cf and V.BLOCKER_TITLE.search(cf) or cf and cf.startswith("Application "):
+                st["blockers"] = st["blockers"] or [cf]
+            if st["blockers"] and st["blockers"] != ["no ui dump"]:
+                clean = 0
+                why = "system dialog %s" % st["blockers"]
+                if len(dismissed) >= self.MAX_DISMISS:
+                    A.log("READY", tag, "persistent dialog", st["blockers"])
+                    raise Inconclusive("readiness[persistent_blocker] %s: %s still shown after %d dismissals" % (tag, st["blockers"], len(dismissed)))
+                dismissed.append(st["blockers"][0])
+                if st.get("blocker_wait"):
+                    A.tap(*st["blocker_wait"], wait=2.0)
+                else:
+                    A.keyevent("KEYCODE_BACK", 2.0)
+                continue
+            why = want(st) if st["dump"] else "no ui dump"
+            if why:
+                clean = 0
+                if on_miss:
+                    on_miss(st)
+                time.sleep(1.5)
+                continue
+            clean += 1
+            if clean >= 2:
+                st["dismissed"] = dismissed
+                A.log("READY", tag, "after", i + 1, "dumps; dismissed", dismissed)
+                return st
+            time.sleep(1.0)
+        raise Inconclusive("readiness[not_ready] %s within %ds: %s" % (tag, limit, why))
+
+    def system_ready(self):
+        """Boot completed, the HOME activity's package is the focused window, no system dialog."""
+        t0 = time.time()
+        for _ in range(60):
+            if A.sh("getprop sys.boot_completed", check=False).strip() == "1":
+                break
+            if time.time() - t0 > self.READY_LIMIT_S:
+                break
+            time.sleep(2)
+        else:
+            raise Inconclusive("readiness[not_ready] boot not completed")
+        if A.sh("getprop sys.boot_completed", check=False).strip() != "1":
+            raise Inconclusive("readiness[not_ready] boot not completed within %ds" % self.READY_LIMIT_S)
+        out = A.sh("cmd package resolve-activity --brief -a android.intent.action.MAIN -c android.intent.category.HOME", check=False)
+        homes = [l.strip() for l in out.splitlines() if IME_ID.fullmatch(l.strip())]
+        if len(homes) != 1:
+            raise Inconclusive("readiness[not_ready] HOME activity not resolved: %r" % out[-200:])
+        home = homes[0].split("/")[0]
+        A.keyevent("KEYCODE_HOME", 1.5)
+        def want(st):
+            fw = st.get("focused_window") or {}
+            cf = st.get("current_focus") or ""
+            if fw.get("pkg") != home or (cf and not cf.startswith(home + "/")):
+                return "launcher %s not focused (window %s, focus %r)" % (home, fw, cf)
+            return None
+        return self.wait_ui("launcher", want, self.READY_LIMIT_S, on_miss=lambda st: A.keyevent("KEYCODE_HOME", 1.0))
+
+    def focus(self, tag, need_ime):
+        """The test-input field focused in the focused window (and this keyboard's IME window visible when
+        need_ime); a bounded number of taps on the field while it is not."""
+        taps = [0]
+        def want(st):
+            fw = st.get("focused_window") or {}
+            cf = st.get("current_focus") or ""
+            if fw.get("pkg") != A.TPKG or not st.get("field_focused") or (cf and not cf.startswith(A.TPKG + "/")):
+                return "readiness[field_not_focused] window %s, field focused %s, focus %r" % (fw, st.get("field_focused"), cf)
+            if need_ime and not st.get("ime_bounds"):
+                return "readiness[keyboard_not_visible] no visible %s input-method window" % self.pkg
+            return None
+        def tap(st):
+            if taps[0] < self.MAX_FOCUS_TAPS:
+                b = st.get("field_bounds")
+                A.tap(*(((b[0] + b[2]) // 2, min(b[1] + 232, (b[1] + b[3]) // 2)) if b else (540, 300)), wait=1.5)
+                taps[0] += 1
+        return self.wait_ui(tag, want, self.FOCUS_LIMIT_S, on_miss=tap)
+
+    def setup_frame(self, wm_size, nav, attempts=3):
+        """ONE contemporaneous capture after settling: UI dump, screenshot, UI dump, of the test-input app
+        with its field focused; checked by visual.frame_check (pixels against both dumps). Repeated (at
+        most `attempts`) only while the two dumps disagree, i.e. while the screen is still changing."""
+        A.sh("am start -S -W -n %s/.TestInput" % A.TPKG, 30); time.sleep(1.5)
+        self.focus("setup_frame", need_ime=False)
+        for i in range(attempts):
+            time.sleep(1.0)
+            before = V.ui_state(A.dump_windows("setup_readback_before"), self.pkg)
+            png = A.shot("setup_readback")
+            after = V.ui_state(A.dump_windows("setup_readback_after"), self.pkg)
+            probs, facts = V.frame_check(png, before, after, nav, wm_size)
+            if not any(p["category"] == "xml_unsettled" for p in probs):
+                break
+        frame = {"px": facts.get("px"), "problems": probs, "facts": facts, "attempts": i + 1,
+                 "png": "png/setup_readback.png", "ui": ["ui/setup_readback_before.xml", "ui/setup_readback_after.xml"]}
+        A.save("sys/setup_frame.json", json.dumps(frame, indent=1))
+        return frame
 
     def dismiss(self):
         """Close first-run dialogs that cover the field; everything else is left alone."""
@@ -568,18 +708,18 @@ def leg_model(variant):
             a = A.mark("op_%s_%s" % (variant, name))
             fn()
             b = A.mark("op_%s_%s_end" % (variant, name))
-            rec = {"op": name, "t_start": a, "t_end": b, "field_after": A.field(a), "pid": d.pid(),
+            rec = {"op": name, "t_start": a, "t_end": b, "field_after": A.field(a), "pid": d.pid(), "keyboard_visible": d.keyboard_visible,
                    "findings": [f["kind"] + "@" + f["package"] for f in d.findings(a, b)]}
             ops.append(rec)
             return rec
 
         op("install", lambda: (d.uninstall(), d.install([apk])))
         op("activate", d.activate)
-        op("open_target", d.open_target)
+        op("open_target", lambda: d.open_target(keyboard="record"))
         op("keymap", lambda: setattr(d, "km", d.keymap("model_" + variant)))
         if not d.hooks:
             return "inconclusive", {"reason": "no WBDBG hooks in this build", "ops": ops}
-        op("open_target_2", d.open_target)
+        op("open_target_2", lambda: d.open_target(keyboard="record"))
         g = op("glide_hello", lambda: d.glide("hello"))
         glided = d.settle()[0]
         g["field_after"] = glided

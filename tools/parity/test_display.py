@@ -110,8 +110,11 @@ def main():
     check("cmd overlay enable-exclusive --category com.android.internal.systemui.navbar.gestural" not in RL.A.cmds, "(readback alone changes nothing)")
     # 3. Device.setup gates on the readback
     tgt = os.path.join(tmp, "t.apk"); open(tgt, "w").write("x"); os.environ["PARITY_TARGET_APK"] = tgt
-    for kw, want_ok, why in (({}, True, "matching device"), ({"size": "1080x1920", "shot": (1080, 1920)}, False, "the first run's 1080x1920")):
-        RL.A = FakeA(tmp, **kw)
+    # (v3.3: Device.setup now also waits for readiness and gates on the settled setup frame, so the device
+    # here is testkit.ScriptA: run 2's real dumps and a true synthetic frame; test_frame.py covers the frame.)
+    import testkit as K
+    for kw, want_ok, why in (({}, True, "matching device"), ({"size": "1080x1920"}, False, "the first run's 1080x1920")):
+        RL.A = K.ScriptA(**kw)
         d = RL.Device(RL.WPKG)
         try:
             d.setup((1080, 2316), 450, "3button"); ok = True
@@ -122,7 +125,7 @@ def main():
         check("cmd overlay enable-exclusive --category com.android.internal.systemui.navbar.threebutton" in RL.A.cmds
               and not any(c.startswith("wm size ") or c.startswith("wm density ") for c in RL.A.cmds),
               "Device.setup (%s) enables the 3-button overlay and applies no wm override" % why)
-    RL.A = FakeA(tmp, nav="2", overlay="gestural"); d = RL.Device(RL.WPKG); d.setup((1080, 2316), 450, "gesture")
+    RL.A = K.ScriptA(nav="gesture", navmode="2", overlay="gestural"); d = RL.Device(RL.WPKG); d.setup((1080, 2316), 450, "gesture")
     check("cmd overlay enable-exclusive --category com.android.internal.systemui.navbar.gestural" in RL.A.cmds, "Device.setup enables the gestural overlay for nav=gesture")
     # 3b. the reference must run native: primaryCpuAbi read back after install
     for out, want in (("    primaryCpuAbi=x86_64\n    secondaryCpuAbi=null\n", "x86_64"), ("    primaryCpuAbi=arm64-v8a\n", "arm64-v8a"),

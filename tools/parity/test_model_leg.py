@@ -44,11 +44,12 @@ class FakeA:
 class FakeDevice:
     def __init__(self, A, sc):
         self.A, self.sc, self.hooks, self.km, self.pkg = A, sc, True, {}, RL.WPKG
+        self.keyboard_visible, self.open_modes = True, []
         self.pids = iter(sc.get("pids", ["4321"] * 20))
     def uninstall(self): pass
     def install(self, apks): pass
     def activate(self): pass
-    def open_target(self): self.A.fieldv = ""
+    def open_target(self, keyboard="require"): self.open_modes.append(keyboard); self.A.fieldv = ""
     def keymap(self, tag): return {"h": (1, 1)}
     def glide(self, w): self.A.fieldv = self.sc["glide_commit"]
     def type_keys(self, s): self.A.fieldv = (self.A.fieldv + " " + s).strip() + " "

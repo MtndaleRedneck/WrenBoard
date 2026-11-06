@@ -8,7 +8,8 @@ Everything stays in $RUNNER_TEMP/sk, outside the workspace; nothing here is comm
 Fails closed (exit 1) unless: the mirror names a download, the bundle's manifest names
 com.touchtype.swiftkey, the base APK and an ABI split for the emulator are present, every APK that
 will be installed has package com.touchtype.swiftkey, one shared versionCode, and exactly one signer
-equal to SwiftKey's certificate. Writes install-list.txt only after every check passes.
+equal to SwiftKey's certificate (apksig.py: pinned build-tools 37.0.0, both apksigner output forms).
+Writes install-list.txt only after every check passes.
 
 --source apkpure-universal (the native x86_64 route): the same mirror API asked for x86_64 only lists
 plain single APKs. The option takes exactly the one listed APK with the requested --version-code, and
@@ -19,6 +20,8 @@ one signer equal to the same certificate pin. No ARM-translated or ABI-less buil
 Usage: fetch_swiftkey.py [--abi x86_64] [--source xapk|apkpure-universal] [--version-code N] [--selftest]
 """
 import argparse, base64, glob, json, os, re, struct, subprocess, sys, urllib.parse, urllib.request, zipfile
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import apksig
 
 PKG = "com.touchtype.swiftkey"
 EXPECT = "0ad0088dfb347a8a515f2d13b17a561d5c3f9773438a207241bae7483c99b76f"  # TouchType Limited
@@ -43,14 +46,11 @@ def choose(names, abi):
 
 
 def tool(name):
-    root = os.environ.get("ANDROID_HOME") or os.environ.get("ANDROID_SDK_ROOT")
-    if not root:
-        raise FetchError("ANDROID_HOME is not set")
-    c = sorted(glob.glob(os.path.join(root, "build-tools", "*", name)),
-               key=lambda p: [int(x) if x.isdigit() else 0 for x in re.split(r"[.-]", p.split(os.sep)[-2])])
-    if not c:
-        raise FetchError("%s not found" % name)
-    return c[-1]
+    """The pinned build-tools copy of NAME (apksig.BUILD_TOOLS); fails closed when it is not present."""
+    try:
+        return apksig.build_tool(name)
+    except apksig.SignerError as e:
+        raise FetchError(str(e))
 
 
 def run(cmd):
@@ -69,12 +69,13 @@ def verify_split(path, version_code=None):
     if version_code is not None and m.group(2) != version_code:
         raise FetchError("%s: versionCode %s, base is %s" % (os.path.basename(path), m.group(2), version_code))
     rc, out = run([tool("apksigner"), "verify", "--print-certs", path])
-    # Only "Signer #N certificate" lines are app signers. A Play-distributed APK also prints "Source Stamp
-    # Signer certificate SHA-256 digest" (Google's distribution stamp, not a signer); counting it made the
-    # real 9.13.18.4 APK fail with two "signers" in the first local end-to-end fetch.
-    signers = sorted(set(s.lower() for s in re.findall(r"^Signer #\d+ certificate SHA-256 digest: ([0-9a-fA-F]{64})\s*$", out, re.M)))
-    if rc != 0 or signers != [EXPECT]:
-        raise FetchError("%s: signer %s (rc %d), expected exactly %s" % (os.path.basename(path), signers, rc, EXPECT))
+    # apksig.check_signer: the 34.x ("Signer #N certificate") and 37.x ("V2 Signer:", "V3.0 Signer:")
+    # app-signer forms, exactly one distinct app signer equal to the pin; the Play source stamp ("Source
+    # Stamp Signer") is never a signer; nonzero exit, unrecognised, missing or multiple signers fail.
+    try:
+        apksig.check_signer(rc, out, EXPECT)
+    except apksig.SignerError as e:
+        raise FetchError("%s: signer check failed (build-tools %s): %s" % (os.path.basename(path), apksig.BUILD_TOOLS, e))
     return m.group(2)
 
 

@@ -7,17 +7,16 @@ Usage: check_apk.py APK --package P [--version-name V] [--version-code C] [--abi
 import argparse, glob, json, os, re, subprocess, sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, HERE)
+import apksig
 
 
 def build_tool(name):
-    root = os.environ.get("ANDROID_HOME") or os.environ.get("ANDROID_SDK_ROOT")
-    if not root:
-        raise SystemExit("ANDROID_HOME is not set")
-    c = sorted(glob.glob(os.path.join(root, "build-tools", "*", name)),
-               key=lambda p: [int(x) if x.isdigit() else x for x in re.split(r"[.-]", p.split(os.sep)[-2])])
-    if not c:
-        raise SystemExit("%s not found in build-tools" % name)
-    return c[-1]
+    """The pinned build-tools copy (apksig.BUILD_TOOLS); a missing pin is a failed check, never a fallback."""
+    try:
+        return apksig.build_tool(name)
+    except apksig.SignerError as e:
+        raise SystemExit("APK CHECK FAIL: %s" % e)
 
 
 def readback(apk):
@@ -29,7 +28,12 @@ def readback(apk):
         info.update(package=m.group(1), version_code=m.group(2), version_name=m.group(3))
     m = re.search(r"native-code: (.*)", b.stdout)
     info["abis"] = re.findall(r"'([^']+)'", m.group(1)) if m else []
-    info["signers"] = sorted(set(x.lower() for x in re.findall(r"certificate SHA-256 digest: ([0-9a-fA-F]{64})", s.stdout)))
+    # Strict reader shared with fetch_swiftkey.py: both apksigner forms, the source stamp never counted,
+    # exactly one distinct app signer (else signers is empty and signer_error says why).
+    try:
+        info["signers"] = [apksig.app_signer(s.returncode, s.stdout)[0]]
+    except apksig.SignerError as e:
+        info["signers"], info["signer_error"] = [], str(e)
     return info
 
 
@@ -54,7 +58,8 @@ def check(apk, package, version_name=None, version_code=None, abi=None, signer=N
     if abi is not None and not info["abis"]:
         p.append("no native-code line; cannot confirm %s" % abi)
     if signer is not None and info["signers"] != [signer.lower()]:
-        p.append("signer %s, expected exactly %s" % (info["signers"], signer.lower()))
+        p.append("signer %s, expected exactly %s%s" % (info["signers"], signer.lower(),
+                 " (%s)" % info["signer_error"] if info.get("signer_error") else ""))
     return info, p
 
 

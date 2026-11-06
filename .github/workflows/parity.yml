@@ -145,14 +145,15 @@ jobs:
           cp build/test-results/testStableDebugUnitTest/*.xml "$RUNNER_TEMP/out/$ROLE/unit/" 2>/dev/null || true
       - name: Build the debug app (exactly one APK, kept in RUNNER_TEMP)
         working-directory: app
+        # The APK is taken from AGP's own stableDebug listing redirect and output metadata (apk_output.py),
+        # never by a glob: with the injected ABI flag AGP 8.10.1 writes it under build/intermediates/apk/,
+        # not build/outputs/apk/ (run 2). The stamp lets apk_output.py refuse anything older than this build.
         run: |
           bash ../harness/tools/parity/check_version_env.sh
+          mkdir -p "$RUNNER_TEMP/app" "$RUNNER_TEMP/out/$ROLE"
+          touch "$RUNNER_TEMP/build.stamp"
           ./gradlew --no-daemon assembleStableDebug -Pandroid.injected.build.abi=x86_64
-          shopt -s nullglob
-          apks=(build/outputs/apk/stable/debug/*.apk)
-          [ "${#apks[@]}" -eq 1 ] || { echo "::error::expected one debug APK, found ${#apks[@]}"; exit 1; }
-          mkdir -p "$RUNNER_TEMP/app"
-          cp "${apks[0]}" "$RUNNER_TEMP/app/app-debug.apk"
+          python3 ../harness/tools/parity/apk_output.py --build-dir build --variant stableDebug --application-id com.wrenboard.keyboard --abi x86_64 --not-before "$RUNNER_TEMP/build.stamp" --copy-to "$RUNNER_TEMP/app/app-debug.apk" --json "$RUNNER_TEMP/out/$ROLE/apk_discovery.json"
           python3 ../harness/tools/parity/check_apk.py "$RUNNER_TEMP/app/app-debug.apk" --package com.wrenboard.keyboard --abi x86_64
       - name: Build the test-input app and the typing tool from source
         run: |
