@@ -16,9 +16,10 @@ jobs:
   android:
     runs-on: ubuntu-latest
     env:
-      # WrenBoard 1.5 release packaging: the in-app updater offers 1.5 only above 1.4.0/5
-      VERSION_NAME: 1.5.0
-      VERSION_CODE: "6"
+      # WrenBoard 1.6 release packaging: versionCode 7 > 1.5.0's 6, so the in-app updater
+      # offers 1.6 to 1.5 users. Same release signing key as 1.5 (secrets unchanged).
+      VERSION_NAME: 1.6.0
+      VERSION_CODE: "7"
     steps:
       - uses: actions/checkout@v4
       - name: Init build submodules (bundled English voice model cleared, provenance in README-WRENBOARD.md)
