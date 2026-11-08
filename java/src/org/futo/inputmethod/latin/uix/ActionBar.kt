@@ -801,46 +801,10 @@ fun ActionItemSmall(action: Action, onSelect: (Action) -> Unit, onLongSelect: (A
 fun ActionItems(onSelect: (Action) -> Unit, onLongSelect: (Action) -> Unit) {
     val context = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current
-    val actions = if(!LocalInspectionMode.current) {
-        useDataStoreValue(FavoriteActions)
-    } else {
-        FavoriteActions.default
-    }
-
-    val scrollItemIndex = if(LocalInspectionMode.current) { 0 } else {
-        remember {
-            context.getSettingBlocking(ActionBarScrollIndexSetting)
-        }
-    }
-
-    val scrollItemOffset = if(LocalInspectionMode.current) { 0 } else {
-        remember {
-            context.getSettingBlocking(ActionBarScrollOffsetSetting)
-        }
-    }
-
-    // WrenBoard: emoji lives on the bottom-row action key AND in the toolbar. The action editor
-    // de-duplicates across categories, so mirror emoji into the toolbar whenever it is the
-    // action key. Moving emoji elsewhere (or disabling it) removes it from both places.
-    val editorMap = if(!LocalInspectionMode.current) {
-        useDataStoreValue(ActionsSettings)
-    } else {
-        ActionsSettings.default
-    }
-    val emojiIsActionKey = remember(editorMap) {
-        editorMap.toActionEditorItems().ensureWellFormed().toActionMap()[ActionCategory.ActionKey]
-            ?.firstOrNull() == EmojiAction
-    }
-
-    val actionItems = remember(actions, emojiIsActionKey) {
-        val base = actions.toActionList().toSet().toMutableList()
-        if(emojiIsActionKey && !base.contains(EmojiAction)) {
-            // approved order: Clipboard, Emoji, GIF, ...
-            val clipIdx = base.indexOf(ClipboardHistoryAction)
-            base.add(if(clipIdx >= 0) clipIdx + 1 else 0, EmojiAction)
-        }
-        base.toList()
-    }
+    val unified = org.futo.inputmethod.latin.uix.actions.useUnifiedActions()
+    val actionItems = unified.visible.take(6).mapNotNull { org.futo.inputmethod.latin.uix.actions.AllActionsMap[it] }
+    val scrollItemIndex = 0
+    val scrollItemOffset = 0
 
     val lazyListState = rememberLazyListState(scrollItemIndex, scrollItemOffset)
 
@@ -1180,7 +1144,7 @@ fun ActionBar(
                         }
 
                         if(inlineSuggestions.isEmpty()) {
-                            PinnedActionItems(onActionActivated, onActionAltActivated)
+                            // Pinned action feature removed in 1.7; all actions share one order.
                         }
                     }
                 }

@@ -171,11 +171,8 @@ public class SettingsValues {
         mIncludesOtherImesInLanguageSwitchList = Settings.ENABLE_SHOW_LANGUAGE_SWITCH_KEY_SETTINGS
                 ? prefs.getBoolean(Settings.PREF_INCLUDE_OTHER_IMES_IN_LANGUAGE_SWITCH_LIST, false)
                 : true /* forcibly */;
-        mActionKeyId = ActionRegistry.INSTANCE.actionStringIdToIdx(
-                prefs.getString(
-                        Settings.PREF_ACTION_KEY_ID,
-                        RegistryKt.getDefaultActionKey()
-                ));
+        // WrenBoard 1.7: fixed emoji key, no legacy reassignment influence.
+        mActionKeyId = ActionRegistry.INSTANCE.actionStringIdToIdx("emoji");
         mShowsActionKey = mActionKeyId != -1;
         mIsNumberRowEnabledByUser = prefs.getBoolean(Settings.PREF_ENABLE_NUMBER_ROW, true);
         mIsNumberRowEnabled = mIsNumberRowEnabledByUser

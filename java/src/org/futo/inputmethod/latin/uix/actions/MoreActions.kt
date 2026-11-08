@@ -32,6 +32,11 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.remember
@@ -127,23 +132,20 @@ fun MoreActionsView() {
     val manager = if(LocalInspectionMode.current) { null } else { LocalManager.current }
     val context = LocalContext.current
 
-    val actionList = if(LocalInspectionMode.current) {
-        ActionsSettings.default
-    } else {
-        useDataStoreValue(ActionsSettings)
+    val unified = useUnifiedActions()
+    val actions = unified.visible.mapNotNull { AllActionsMap[it] }
+    var showHidden by remember { mutableStateOf(false) }
+    if (showHidden) {
+        Column {
+            TextButton(onClick = { showHidden = false }) { Text("Back to actions") }
+            LazyVerticalGrid(columns = GridCells.Fixed(4)) {
+                items(unified.hidden.mapNotNull { AllActionsMap[it] }.filter { it.shownInEditor }, key = { it.name }) { action ->
+                    ActionItem(action, Modifier.clickable { manager?.activateAction(action) })
+                }
+            }
+        }
+        return
     }
-
-    val map = remember(actionList) {
-        actionList.toActionEditorItems().ensureWellFormed().toActionMap()
-    }
-
-    val actions = remember(actionList) {
-        (map[ActionCategory.Favorites] ?: listOf()) +
-                (map[ActionCategory.ActionKey] ?: listOf()) +
-                (map[ActionCategory.PinnedKey] ?: listOf()) +
-                (map[ActionCategory.More]      ?: listOf())
-    }
-
     if(actions.isEmpty()) {
         ScreenTitle(stringResource(R.string.action_editor_warning_no_actions))
     }
@@ -156,6 +158,9 @@ fun MoreActionsView() {
         horizontalArrangement = Arrangement.spacedBy(0.dp),
         verticalArrangement = Arrangement.spacedBy(0.dp)
     ) {
+        item(key = "hidden-destination") {
+            TextButton(onClick = { showHidden = true }, modifier = Modifier.height(74.dp)) { Text("Hidden") }
+        }
         items(actions, key = { it.name }) {
             // WrenBoard harness: log each grid tile's center in DEBUG builds, same as the toolbar.
             val wbView = LocalView.current
@@ -176,101 +181,48 @@ fun MoreActionsView() {
 @Composable
 fun ActionsEditor(header: @Composable () -> Unit) {
     val context = LocalContext.current
-    val resources = LocalResources.current
+    val scope = rememberCoroutineScope()
+    val inspecting = LocalInspectionMode.current
+    var draft by remember { mutableStateOf(if(inspecting) migrateUnifiedActionIds(ActionsSettings.default) else context.readUnifiedActions()) }
+    var hiddenOpen by remember { mutableStateOf(false) }
+    var saved by remember { mutableStateOf(false) }
     val view = LocalView.current
-
-    val initialList: List<ActionEditorItem> = if(!LocalInspectionMode.current) {
-        remember {
-            context.getSettingBlocking(ActionsSettings).toActionEditorItems().ensureWellFormed().filter {
-                it !is ActionEditorItem.Item || it.action.shownInEditor
-            }
-        }
-    } else {
-        DefaultActionSettings.flattenToActionEditorItems()
-    }
-
-    val list = remember { initialList.toMutableStateList() }
-    val lazyListState = rememberLazyGridState()
-    val reorderableLazyListState = rememberReorderableLazyGridState(lazyListState) { from, to ->
-        val itemToAdd = list.removeAt(from.index)
-        list.add(to.index, itemToAdd)
-
-        view.performHapticFeedback(HapticFeedbackConstants.SEGMENT_FREQUENT_TICK)
-    }
-
-    if(!LocalInspectionMode.current) {
-        DisposableEffect(Unit) {
-            onDispose {
-                val map = list.toActionMap()
-                context.updateSettingsWithNewActions(map)
-            }
+    val lazyState = rememberLazyGridState()
+    // Sentinel remains fixed and reachable. Moving onto it transfers the action to Hidden.
+    val shownIds = if(hiddenOpen) draft.hidden.filter { AllActionsMap[it]?.shownInEditor == true } else draft.visible
+    val reorder = rememberReorderableLazyGridState(lazyState) { from, to ->
+        val id = from.key as? String
+        if (id != null && id != "hidden-destination" && !hiddenOpen) {
+            draft = if(to.key == "hidden-destination") draft.hide(id)
+                else draft.move(id, shownIds.indexOf(to.key).coerceAtLeast(0))
+            saved = false
+            view.performHapticFeedback(HapticFeedbackConstants.SEGMENT_FREQUENT_TICK)
         }
     }
-
-    val actionMap = list.toActionMap()
-
-    LazyVerticalGrid(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(8.dp, 0.dp),
-        state = lazyListState,
-        columns = GridCells.Fixed(4),
-        horizontalArrangement = Arrangement.spacedBy(0.dp),
-        verticalArrangement = Arrangement.spacedBy(0.dp)
-    ) {
-
-        items(list, key = { it.toKey() }, span = {
-            when(it) {
-                is ActionEditorItem.Item -> GridItemSpan(1)
-                is ActionEditorItem.Separator -> GridItemSpan(maxLineSpan)
-            }
-        }) {
-            when(it) {
-                is ActionEditorItem.Item -> {
-                    ReorderableItem(reorderableLazyListState, key = it.toKey()) { isDragging ->
-                        ActionItem(it.action, Modifier.longPressDraggableHandle(
-                            onDragStarted = {
-                                view.performHapticFeedback(HapticFeedbackConstants.DRAG_START)
-                            },
-                            onDragStopped = {
-                                view.performHapticFeedback(HapticFeedbackConstants.GESTURE_END)
-                            },
-                        ), dragIcon = false)
+    Column(Modifier.fillMaxSize()) {
+        header()
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            TextButton(onClick = { hiddenOpen = !hiddenOpen }) { Text(if(hiddenOpen) "Back to actions" else "Customize actions") }
+            TextButton(onClick = { scope.launch { context.saveUnifiedActions(draft); saved = true } }) { Text(if(saved) "Saved" else "Done") }
+        }
+        Text(if(hiddenOpen) "Tap an action to bring it back." else "Hold and drag to reorder. Drag onto Hidden to hide.",
+            Modifier.padding(8.dp), style = Typography.Small)
+        LazyVerticalGrid(state = lazyState, columns = GridCells.Fixed(4), modifier = Modifier.fillMaxSize().padding(8.dp)) {
+            item(key = "hidden-destination") {
+                ReorderableItem(reorder, key = "hidden-destination", enabled = false) {
+                    TextButton(onClick = { hiddenOpen = !hiddenOpen }, modifier = Modifier.height(74.dp)) {
+                        Text(if(hiddenOpen) "Actions" else "Hidden (" + draft.hidden.count { AllActionsMap[it]?.shownInEditor == true } + ")")
                     }
                 }
-                is ActionEditorItem.Separator -> {
-                    ReorderableItem(reorderableLazyListState, modifier = Modifier.fillMaxWidth(), key = it.toKey(), enabled = it.category != ActionCategory.entries[0]) { _ ->
-                        Column {
-                            if (it.category == ActionCategory.entries[0]) {
-                                header()
-
-                                if (actionMap[ActionCategory.ActionKey]?.let { it.size > 1 } == true) {
-                                    WarningTip(stringResource(R.string.action_editor_error_more_than_one_action_key))
-                                } else if (actionMap[ActionCategory.PinnedKey]?.let { it.size >= 3 } == true) {
-                                    WarningTip(stringResource(R.string.action_editor_warning_too_many_pinned))
-                                }
-                            }
-                            Text(it.category.name(LocalResources.current), modifier = Modifier.padding(top = 12.dp), style = Typography.Small)
-                            if (it.category == ActionCategory.entries[0]) Text(stringResource(R.string.wren17_drag_hint), modifier = Modifier.padding(vertical = 12.dp), style = Typography.Small)
-
-                            if(false && actionMap[it.category]?.isEmpty() == true && it.category != ActionCategory.entries.last()) {
-                                TextButton(onClick = {
-                                    val selfIdx = list.indexOf(it)
-                                    val itemToMove = list.subList(
-                                        selfIdx,
-                                        list.size
-                                    ).firstOrNull { v -> v is ActionEditorItem.Item }
-
-                                    if (itemToMove != null) {
-                                        val idx = list.indexOf(itemToMove)
-
-                                        list.add(selfIdx + 1, list.removeAt(idx))
-                                    }
-                                }) {
-                                    Text(stringResource(R.string.action_editor_add_next_action))
-                                }
-                            }
-                        }
+            }
+            items(shownIds, key = { it }) { id ->
+                val action = AllActionsMap[id]
+                if(action != null) {
+                    ReorderableItem(reorder, key = id) { _ ->
+                        val itemModifier = if(hiddenOpen) Modifier.clickable {
+                            draft = draft.show(id, draft.visible.size); saved = false
+                        } else Modifier.longPressDraggableHandle()
+                        ActionItem(action, itemModifier)
                     }
                 }
             }
