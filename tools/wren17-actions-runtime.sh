@@ -5,6 +5,12 @@ PKG=com.wrenboard.keyboard
 OUT=actions17
 mkdir -p "$OUT"
 export_screens() {
+ echo 'W17_FAILURE_DIAGNOSTICS_BEGIN'
+ adb logcat -d -b crash -v brief | tail -180 || true
+ adb logcat -d -s AndroidRuntime:E WBDBG:I | tail -180 || true
+ adb shell dumpsys input_method | grep -E 'mCurMethodId|mInputShown|mShowRequested|mCurFocusedWindow' || true
+ echo 'W17_FAILURE_DIAGNOSTICS_END'
+
 python3 - "$OUT" <<'PY'
 from pathlib import Path
 from PIL import Image
