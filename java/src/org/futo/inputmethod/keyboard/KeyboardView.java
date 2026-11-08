@@ -592,6 +592,13 @@ public class KeyboardView extends View {
                 labelBaseline = skTop + skBodyH / 2.0f - (mTextBounds.top + mTextBounds.bottom) / 2.0f;
             }
 
+            // Popup glyphs are centred by their visible ink. They must not inherit the
+            // letters-page punctuation baseline, which moved all four period choices up.
+            if (skGeom && key.getVisualStyle() == org.futo.inputmethod.v2keyboard.KeyVisualStyle.MoreKey) {
+                paint.getTextBounds("!", 0, 1, mTextBounds);
+                labelBaseline = keyHeight * 0.50f - (mTextBounds.top + mTextBounds.bottom) / 2.0f;
+            }
+
             // Horizontal label text alignment
             if (key.isAlignLabelOffCenter()) {
                 // The label is placed off center of the key. Used mainly on "phone number" layout.
@@ -765,7 +772,7 @@ public class KeyboardView extends View {
             if (key.getCode() == Constants.CODE_SPACE && icon instanceof NinePatchDrawable) {
                 iconWidth = (int)(keyWidth * mSpacebarIconWidthRatio);
             } else if (KeyboardIconsSet.NAME_SPACE_KEY_FOR_NUMBER_LAYOUT.equals(key.getIconId())) {
-                // SwiftKey parity (spec v1.1 item 56, measured on Ezzy's S22 Ultra): the symbols-page
+
                 // space glyph is a bracket 32.0 dp wide x 9.2 dp tall (3 dp stroke lives in the vector).
                 iconWidth = Math.round(32.0f * iconDm);
                 iconHeightOverride = Math.round(9.2f * iconDm);

@@ -91,10 +91,10 @@ val ThirdPartyList: List<ThirdPartyItem> = listOf(
         License.Apache2
     ),
     TP(
-        "Noto Emoji",
-        "Noto Emoji",
-        "https://fonts.google.com/noto/specimen/Noto+Emoji",
-        "Copyright (c) 2013 Google LLC",
+        "Noto Color Emoji",
+        "Noto Color Emoji",
+        "https://github.com/googlefonts/noto-emoji/",
+        "Copyright 2022 Google Inc.",
         License.OFL1_1
     ),
     TP(
