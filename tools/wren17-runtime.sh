@@ -49,8 +49,17 @@ adb shell ime set "$IME"
 adb shell settings put secure show_ime_with_hard_keyboard 1
 adb shell pm grant "$PKG" android.permission.RECORD_AUDIO
 shot() { adb exec-out screencap -p > "$OUT/$1.png"; }
-dump() { adb shell uiautomator dump /sdcard/w17.xml >/dev/null; adb exec-out cat /sdcard/w17.xml > "$OUT/$1.xml"; }
-openpage() { adb shell input keyevent KEYCODE_HOME; adb shell am start -n "$PKG/org.futo.inputmethod.latin.uix.settings.SettingsActivity" -f 0x34000000 --es navDest "$1" >/dev/null; sleep 3; shot "$1"; dump "$1"; }
+dump() {
+ for ATTEMPT in 1 2 3 4 5; do
+  adb shell rm -f /sdcard/w17.xml
+  adb shell uiautomator dump /sdcard/w17.xml >/dev/null 2>&1 || true
+  adb exec-out cat /sdcard/w17.xml > "$OUT/$1.xml" 2>/dev/null || true
+  if python3 -c 'import sys,xml.etree.ElementTree as E;assert E.parse(sys.argv[1]).getroot().tag=="hierarchy"' "$OUT/$1.xml" 2>/dev/null; then return 0; fi
+  sleep 2
+ done
+ echo "No valid UI hierarchy for $1 after5attempts" >&2;return 1
+}
+openpage() { adb shell input keyevent KEYCODE_HOME; adb shell am start -n "$PKG/org.futo.inputmethod.latin.uix.settings.SettingsActivity" -f 0x34000000 --es navDest "$1" >/dev/null; sleep 3; dump "$1"; shot "$1"; }
 for page in home themes wren_typing wren_emoji wren_rich_input wren_layout wren_sound wren_backup wren_advanced wren_futo; do
  openpage "$page"
  echo "PAGE $page"
