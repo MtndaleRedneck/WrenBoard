@@ -192,6 +192,31 @@ private fun popupBox(context: android.content.Context): GradientDrawable {
     }
 }
 
+private fun popupSelection(context: android.content.Context): android.graphics.drawable.Drawable =
+    object : android.graphics.drawable.Drawable() {
+        private val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
+        private val rect = android.graphics.RectF()
+        override fun draw(canvas: android.graphics.Canvas) {
+            val dx = dpPx(context, 2f)
+            val dy = dpPx(context, 5f)
+            rect.set(bounds.left + dx, bounds.top + dy, bounds.right - dx, bounds.bottom - dy)
+            if (rect.width() <= 0 || rect.height() <= 0) return
+            paint.style = android.graphics.Paint.Style.FILL
+            paint.shader = android.graphics.LinearGradient(0f, rect.top, 0f, rect.bottom,
+                0xFF595959.toInt(), 0xFF393939.toInt(), android.graphics.Shader.TileMode.CLAMP)
+            canvas.drawRoundRect(rect, dpPx(context, 5f), dpPx(context, 5f), paint)
+            paint.shader = null
+            paint.style = android.graphics.Paint.Style.STROKE
+            paint.strokeWidth = dpPx(context, 0.8f).coerceAtLeast(1f)
+            paint.color = 0xFF222222.toInt()
+            canvas.drawRoundRect(rect, dpPx(context, 5f), dpPx(context, 5f), paint)
+        }
+        override fun setAlpha(alpha: Int) { paint.alpha = alpha }
+        override fun setColorFilter(filter: android.graphics.ColorFilter?) { paint.colorFilter = filter }
+        @Deprecated("Deprecated in Java")
+        override fun getOpacity(): Int = android.graphics.PixelFormat.TRANSLUCENT
+    }
+
 private fun wrenKeyBackgrounds(context: android.content.Context) = KeyedBitmaps(
     listOf(
         // Long-press popup (P0-1): one solid box with a light border, items drawn flat inside it, and the item
@@ -223,13 +248,8 @@ private fun wrenKeyBackgrounds(context: android.content.Context) = KeyedBitmaps(
                 hintColor = HintGrey,
                 outlineColor = 0xFFD0D0D0.toInt(),
                 outlineWidth = 1.dp,
-                // S7: selected cell inset so it doesn't paint over the panel outline (420dpi px in Rect)
-                padding = run { val d = context.resources.displayMetrics.density; android.graphics.Rect((2*d).toInt(), (5*d).toInt(), (2*d).toInt(), (5*d).toInt()) },
-                background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
-                    intArrayOf(0xFF595959.toInt(), 0xFF393939.toInt())).apply {
-                    cornerRadius = dpPx(context, 5.dp.value)
-                    setStroke(dpPx(context, 0.8f).toInt().coerceAtLeast(1), 0xFF222222.toInt())
-                }
+                // Visual inset belongs to the drawable; KeyBackground.padding only affects hints.
+                background = popupSelection(context)
             )
         ),
         KeyedBitmap(
