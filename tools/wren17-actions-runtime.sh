@@ -97,6 +97,9 @@ adb shell am broadcast -a com.wrenboard.keyboard.WBDBG -p "$PKG" --es cmd open:m
 shot direct_reopened
 taptext Hidden
 shot hidden_open
+# Restored item is appended to Hidden; scroll its grid into view.
+adb shell input swipe 800 1990 800 1440 500; sleep 1
+shot hidden_scrolled
 taptext Emojis
 shot restored_saved
 adb shell input keyevent KEYCODE_BACK;sleep 1

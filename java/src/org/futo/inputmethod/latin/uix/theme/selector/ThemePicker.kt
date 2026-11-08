@@ -363,7 +363,7 @@ fun ThemePicker(onDeleteCustomTheme: (String) -> Unit, onCustomTheme: () -> Unit
                         }
                     }
                 }
-                item(span = { GridItemSpan(maxCurrentLineSpan) }) {
+                item(span = { GridItemSpan(maxLineSpan) }) {
                     ScreenTitle(stringResource(R.string.theme_settings_custom_themes))
                 }
 
@@ -388,8 +388,8 @@ fun ThemePicker(onDeleteCustomTheme: (String) -> Unit, onCustomTheme: () -> Unit
                     VisitThemeStoreButton(customThemes.isEmpty())
                 }
 
-                item(span = { GridItemSpan(maxCurrentLineSpan) }) { }
-                item(span = { GridItemSpan(maxCurrentLineSpan) }) {
+                item(span = { GridItemSpan(maxLineSpan) }) { }
+                item(span = { GridItemSpan(maxLineSpan) }) {
                     ScreenTitle(stringResource(R.string.theme_settings_default_themes))
                 }
                 items(assetThemes) { name ->
@@ -410,9 +410,9 @@ fun ThemePicker(onDeleteCustomTheme: (String) -> Unit, onCustomTheme: () -> Unit
                 }
 
 
-                item(span = { GridItemSpan(maxCurrentLineSpan) }) { }
+                item(span = { GridItemSpan(maxLineSpan) }) { }
 
-                item(span = { GridItemSpan(maxCurrentLineSpan) }) {
+                item(span = { GridItemSpan(maxLineSpan) }) {
                     if(ZipThemes.ThemeFileName.fromSetting(currentTheme) == null) {
                         CompositionLocalProvider(LocalLayoutDirection provides originalDirection) {
                             SettingToggleDataStore(
