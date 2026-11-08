@@ -264,23 +264,10 @@ fun AddCustomThemeButton(short: Boolean = false, onClick: () -> Unit = { }) {
 
     val keyboardShape = RoundedCornerShape(8.dp)
 
-    Surface(
-        modifier = Modifier
-            .padding(12.dp)
-            .width(172.dp)
-            .height(if(short) 64.dp else 128.dp ),
-        onClick = { onClick() },
-        color = currColors.surfaceVariant,
-        shape = keyboardShape
-    ) {
-        Box(modifier = Modifier.fillMaxSize()) {
-            Icon(
-                Icons.Default.Add,
-                contentDescription = stringResource(R.string.theme_settings_add_new_theme),
-                modifier = Modifier
-                    .size(if(short) 32.dp else 48.dp)
-                    .align(Alignment.Center)
-            )
+    Surface(modifier = Modifier.padding(12.dp).width(172.dp).height(80.dp), onClick = onClick, color = currColors.surfaceVariant, shape = keyboardShape) {
+        Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+            Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(28.dp))
+            Text("Create your own")
         }
     }
 }
@@ -292,25 +279,10 @@ fun VisitThemeStoreButton(short: Boolean = false) {
 
     val keyboardShape = RoundedCornerShape(8.dp)
 
-    Surface(
-        modifier = Modifier
-            .padding(12.dp)
-            .width(172.dp)
-            .height(if(short) 64.dp else 128.dp ),
-        onClick = {
-            context.openURI("https://keyboard.futo.tech/themes", true)
-        },
-        color = currColors.surfaceVariant,
-        shape = keyboardShape
-    ) {
-        Box(modifier = Modifier.fillMaxSize()) {
-            Icon(
-                painterResource(R.drawable.compass),
-                contentDescription = stringResource(R.string.theme_settings_visit_theme_store),
-                modifier = Modifier
-                    .size(if(short) 32.dp else 48.dp)
-                    .align(Alignment.Center)
-            )
+    Surface(modifier = Modifier.padding(12.dp).width(172.dp).height(80.dp), onClick = { context.openURI("https://keyboard.futo.tech/themes", true) }, color = currColors.surfaceVariant, shape = keyboardShape) {
+        Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+            Icon(painterResource(R.drawable.compass), contentDescription = null, modifier = Modifier.size(28.dp))
+            Text("Download more")
         }
     }
 }
@@ -355,10 +327,26 @@ fun ThemePicker(onDeleteCustomTheme: (String) -> Unit, onCustomTheme: () -> Unit
                     Arrangement.Start
                 }
             ) {
+                item { AddCustomThemeButton(true) { onCustomTheme() } }
+                item { VisitThemeStoreButton(true) }
                 item(span = { GridItemSpan(maxLineSpan) }) {
-                    ScreenTitle(stringResource(R.string.theme_settings_custom_themes))
+                    if(ZipThemes.ThemeFileName.fromSetting(currentTheme) == null) {
+                        CompositionLocalProvider(LocalLayoutDirection provides originalDirection) {
+                            SettingToggleDataStore(
+                                title = stringResource(R.string.theme_settings_key_borders),
+                                setting = KeyBordersSetting
+                            )
+                        }
+                    }
                 }
-
+                // First entry within the existing built-in list; keep selection and stored key unchanged.
+                item {
+                    ThemePreview(WrenBoardTheme, isSelected = WrenBoardTheme.key == currentTheme) {
+                        lifecycle.lifecycleScope.launch {
+                            context.setSetting(THEME_KEY, WrenBoardTheme.key)
+                        }
+                    }
+                }
                 items(customThemes.size) {
                     val name = customThemes[it]
                     ZipThemePreview(name, isSelected = currentTheme == name.toSetting(), modifier = Modifier, onLongClick = {
@@ -370,28 +358,6 @@ fun ThemePicker(onDeleteCustomTheme: (String) -> Unit, onCustomTheme: () -> Unit
                     }
                 }
 
-                item {
-                    AddCustomThemeButton(customThemes.isEmpty()) {
-                        onCustomTheme()
-                    }
-                }
-
-                item {
-                    VisitThemeStoreButton(customThemes.isEmpty())
-                }
-
-                item(span = { GridItemSpan(maxLineSpan) }) { }
-                item(span = { GridItemSpan(maxLineSpan) }) {
-                    ScreenTitle(stringResource(R.string.theme_settings_default_themes))
-                }
-                // First entry within the existing built-in list; keep selection and stored key unchanged.
-                item {
-                    ThemePreview(WrenBoardTheme, isSelected = WrenBoardTheme.key == currentTheme) {
-                        lifecycle.lifecycleScope.launch {
-                            context.setSetting(THEME_KEY, WrenBoardTheme.key)
-                        }
-                    }
-                }
                 items(assetThemes) { name ->
                     ZipThemePreview(name, isSelected = currentTheme == name.toSetting(), modifier = Modifier, onLongClick = {}) {
                         lifecycle.lifecycleScope.launch {
@@ -412,16 +378,7 @@ fun ThemePicker(onDeleteCustomTheme: (String) -> Unit, onCustomTheme: () -> Unit
 
                 item(span = { GridItemSpan(maxLineSpan) }) { }
 
-                item(span = { GridItemSpan(maxLineSpan) }) {
-                    if(ZipThemes.ThemeFileName.fromSetting(currentTheme) == null) {
-                        CompositionLocalProvider(LocalLayoutDirection provides originalDirection) {
-                            SettingToggleDataStore(
-                                title = stringResource(R.string.theme_settings_key_borders),
-                                setting = KeyBordersSetting
-                            )
-                        }
-                    }
-                }
+
             }
         }
     }
