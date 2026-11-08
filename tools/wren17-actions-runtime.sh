@@ -101,7 +101,24 @@ assert items, 'No rendered/debug icon bounds for '+label
 print(*items[-1])
 PYICON
 }
-taptext() { shot current; read -r X Y < <(coords current "$1"); adb shell input tap "$X" "$Y"; sleep 1; }
+HIDDEN_VIEW=0
+taptext() {
+ if [ "$HIDDEN_VIEW" = 1 ] && [ "$1" != Back ]; then
+  # Never use old toolbar icon bounds to find an off-screen hidden action.
+  for I in 1 2 3; do adb shell input swipe 800 1510 800 2050 300;done
+  for I in 1 2 3 4 5 6; do
+   shot current
+   if POS=$(python3 tools/wren17-screen-coords.py "$OUT/current.png" "$1" 2>/dev/null); then
+    read -r X Y <<< "$POS";adb shell input tap "$X" "$Y";sleep 1;return
+   fi
+   adb shell input swipe 800 2040 800 1480 350;sleep 0.5
+  done
+  echo "Hidden action not found after bounded scroll: $1" >&2;return 1
+ fi
+ shot current;read -r X Y < <(coords current "$1");adb shell input tap "$X" "$Y";sleep 1
+ if [ "$1" = Hidden ]; then HIDDEN_VIEW=1;fi
+ if [ "$1" = Back ]; then HIDDEN_VIEW=0;fi
+}
 # No separate editor: drag directly in the open action box, save only on completed drop.
 shot direct_initial
 read -r SX SY < <(coords direct_initial Emojis)
@@ -122,6 +139,7 @@ adb shell input swipe 800 1990 800 1440 500; sleep 1
 shot hidden_scrolled
 taptext Emojis
 shot restored_saved
+HIDDEN_VIEW=0
 adb shell input keyevent KEYCODE_BACK;sleep 1
 adb shell am broadcast -a com.wrenboard.keyboard.WBDBG -p "$PKG" --es cmd open:more >/dev/null;sleep 2
 shot restored_reopened
