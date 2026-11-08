@@ -55,7 +55,12 @@ val UnifiedActionsSetting = SettingsKey(UnifiedActionsKey, migrateUnifiedActionI
 @Composable
 fun useUnifiedActions(): OrderedActionIds {
     val context = LocalContext.current
-    // Settings may open before the IME after an update. Migrate before exposing a draft.
-    remember(context) { context.readUnifiedActions() }
-    return useDataStoreValue(UnifiedActionsSetting).decodeUnified()
+    // Build the initial draft from actual legacy preferences, even before IME startup.
+    // Never block the UI thread while DataStore emits a new value.
+    val legacy = useDataStoreValue(ActionsSettings)
+    val initial = androidx.compose.runtime.remember(legacy) { migrateUnifiedActionIds(legacy).encode() }
+    androidx.compose.runtime.LaunchedEffect(context) {
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { context.readUnifiedActions() }
+    }
+    return useDataStoreValue(SettingsKey(UnifiedActionsKey, initial)).decodeUnified()
 }

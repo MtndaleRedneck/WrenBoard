@@ -83,7 +83,7 @@ dump normal
 coords() {
  if python3 tools/wren17-screen-coords.py "$OUT/$1.png" "$2" 2>/dev/null; then return; fi
  dump locator
- python3 - "$OUT/locator.xml" "$2" <<'PYCOORD'
+ if python3 - "$OUT/locator.xml" "$2" <<'PYCOORD'
 import sys,xml.etree.ElementTree as E,re
 root=E.parse(sys.argv[1]).getroot();label=sys.argv[2].lower()
 nodes=[n for n in root.iter('node') if n.get('text','').lower()==label]
@@ -91,6 +91,16 @@ if not nodes:nodes=[n for n in root.iter('node') if n.get('content-desc','').low
 assert nodes, 'No actual text or accessible icon for '+label
 v=list(map(int,re.findall(r'\d+',nodes[0].get('bounds'))));print((v[0]+v[2])//2,(v[1]+v[3])//2)
 PYCOORD
+ then return; fi
+ adb logcat -d -s WBDBG:I > "$OUT/locator.log"
+ python3 - "$OUT/locator.log" "$2" <<'PYICON'
+import sys,re
+text=open(sys.argv[1]).read();label=sys.argv[2].replace(' ','_')
+if label=='Clipboard':label='Clipboard_Manager'
+items=re.findall(r'WINDOW ACTION name='+re.escape(label)+r' cx=(\d+) cy=(\d+)',text)
+assert items, 'No rendered/debug icon bounds for '+label
+print(*items[-1])
+PYICON
 }
 taptext() { shot current; read -r X Y < <(coords current "$1"); adb shell input tap "$X" "$Y"; sleep 1; }
 # No separate editor: drag directly in the open action box, save only on completed drop.
