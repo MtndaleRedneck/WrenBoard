@@ -117,5 +117,32 @@ shot reordered_visible
 adb shell input keyevent KEYCODE_BACK;sleep 1
 adb shell am broadcast -a com.wrenboard.keyboard.WBDBG -p "$PKG" --es cmd open:more >/dev/null;sleep 2
 shot reordered_reopened
+# Cancel a changed in-memory drag by dismissing its window before pointer release.
+read -r SX SY < <(coords reordered_reopened Emojis)
+read -r HX HY < <(coords reordered_reopened GIF)
+adb shell input motionevent DOWN "$SX" "$SY"; sleep 0.8
+for I in $(seq 1 12); do
+ X=$((SX+(HX-SX)*I/12));Y=$((SY+(HY-SY)*I/12));adb shell input motionevent MOVE "$X" "$Y";sleep 0.07
+done
+shot cancel_before_back
+adb shell input keyevent KEYCODE_BACK;sleep 1
+adb shell input motionevent UP "$HX" "$HY";sleep 1
+adb shell am broadcast -a com.wrenboard.keyboard.WBDBG -p "$PKG" --es cmd open:more >/dev/null;sleep 2
+shot cancelled_reopened
+# Real hide gestures leave five visible actions, proving fewer-than-six spacing in the real strip.
+for LABEL in Emojis Clipboard GIF Share Info Settings Undo Redo; do
+ shot few_current
+ read -r SX SY < <(coords few_current "$LABEL")
+ read -r HX HY < <(coords few_current Hidden)
+ adb shell input motionevent DOWN "$SX" "$SY"; sleep 0.8
+ for I in $(seq 1 12); do
+  X=$((SX+(HX-SX)*I/12));Y=$((SY+(HY-SY)*I/12));adb shell input motionevent MOVE "$X" "$Y";sleep 0.07
+ done
+ adb shell input motionevent UP "$HX" "$HY";sleep 1
+done
+shot fewer_than_six
+adb shell input keyevent KEYCODE_BACK;sleep 1
+adb shell am broadcast -a com.wrenboard.keyboard.WBDBG -p "$PKG" --es cmd open:more >/dev/null;sleep 2
+shot fewer_than_six_reopened
 echo 'FOCUSED DIRECT ACTIONS CAPTURE COMPLETE: inspect pixels before persistence verdict'
 adb logcat -d -s AndroidRuntime:E | tail -60
