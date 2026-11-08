@@ -232,18 +232,21 @@ fun MoreActionsView() {
             kotlinx.coroutines.delay(35)
         }
     }
-    val tileModifier: @Composable (String) -> Modifier = { id ->
+    val tileModifier: @Composable (String, Boolean) -> Modifier = { id, inBar ->
         DisposableEffect(id, hiddenOpen) { onDispose { bounds.remove(id) } }
         Modifier.alpha(if(dragging == id) 0.55f else 1f)
-            .onGloballyPositioned { bounds[id] = it.boundsInRoot() }
+            .onGloballyPositioned {
+                val rect = it.boundsInRoot()
+                bounds[id] = if(inBar) rect else gridBounds?.intersect(rect) ?: Rect.Zero
+            }
     }
     Column(Modifier.onGloballyPositioned { rootOrigin = it.boundsInRoot().topLeft }.then(dragModifier)) {
         Row(Modifier.fillMaxWidth().height(org.futo.inputmethod.latin.uix.ToolbarRowHeight), verticalAlignment = Alignment.CenterVertically) {
             toolbarIds.forEach { id ->
                 androidx.compose.runtime.key(id) {
                     val action = AllActionsMap[id]!!
-                    Box(tileModifier(id).weight(1f).fillMaxHeight().clickable { manager?.activateAction(action) }, contentAlignment = Alignment.Center) {
-                        Icon(painterResource(action.icon), contentDescription = stringResource(action.name), tint = LocalKeyboardScheme.current.onKeyboardContainer)
+                    Box(tileModifier(id, true).weight(1f).fillMaxHeight().clickable { manager?.activateAction(action) }, contentAlignment = Alignment.Center) {
+                        Icon(painterResource(action.icon), contentDescription = if(action == org.futo.inputmethod.latin.uix.actions.clipboard.ClipboardHistoryAction) stringResource(R.string.wren_home_clipboard) else stringResource(action.name), tint = LocalKeyboardScheme.current.onKeyboardContainer)
                     }
                 }
             }
@@ -256,7 +259,7 @@ fun MoreActionsView() {
             modifier = Modifier.fillMaxWidth().heightIn(max = 304.dp).padding(8.dp).onGloballyPositioned { gridBounds = it.boundsInRoot() }) {
             items(boxIds, key = { it }) { id ->
                 val action = AllActionsMap[id]!!
-                ActionItem(action, tileModifier(id).clickable {
+                ActionItem(action, tileModifier(id, false).clickable {
                     if(hiddenOpen) persist(draft.show(id, draft.visible.size)) else manager?.activateAction(action)
                 }, dragIcon = !hiddenOpen)
             }
