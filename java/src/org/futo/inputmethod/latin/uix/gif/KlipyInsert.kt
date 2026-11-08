@@ -11,24 +11,31 @@ import org.futo.inputmethod.latin.uix.KeyboardManagerForAction
  * (the stickers setting, off by default, is the only escape hatch - wired when that setting
  * lands). On success the share is registered with KLIPY so recents/trending stay accurate.
  */
-/** Owner original (WhatsApp Oct 31 21:51:57 EDT, [reference removed]):
- * sticker support only as an option that can be shut off; 21:53:32 EDT ([reference removed]):
- * "post as sticker/gif" shows only when stickers are enabled via setting. Default OFF.
- * The "post as sticker" affordance itself is not implemented in 1.5 (GIFs only). */
+
 val WrenStickersEnabled = SettingsKey(booleanPreferencesKey("wren_stickers_enabled"), false)
 
 object KlipyInsert {
     // ignoreConnectionOverride = true: capability and insertion always target the HOST
     // editor, never the panel's own local search field while its input override is active.
     fun canOffer(manager: KeyboardManagerForAction): Boolean =
-        manager.appSupportsImageInsertion("image/gif", true)
+        manager.appSupportsImageInsertion("image/gif", true) ||
+            manager.appSupportsImageInsertion("video/mp4", true)
+
+
+    fun pickVariant(gif: KlipyClient.KlipyGif, supports: (String) -> Boolean): Pair<KlipyClient.KlipyVariant, String>? {
+        if (supports("video/mp4")) {
+            gif.fullMp4()?.takeIf { KlipyGifPipe.isAllowedUrl(it.url) }?.let { return it to "video/mp4" }
+        }
+        if (supports("image/gif")) {
+            gif.fullGif()?.takeIf { KlipyGifPipe.isAllowedUrl(it.url) }?.let { return it to "image/gif" }
+        }
+        return null
+    }
 
     fun insert(manager: KeyboardManagerForAction, appKey: String, gif: KlipyClient.KlipyGif): Boolean {
-        val variant = gif.fullGif() ?: return false
-        if (!KlipyGifPipe.isAllowedUrl(variant.url)) return false
-        if (!canOffer(manager)) return false
-        val uri = KlipyGifPipe.register(variant.url)
-        val inserted = manager.typeUri(uri, listOf("image/gif"), ignoreConnectionOverride = true)
+        val pick = pickVariant(gif) { manager.appSupportsImageInsertion(it, true) } ?: return false
+        val uri = KlipyGifPipe.register(pick.first.url, pick.second)
+        val inserted = manager.typeUri(uri, listOf(pick.second), ignoreConnectionOverride = true)
         if (inserted && appKey.isNotEmpty()) {
             manager.getLifecycleScope().launch { KlipyClient.registerShare(appKey, gif.slug) }
         }

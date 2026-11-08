@@ -3,6 +3,11 @@ package org.futo.inputmethod.latin.uix.actions
 import android.view.HapticFeedbackConstants
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.border
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -63,17 +68,18 @@ import sh.calvin.reorderable.rememberReorderableLazyGridState
 
 @Composable
 fun ActionItem(action: Action, modifier: Modifier = Modifier, dragIcon: Boolean = false, dragIconModifier: Modifier = Modifier) {
-    Surface(color = LocalKeyboardScheme.current.keyboardContainer,
+    Surface(color = Color.Transparent,
         modifier = modifier
             .fillMaxWidth()
-            .height(92.dp),
-        shape = RoundedCornerShape(16.dp)
+            .height(74.dp),
+        shape = RoundedCornerShape(0.dp)
     ) {
         CompositionLocalProvider(LocalContentColor provides LocalKeyboardScheme.current.onKeyboardContainer) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(8.dp)
+                    .padding(4.dp)
+                    .border(0.3.dp, LocalKeyboardScheme.current.outline.copy(alpha = 0.2f))
             ) {
 
                 if (dragIcon) {
@@ -104,12 +110,13 @@ fun ActionItem(action: Action, modifier: Modifier = Modifier, dragIcon: Boolean 
                     Spacer(modifier = Modifier.weight(1.0f))
 
                     Text(
-                        stringResource(id = action.name),
+                        if (action == org.futo.inputmethod.latin.uix.actions.clipboard.ClipboardHistoryAction) stringResource(R.string.wren_home_clipboard) else stringResource(id = action.name),
                         modifier = Modifier.align(
                             CenterHorizontally
                         ),
                         style = Typography.Small.copy(lineHeight = 12.sp),
-                        textAlign = TextAlign.Center
+                        textAlign = TextAlign.Center,
+                        maxLines = 1, overflow = TextOverflow.Ellipsis
                     )
                 }
             }
@@ -149,9 +156,9 @@ fun MoreActionsView() {
         modifier = Modifier
             .fillMaxWidth()
             .padding(8.dp),
-        columns = GridCells.Adaptive(98.dp),
-        horizontalArrangement = Arrangement.spacedBy(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+        columns = GridCells.Fixed(4),
+        horizontalArrangement = Arrangement.spacedBy(0.dp),
+        verticalArrangement = Arrangement.spacedBy(0.dp)
     ) {
         items(actions, key = { it.name }) {
             // WrenBoard harness: log each grid tile's center in DEBUG builds, same as the toolbar.
@@ -211,9 +218,9 @@ fun ActionsEditor(header: @Composable () -> Unit) {
             .fillMaxSize()
             .padding(8.dp, 0.dp),
         state = lazyListState,
-        columns = GridCells.Adaptive(98.dp),
-        horizontalArrangement = Arrangement.spacedBy(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+        columns = GridCells.Fixed(4),
+        horizontalArrangement = Arrangement.spacedBy(0.dp),
+        verticalArrangement = Arrangement.spacedBy(0.dp)
     ) {
 
         items(list, key = { it.toKey() }, span = {
@@ -232,7 +239,7 @@ fun ActionsEditor(header: @Composable () -> Unit) {
                             onDragStopped = {
                                 view.performHapticFeedback(HapticFeedbackConstants.GESTURE_END)
                             },
-                        ), dragIcon = true, dragIconModifier = Modifier.draggableHandle())
+                        ), dragIcon = false)
                     }
                 }
                 is ActionEditorItem.Separator -> {
@@ -240,16 +247,17 @@ fun ActionsEditor(header: @Composable () -> Unit) {
                         Column {
                             if (it.category == ActionCategory.entries[0]) {
                                 header()
-                                
+
                                 if (actionMap[ActionCategory.ActionKey]?.let { it.size > 1 } == true) {
                                     WarningTip(stringResource(R.string.action_editor_error_more_than_one_action_key))
                                 } else if (actionMap[ActionCategory.PinnedKey]?.let { it.size >= 3 } == true) {
                                     WarningTip(stringResource(R.string.action_editor_warning_too_many_pinned))
                                 }
                             }
-                            Text(it.category.name(resources), modifier = Modifier.padding(top = 24.dp), style = Typography.Heading.MediumMl, color = LocalContentColor.current.copy(alpha = 0.6f))
+                            Text(it.category.name(LocalResources.current), modifier = Modifier.padding(top = 12.dp), style = Typography.Small)
+                            if (it.category == ActionCategory.entries[0]) Text(stringResource(R.string.wren17_drag_hint), modifier = Modifier.padding(vertical = 12.dp), style = Typography.Small)
 
-                            if(actionMap[it.category]?.isEmpty() == true && it.category != ActionCategory.entries.last()) {
+                            if(false && actionMap[it.category]?.isEmpty() == true && it.category != ActionCategory.entries.last()) {
                                 TextButton(onClick = {
                                     val selfIdx = list.indexOf(it)
                                     val itemToMove = list.subList(
@@ -299,12 +307,23 @@ val MoreActionsAction = Action(
     shownInEditor = false,
     windowImpl = { manager, _ ->
         object : ActionWindow() {
+            override val showTitleBar = false
             @Composable
             override fun windowName(): String = stringResource(id = R.string.action_more_actions_title)
 
             @Composable
             override fun WindowContents(keyboardShown: Boolean) {
-                MoreActionsView()
+                Column {
+                    Box(Modifier.fillMaxWidth().height(org.futo.inputmethod.latin.uix.ToolbarRowHeight)) {
+                        org.futo.inputmethod.latin.uix.ActionItems({ manager.activateAction(it) }, { })
+                    }
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                        OutlinedButton(onClick = { manager.showActionEditor() }, modifier = Modifier.padding(horizontal = 8.dp)) {
+                            Text(stringResource(R.string.wren17_reorder))
+                        }
+                    }
+                    MoreActionsView()
+                }
             }
 
             @Composable

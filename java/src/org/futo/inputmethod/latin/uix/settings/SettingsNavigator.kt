@@ -2,6 +2,11 @@ package org.futo.inputmethod.latin.uix.settings
 
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.ui.Modifier
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.navigation.NavGraphBuilder
@@ -125,6 +130,7 @@ val SettingsMenus = listOf(
     WrenTypingMenu,
     WrenEmojiMenu,
     WrenVoiceMenu,
+    org.futo.inputmethod.latin.uix.settings.pages.WrenRichInputMenu,
     WrenToolbarMenu,
     WrenLayoutMenu,
     WrenSoundMenu,
@@ -179,7 +185,7 @@ fun SettingsNavigator(
             }
             composable("home") { HomeScreen(navController) }
             composable("search") { SearchScreen(navController) }
-            composable("languages") { LanguagesScreen(navController) }
+            composable("languages") { Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) { LanguagesScreen(navController) } }
             composable("addLanguage") { SelectLanguageScreen(navController) }
             composable("pdict") {
                 PersonalDictionaryLanguageList()
@@ -191,7 +197,7 @@ fun SettingsNavigator(
             }
             composable("keyboardAndTyping") { KeyboardAndTypingScreen(navController) }
             composable("resize") { ResizeScreen(navController) }
-            composable("themes") { ThemeScreen(navController) }
+            composable("themes") { Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) { ThemeScreen(navController) } }
             composable("developer") { DeveloperScreen(navController) }
             composable("devtextedit") { DevEditTextVariationsScreen(navController) }
             composable("devbuggytextedit") { BuggyTextEditVariations(navController) }
@@ -206,7 +212,7 @@ fun SettingsNavigator(
             composable("credits") { CreditsScreen(navController) }
             composable("exportingcfg") { ExportingMenu(navController) }
             composable("kasroz") { KASROZMenu() }
-            // WrenBoard 1.6 (item 11): Ezzy's Feedback page, opened from the Feedback & bugs card.
+
             composable("feedback") { org.futo.inputmethod.updates.FeedbackScreen(navController) }
             dialog("update") {
                 UpdateDialog(navController = navController)

@@ -539,6 +539,21 @@ val LongPressMenu = UserSettingsMenu(
     title = R.string.morekey_settings_keys,
     navPath = "longPress", registerNavPath = true,
     settings = listOf(
+        UserSetting(name = R.string.wren17_accents) {
+            val setting = useDataStore(LongPressKeyLayoutSetting)
+            val items = setting.value.toLongPressKeyLayoutItems()
+            SettingToggleRaw(
+                title = stringResource(R.string.wren17_accents),
+                subtitle = stringResource(R.string.wren17_accents_summary),
+                enabled = org.futo.inputmethod.latin.settings.LongPressKey.LanguageKeys in items,
+                setValue = { enabled ->
+                    val category = org.futo.inputmethod.latin.settings.LongPressKey.LanguageKeys
+                    val next = if (enabled) (items + category).distinct() else items - category
+                    setting.setValue(next.joinToString(",") { it.ordinal.toString() })
+                }
+            )
+        },
+
         userSettingToggleDataStore(
             title = R.string.morekey_settings_show_hints,
             subtitle = R.string.morekey_settings_show_hints_subtitle,

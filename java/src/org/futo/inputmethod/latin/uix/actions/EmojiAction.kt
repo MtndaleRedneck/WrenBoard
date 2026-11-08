@@ -1043,8 +1043,6 @@ class PersistentEmojiState : PersistentActionState {
             val supplementalEmoteText = context.resources.openRawResource(R.raw.supplemental_emotes)
                 .bufferedReader().readText()
 
-            val compatTypeface = context.compatEmojiTypeface
-
             withContext(Dispatchers.Default) {
                 val emojiData = Json.parseToJsonElement(text).jsonArray.toList()
                 val supplementalEmoteData = Json.parseToJsonElement(supplementalEmoteText).jsonArray
@@ -1064,10 +1062,8 @@ class PersistentEmojiState : PersistentActionState {
                     val aliases = it.jsonObject["aliases"]?.jsonArray?.map { it.jsonPrimitive.content }
                         ?.toList() ?: listOf()
 
-                    val supported = when {
-                        category == "ASCII" -> true
-                        else -> emojiShouldShow(emoji, compatTypeface)
-                    }
+                    // Rendering support must not silently remove selectable emoji.
+                    val supported = true
 
                     if(!supported) {
                         null

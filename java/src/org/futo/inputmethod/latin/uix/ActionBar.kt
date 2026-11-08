@@ -202,7 +202,7 @@ val ActionBarExpanded = SettingsKey(
     booleanPreferencesKey("actionExpanded"),
     // SwiftKey parity (approved item 3, Nov 4; difference list item 1): the icon row shows above the predictions
     // by default, as in SwiftKey; the chevron still hides it and the choice is remembered. (WrenBoard 1.2-1.5
-    // tucked it away by default, Ezzy Oct 29/30.)
+
     true
 )
 
@@ -342,7 +342,7 @@ fun RowScope.SuggestionItem(words: SuggestedWords, idx: Int, isPrimary: Boolean,
 
     val isAutocorrect = forcePrimary || (isPrimary && words.mWillAutoCorrect)
 
-    val color = when(isAutocorrect) {
+    val color = if (isKeyStyledTheme()) LocalKeyboardScheme.current.primary else when(isAutocorrect) {
         true -> LocalKeyboardScheme.current.onSurface
         else -> LocalKeyboardScheme.current.onSurfaceVariant
     }
@@ -407,6 +407,8 @@ fun RowScope.SuggestionItem(words: SuggestedWords, idx: Int, isPrimary: Boolean,
             } else Modifier)
             .combinedClickable(
                 enabled = word != null,
+                interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                indication = null, // Suggestion presses must not flash the accent colour.
                 onClick = onClick,
                 onLongClick = onLongClick
             )
@@ -418,7 +420,7 @@ fun RowScope.SuggestionItem(words: SuggestedWords, idx: Int, isPrimary: Boolean,
                     .align(Center)
                     .padding(horizontal = 8.dp, vertical = 2.dp)
                     .testTag("SuggestionItemText")
-                if(isVerbatim) {
+                if(isVerbatim && !isKeyStyledTheme()) {
                     AutoFitText('"' + word + '"', style = textStyle.copy(fontStyle = FontStyle.Italic), modifier = modifier)
                 } else {
                     AutoFitText(word, style = textStyle, modifier = modifier)
@@ -565,15 +567,15 @@ fun RowScope.SuggestionItems(words: SuggestedWords, onClick: (i: Int) -> Unit, o
     val centreWeight = 1.3128f
     val rightWeight = 0.9842f
     var slotIndex = 0
-    val suggestionItem = @Composable { suggestion: SuggestedWordInfo? ->
-        val w = when (slotIndex++ % 3) { 0 -> leftWeight; 1 -> centreWeight; else -> rightWeight }
+    val renderItem: @Composable (SuggestedWordInfo?, Float?) -> Unit = { suggestion, overrideWeight ->
+        val w = overrideWeight ?: when (slotIndex++ % 3) { 0 -> leftWeight; 1 -> centreWeight; else -> rightWeight }
         if(suggestion != null) {
             val idx = words.indexOf(suggestion)
             SuggestionItem(
                 words,
                 idx,
-                isPrimary = idx == SuggestedWords.INDEX_OF_AUTO_CORRECTION,
-                forcePrimary = suggestion == layout.swipePrimaryElement || (boldCentre && suggestion == centreSuggestion),
+                isPrimary = !boldCentre && idx == SuggestedWords.INDEX_OF_AUTO_CORRECTION,
+                forcePrimary = suggestion == layout.swipePrimaryElement || (boldCentre && suggestion == centreSuggestion && w == centreWeight),
                 onClick = { onClick(idx) },
                 onLongClick = { onLongClick(idx) },
                 isEmoji = suggestion in layout.emojiMatches,
@@ -596,6 +598,8 @@ fun RowScope.SuggestionItems(words: SuggestedWords, onClick: (i: Int) -> Unit, o
         }
     }
 
+    val suggestionItem: @Composable (SuggestedWordInfo?) -> Unit = { renderItem(it, null) }
+
     // WrenBoard 1.5 item 12 (Tab's pinned candidate for owner review - not owner-approved): the
     // save-word confirmation takes the centre chip for 1.2 s, three boxes kept, then suggestions return.
     val saveNotice by WrenSaveWordNotice.notice.collectAsState()
@@ -617,6 +621,28 @@ fun RowScope.SuggestionItems(words: SuggestedWords, onClick: (i: Int) -> Unit, o
         return
     }
 
+    // Typed word left, what Space will commit in the middle, emoji alternatives right.
+    // Keep empty chip geometry stable while the engine is starting or returning no words.
+    if (isKeyStyledTheme() && !layout.isGestureBatch) {
+        val candidates = layout.sortedMatches
+        centreSuggestion = layout.autocorrectMatch ?: candidates.firstOrNull() ?: layout.verbatimWord
+        val left = layout.verbatimWord
+            ?: candidates.firstOrNull { it != centreSuggestion }
+        renderItem(left, leftWeight)
+        SuggestionSeparator()
+        renderItem(centreSuggestion, centreWeight)
+        SuggestionSeparator()
+        if (layout.emojiMatches.isNotEmpty()) {
+            renderItem(layout.emojiMatches[0], rightWeight / 2f)
+            SuggestionSeparator()
+            renderItem(layout.emojiMatches.getOrNull(1), rightWeight / 2f)
+        } else {
+            renderItem(candidates.firstOrNull { it != centreSuggestion && it != left }, rightWeight)
+        }
+        Spacer(Modifier.width(40.dp))
+        return
+    }
+
     when {
         layout.isGestureBatch ->
             suggestionItem(layout.presentableSuggestions.firstOrNull())
@@ -631,7 +657,7 @@ fun RowScope.SuggestionItems(words: SuggestedWords, onClick: (i: Int) -> Unit, o
         }
 
         layout.emojiMatches.isEmpty() && layout.presentableSuggestions.size == 1 -> {
-            // S11 (owner-approved 2026-11-01, WhatsApp): one suggestion still shows three chip
+
             // boxes, word in the centre, empty boxes kept - SwiftKey's layout.
             suggestionItem(null)
             SuggestionSeparator()
@@ -710,6 +736,9 @@ fun LazyItemScope.ActionItem(idx: Int, action: Action, onSelect: (Action) -> Uni
             onLongClick = action.altPressImpl?.let { { onLongSelect(action) } },
             onClick = { onSelect(action) }), contentAlignment = Center) {
         if (swiftKeyIcons && action == MoreActionsAction) {
+            val manager = LocalManager.current
+            val active = !LocalInspectionMode.current && manager.getLatinIMEForDebug().uixManager.currWindowAction.value == MoreActionsAction
+            if (active) Box(Modifier.size(32.dp).background(Color(0xFF5C5C5C), CircleShape))
             // SwiftKey parity (item 45): "..." at the right end, 12.4 x 2.8 dp, no circle
             Icon(
                 painter = painterResource(id = R.drawable.wren_more_dots),

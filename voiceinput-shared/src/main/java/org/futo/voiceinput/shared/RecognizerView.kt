@@ -68,6 +68,10 @@ interface RecognizerViewListener {
 
     fun partialResult(result: String)
 
+    // Recording has actually stopped (user stop, chevron stop or VAD auto-stop) and
+    // decoding is about to start. Default no-op so existing listeners are unaffected.
+    fun processing() { }
+
     // Return true if a permission modal was shown, otherwise return false
     fun requestPermission(onGranted: () -> Unit, onRejected: () -> Unit): Boolean
 
@@ -233,6 +237,7 @@ class RecognizerView(
         }
 
         override fun processing() {
+            listener.processing()
             loadingCircleText.value = context.getString(R.string.processing)
             currentViewState.value = CurrentView.LoadingCircle
         }

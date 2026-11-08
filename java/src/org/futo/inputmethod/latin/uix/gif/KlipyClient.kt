@@ -52,6 +52,9 @@ object KlipyClient {
         val webm: KlipyVariant? = null
     )
 
+    /** 1.7: a grid tile is sharp when its preview is at least this wide (2-col grid, xxhdpi). */
+    const val PREVIEW_MIN_WIDTH = 480
+
     @Serializable
     data class KlipyGif(
         val id: Long = 0,
@@ -62,19 +65,31 @@ object KlipyClient {
     ) {
         /** Full-size GIF for insertion. */
         fun fullGif(): KlipyVariant? = file["hd"]?.gif ?: file["md"]?.gif
-        /** Small preview for the grid: prefer an animated webp in the lightest tier, then jpg. */
+        /** 1.7: full-size MP4 for the distinct video/mp4 insertion path. */
+        fun fullMp4(): KlipyVariant? = file["hd"]?.mp4 ?: file["md"]?.mp4
+        /**
+         * 1.7 grid preview: animated and sharp, never a tiny still when an animated variant
+         * exists. Preference order: the md tier's animated webp, then md gif (webp is smaller
+         * at equal quality); otherwise the smallest animated variant at least
+         * [PREVIEW_MIN_WIDTH] px wide, or the widest animated variant when every tier is
+         * smaller than that; a still jpg only when KLIPY returned no animated variant at all.
+         */
         fun gridPreview(): KlipyVariant? {
-            val tiers = file.keys.sortedBy { tier ->
-                val v = file[tier]?.jpg ?: file[tier]?.webp ?: file[tier]?.gif
-                v?.size ?: Long.MAX_VALUE
+            file["md"]?.let { set ->
+                set.webp?.takeIf { it.url.isNotEmpty() }?.let { return it }
+                set.gif?.takeIf { it.url.isNotEmpty() }?.let { return it }
             }
-            for (tier in tiers) {
-                val set = file[tier] ?: continue
-                set.webp?.let { if (it.url.isNotEmpty()) return it }
-                set.jpg?.let { if (it.url.isNotEmpty()) return it }
-                set.gif?.let { if (it.url.isNotEmpty()) return it }
+            val animated = file.values.flatMap { set ->
+                listOfNotNull(set.webp, set.gif)
+            }.filter { it.url.isNotEmpty() }
+            if (animated.isNotEmpty()) {
+                animated.sortedBy { if (it.size > 0) it.size else Long.MAX_VALUE }
+                    .firstOrNull { it.width >= PREVIEW_MIN_WIDTH }?.let { return it }
+                animated.maxByOrNull { it.width }?.let { return it }
             }
-            return null
+            return file.values.mapNotNull { it.jpg }
+                .filter { it.url.isNotEmpty() }
+                .minByOrNull { if (it.size > 0) it.size else Long.MAX_VALUE }
         }
     }
 

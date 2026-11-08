@@ -40,6 +40,7 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -75,7 +76,9 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
 import androidx.datastore.preferences.core.stringPreferencesKey
-import coil.compose.AsyncImage
+import coil.compose.AsyncImagePainter
+import coil.compose.SubcomposeAsyncImage
+import coil.compose.SubcomposeAsyncImageContent
 import coil.decode.ImageDecoderDecoder
 import coil.request.ImageRequest
 import kotlinx.coroutines.FlowPreview
@@ -111,12 +114,12 @@ import org.futo.inputmethod.latin.uix.theme.LocalCompatEmojiTypeface
 import org.futo.inputmethod.latin.uix.theme.emojiCompatText
 import org.futo.inputmethod.latin.uix.theme.emojiNeedsCompat
 
-/** Emojis locked to the top of the Recents page, newest lock last. No limit (Ezzy, Oct 30). */
+
 val WrenLockedEmojis = SettingsKey(stringPreferencesKey("wren_locked_emojis"), "")
 private const val SEP = "<|>"
 fun String.toLockedList(): List<String> = split(SEP).filter { it.isNotEmpty() }
 
-/** WrenBoard 1.6 (item 9): colours from Ezzy's approved mock-ups 09_emoji_panel / 10_gif_panel (accent #FF8710). */
+
 private object EmojiColors {
     val Orange = Color(0xFFFF8710)
     val OrangeMuted = Color(0xFFB16922)
@@ -243,6 +246,16 @@ private fun EmojiGlyph(text: String, sizeDp: Float, modifier: Modifier = Modifie
     val typeface = LocalCompatEmojiTypeface.current
     val family = LocalCompatEmojiFamily.current
     val fontSize = with(LocalDensity.current) { sizeDp.dp.toSp() }
+    if (org.futo.inputmethod.latin.BuildConfig.DEBUG) {
+        LaunchedEffect(text, typeface) {
+            val systemHas = android.graphics.Paint().hasGlyph(text)
+            val compatHas = typeface?.let { android.graphics.Paint().apply { this.typeface = it }.hasGlyph(text) } ?: false
+            if (!systemHas || !compatHas) {
+                val points = text.codePoints().toArray().joinToString(" ") { "U+" + it.toString(16).uppercase() }
+                android.util.Log.d("WBGLYPH", "$points system=$systemHas compat=$compatHas")
+            }
+        }
+    }
     Text(
         if (emojiNeedsCompat(text, typeface)) emojiCompatText(text, typeface) else text,
         fontSize = fontSize,
@@ -261,21 +274,10 @@ private fun EmojiGlyph(text: String, sizeDp: Float, modifier: Modifier = Modifie
  */
 @Composable
 private fun WrenTopTab(active: Boolean, label: String, modifier: Modifier, onClick: () -> Unit, icon: @Composable (Boolean) -> Unit) {
-    if (active) {
-        Box(modifier.fillMaxHeight().semantics { contentDescription = label }.clickable(onClick = onClick)) {
-            Row(Modifier.align(Alignment.Center).padding(start = 1.8.dp, end = 18.5.dp), verticalAlignment = Alignment.CenterVertically) {
-                icon(true)
-                Spacer(Modifier.width(6.7.dp))
-                Text(label, color = EmojiColors.Orange, fontSize = 15.6.sp)
-            }
-            Box(Modifier.matchParentSize().padding(bottom = 6.dp), contentAlignment = Alignment.BottomCenter) {
-                Box(Modifier.fillMaxWidth().height(1.8.dp).background(EmojiColors.Orange))
-            }
-        }
-    } else {
-        Box(modifier.width(60.dp).fillMaxHeight().semantics { contentDescription = label }.clickable(onClick = onClick), contentAlignment = Alignment.Center) {
-            icon(false)
-        }
+    Box(modifier.width(60.dp).fillMaxHeight().semantics { contentDescription = label }.clickable(onClick = onClick),
+        contentAlignment = Alignment.Center) {
+        icon(active)
+        if (active) Box(Modifier.align(Alignment.BottomCenter).padding(bottom = 6.dp).width(32.dp).height(1.8.dp).background(EmojiColors.Orange))
     }
 }
 
@@ -453,8 +455,9 @@ fun WrenEmojiPanel(w: WrenEmojiWindow) {
 @Composable
 private fun CategoryIcon(icon: Int, active: Boolean, desc: String, modifier: Modifier, onClick: () -> Unit) {
     Box(modifier.width(36.3.dp).fillMaxHeight().clickable(onClick = onClick), contentAlignment = Alignment.Center) {
-        Ic(icon, if (active) EmojiColors.Orange else EmojiColors.OrangeMuted, 23.dp, desc = desc)
-        if (active) Box(Modifier.align(Alignment.BottomCenter).width(25.6.dp).height(1.8.dp).background(EmojiColors.Orange))
+        Box(Modifier.size(30.dp).clip(CircleShape).background(if (active) EmojiColors.Orange else Color.Transparent), contentAlignment = Alignment.Center) {
+            Ic(icon, if (active) EmojiColors.Bar else EmojiColors.OrangeMuted, 21.dp, desc = desc)
+        }
     }
 }
 
@@ -712,8 +715,18 @@ private fun WrenGifPlaceholder(w: WrenEmojiWindow, view: View, modifier: Modifie
     val gifs = remember { mutableStateOf<List<KlipyGif>>(emptyList()) }
     val loading = remember { mutableStateOf(false) }
     val failed = remember { mutableStateOf(false) }
-    // Typing a query switches to search results (the old field did this in onValueChange).
-    LaunchedEffect(query.value) { if (query.value.isNotEmpty()) mode.value = "search" }
+    // 1.7 (owner choice, Nov 8): ONE Recents landing page with the search box on it - no
+    // separate Search page. Typing overlays search results on the same grid; clearing the
+    // query returns to Recents, re-arming the one-shot Trending fallback so an empty
+    // Recents never shows a blank panel.
+    LaunchedEffect(query.value) {
+        if (query.value.isNotEmpty()) {
+            mode.value = "search"
+        } else if (mode.value == "search") {
+            mode.value = "recents"
+            w.gifRecentsFallback.value = true
+        }
+    }
 
     val canInsert = remember { KlipyInsert.canOffer(w.manager) }
     val bsDesc = stringResource(R.string.wren_cd_backspace)
@@ -755,26 +768,40 @@ private fun WrenGifPlaceholder(w: WrenEmojiWindow, view: View, modifier: Modifie
         } else {
             // SwiftKey reference layout (owner screenshots, Nov 3): two-column varied-height grid
             // filling the panel; no letters keyboard below; bottom bar = abc / categories / backspace.
-            // Mock-up 10: 8 px margins and gaps, square corners, warm grey behind.
+            // 1.7 (reconciled Tab prose over the wrong 17-page mock): 2 columns, 4-5 dp gaps,
+            // 8 dp rounded corners, animated sharp previews (KlipyClient.gridPreview picks the
+            // tile-size-appropriate animated tier, never a tiny jpg when animation exists).
             LazyVerticalGrid(columns = GridCells.Fixed(2), modifier = Modifier.weight(1f).fillMaxWidth().wbPos("GIFGRID")
                     .background(Brush.verticalGradient(listOf(EmojiColors.GifTop, EmojiColors.GifBottom))),
-                contentPadding = PaddingValues(2.8.dp),
-                horizontalArrangement = Arrangement.spacedBy(2.8.dp),
-                verticalArrangement = Arrangement.spacedBy(2.8.dp)) {
+                contentPadding = PaddingValues(4.5.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.5.dp),
+                verticalArrangement = Arrangement.spacedBy(4.5.dp)) {
                 itemsIndexed(gifs.value, key = { _, g -> g.id }) { idx, gif ->
                     val preview = gif.gridPreview()
                     val ratio = if (preview != null && preview.width > 0 && preview.height > 0)
                         preview.width.toFloat() / preview.height.toFloat() else 1f
-                    AsyncImage(
+                    SubcomposeAsyncImage(
                         model = ImageRequest.Builder(context).data(preview?.url)
                             .apply { if (Build.VERSION.SDK_INT >= 28) decoderFactory(ImageDecoderDecoder.Factory()) }
                             .build(),
                         contentDescription = gif.title,
                         contentScale = ContentScale.Crop,
                         modifier = Modifier.fillMaxWidth().aspectRatio(ratio)
+                            .clip(RoundedCornerShape(8.dp))
                             .background(EmojiColors.Field).wbPos("GIFCELL i=$idx").clickable {
                                 KlipyInsert.insert(w.manager, appKey, gif)
-                            })
+                            }) {
+                        when (painter.state) {
+                            // Per-tile spinner while the preview loads; failure-safe: an error
+                            // leaves the (tappable) tile background instead of crashing or
+                            // dropping the cell.
+                            is AsyncImagePainter.State.Loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                CircularProgressIndicator(color = EmojiColors.Orange, strokeWidth = 2.dp, modifier = Modifier.size(22.dp))
+                            }
+                            is AsyncImagePainter.State.Error -> Box(Modifier.fillMaxSize())
+                            else -> SubcomposeAsyncImageContent()
+                        }
+                    }
                 }
             }
             val status = when {
@@ -793,19 +820,19 @@ private fun WrenGifPlaceholder(w: WrenEmojiWindow, view: View, modifier: Modifie
             Box(Modifier.width(54.8.dp).fillMaxHeight().wbPos("GIFABC").clickable { w.manager.closeActionWindow() }, contentAlignment = Alignment.Center) {
                 Text("abc", color = EmojiColors.Orange, fontSize = 15.6.sp)
             }
-            // label to KLIPY query; Recents and Trending are their own feeds.
-            val cats = listOf("Recents" to "", "Happy" to "happy", "Sad" to "sad", "Laughing" to "laughing", "Trending" to "", "Love" to "love")
+            // 1.7 (reconciled Tab prose): scrolling category LABELS Recents/Happy/Sad/Laugh/Love
+            // with the active underline. Trending is not a category - it is only the fallback
+            // feed when Recents is empty. A non-empty label maps to its KLIPY query.
+            val cats = listOf("Recents" to "", "Happy" to "happy", "Sad" to "sad", "Laugh" to "laugh", "Love" to "love")
             LazyRow(Modifier.weight(1f).fillMaxHeight(), horizontalArrangement = Arrangement.spacedBy(13.9.dp)) {
                 items(cats) { (label, q) ->
                     val active = (label == "Recents" && mode.value == "recents") ||
-                        (label == "Trending" && mode.value == "trending") ||
                         (q.isNotEmpty() && mode.value == "search" && query.value.equals(q, ignoreCase = true))
                     Box(Modifier.fillMaxHeight().wbPos("GIFCAT name=$label").clickable {
-                        w.gifRecentsFallback.value = false
                         when (label) {
-                            "Recents" -> { mode.value = "recents"; query.value = "" }
-                            "Trending" -> { mode.value = "trending"; query.value = "" }
-                            else -> { mode.value = "search"; query.value = q }
+                            // Recents tap re-arms the Trending fallback, same as landing.
+                            "Recents" -> { mode.value = "recents"; query.value = ""; w.gifRecentsFallback.value = true }
+                            else -> { w.gifRecentsFallback.value = false; mode.value = "search"; query.value = q }
                         }
                     }) {
                         Row(Modifier.align(Alignment.Center).padding(horizontal = 7.5.dp), verticalAlignment = Alignment.CenterVertically) {

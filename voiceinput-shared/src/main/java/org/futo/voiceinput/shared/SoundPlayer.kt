@@ -22,11 +22,13 @@ class SoundPlayer(
     ).build()
 
     private var startSound: Int = -1
-    private var cancelSound: Int = -1
+    // The mic-off tone (Google's original OFF/noinput cue, chosen in 1.5). One resource
+    // backs both the cancel cue and the normal-stop cue: the microphone is off in both.
+    private var offSound: Int = -1
 
     init {
         startSound = soundPool.load(this.context, R.raw.start, 0)
-        cancelSound = soundPool.load(this.context, R.raw.cancel, 0)
+        offSound = soundPool.load(this.context, R.raw.cancel, 0)
     }
 
     override fun close() {
@@ -57,6 +59,11 @@ class SoundPlayer(
     }
 
     fun playCancelSound() {
-        playSoundOrLoad(cancelSound)
+        playSoundOrLoad(offSound)
+    }
+
+    // 1.7: normal stop (pill tap, chevron stop, VAD auto-stop) also gets the mic-off cue.
+    fun playStopSound() {
+        playSoundOrLoad(offSound)
     }
 }

@@ -114,6 +114,7 @@ import org.futo.inputmethod.latin.BuildConfig
 import org.futo.inputmethod.latin.FoldingOptions
 import org.futo.inputmethod.latin.LanguageSwitcherDialog
 import org.futo.inputmethod.latin.LatinIME
+import org.futo.inputmethod.latin.uix.actions.MoreActionsAction
 import org.futo.inputmethod.latin.R
 import org.futo.inputmethod.latin.RichInputMethodManager
 import org.futo.inputmethod.latin.SuggestedWords
@@ -608,6 +609,8 @@ class UixManager(private val latinIME: LatinIME) {
     private val swiftKeyPadField = mutableStateOf(false)
     fun onInputStartingForPad(editorInfo: EditorInfo?) {
         swiftKeyPadField.value = org.futo.inputmethod.v2keyboard.isSwiftKeyPadField(editorInfo)
+        suggestedWords.value = null // Never carry an old editor's words into the first frame.
+        actionBackStack.clear()
     }
     private val suggestedWords: MutableState<SuggestedWords?> = mutableStateOf(null)
     private val expandableSuggestionCfg: MutableState<ExpandableSuggestionBarConfiguration> = mutableStateOf(
@@ -733,7 +736,7 @@ class UixManager(private val latinIME: LatinIME) {
         Column {
             // Don't show suggested words when it's not meant to be shown
             val suggestedWordsOrNull = if(shouldShowSuggestionStrip.value) {
-                suggestedWords.value
+                suggestedWords.value ?: SuggestedWords.getEmptyInstance()
             } else {
                 null
             }
@@ -860,7 +863,7 @@ class UixManager(private val latinIME: LatinIME) {
             ) {
                 if ((mainKeyboardHidden.value || isInputOverridden.value) && windowImpl.showTitleBar) {
                     ActionWindowBar(
-                        onBack = { closeActionWindow(true) },
+                        onBack = { navigateActionBack() },
                         canExpand = currWindowAction.value!!.canShowKeyboard,
                         onExpand = { toggleExpandAction() },
                         windowTitleBar = { windowImpl.WindowTitleBar(this) }
@@ -1500,12 +1503,29 @@ class UixManager(private val latinIME: LatinIME) {
 
     fun hasOpenActionWindow(): Boolean = currWindowActionWindow.value != null
 
+    private val actionBackStack = mutableListOf<Action>()
+
+    fun navigateActionBack(): Boolean {
+        if (isShowingActionEditor.value) {
+            isShowingActionEditor.value = false
+            return true
+        }
+        if (hasOpenActionWindow()) {
+            val previous = actionBackStack.lastOrNull()
+            closeActionWindow(true)
+            if (!hasOpenActionWindow() && previous != null) enterActionWindowView(previous)
+            return true
+        }
+        return false
+    }
+
     fun closeActionWindow(allowSkipClosing: Boolean = false) {
         if(returnBackToMainKeyboardViewFromAction(allowSkipClosing) == false) return
 
         // Reset any typeface override as they're not supposed to persist outside of an active
         // action window
         keyboardManagerForAction.overrideKeyboardTypeface(null)
+        actionBackStack.clear()
     }
 
 
@@ -1548,10 +1568,16 @@ class UixManager(private val latinIME: LatinIME) {
         if(alt) {
             onActionAltActivatedInternal(action)
         } else {
-            if (currWindowAction.value != null && action.windowImpl != null) {
+            val previous = currWindowAction.value
+            if (previous == MoreActionsAction && action == MoreActionsAction) {
                 closeActionWindow()
+                actionBackStack.clear()
+                return
             }
-
+            if (previous != null && action.windowImpl != null) {
+                closeActionWindow()
+                if (previous == MoreActionsAction) actionBackStack.add(previous)
+            }
             onActionActivatedInternal(action)
         }
     }

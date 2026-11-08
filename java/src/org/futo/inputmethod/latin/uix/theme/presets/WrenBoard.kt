@@ -168,7 +168,7 @@ private const val KeyRadiusDp = 5.3f
 
 /** Letter and functional keys (items 25-29): fill #3F3F3F -> #020202, outline black 95%, highlight #6D6D6D. */
 private fun letterKey(context: android.content.Context) = WrenKeyDrawable(
-    0xFF3F3F3F.toInt(), 0xFF020202.toInt(), 0xF2000000.toInt(), 0xFF6D6D6D.toInt(), true,
+    0xFF4B4B4B.toInt(), 0xFF161616.toInt(), 0xF2000000.toInt(), 0xFF777777.toInt(), true,
     dpPx(context, KeyRadiusDp), context.resources.displayMetrics)
 
 /** Number-row keys (items 30-33): fill #595959 -> #212121, outline #212121 at 95%, highlight #7E7E7E. */
@@ -308,7 +308,7 @@ val WrenBoardTheme = ThemeOption(
             advancedThemeOptions = AdvancedThemeOptions(
                 keyRoundness = 0.78f,
                 // SwiftKey list item 1: letters measured ~35% too big at 1.0; 0.74 matches Tab's SwiftKey spec
-                // (Ezzy's phone renders ~0.82; Tab re-measures there in the consolidated review).
+
                 // WrenBoard 1.5 (item 10, candidate): Tab's 1.5 measurement has our letters 14% SMALL
                 // (x-height 28px vs SwiftKey 32px, tall letters 40 vs 45): 0.74 * 1.14 = 0.84.
                 textSizeMultiplier = 0.84f,
@@ -316,7 +316,7 @@ val WrenBoardTheme = ThemeOption(
                 hintSizeMultiplier = 1.2f,
                 // WrenBoard 1.3 (teardown item 5): no orange transformer marker under suggestions.
                 showSuggestionSourceIndicators = false,
-                // Symbols sit centred above the letter, as on Ezzy's phone, SwiftKey and the approved render.
+
                 centerHints = true,
                 // Pixel spec v1.1 items 3-9: SwiftKey's label positions, 13.2 dp Regular (400) hints,
                 // 15.2 dp "123" and ",!?".

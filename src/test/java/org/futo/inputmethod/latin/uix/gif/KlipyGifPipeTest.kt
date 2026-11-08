@@ -39,6 +39,15 @@ class KlipyGifPipeTest {
     }
 
     @Test
+    fun mimeForFormatToken_mapping() {
+        assertEquals("video/mp4", KlipyGifPipe.mimeForFormatToken("mp4"))
+        assertEquals("image/gif", KlipyGifPipe.mimeForFormatToken("gif"))
+        assertEquals("image/gif", KlipyGifPipe.mimeForFormatToken(null))
+        // A raw uuid path segment (original two-segment URIs) reads as image/gif.
+        assertEquals("image/gif", KlipyGifPipe.mimeForFormatToken("3f6e6a60-0000-0000-0000-000000000000"))
+    }
+
+    @Test
     fun urlAllowlist() {
         assertTrue(KlipyGifPipe.isAllowedUrl("https://static.klipy.com/a/b.gif"))
         assertTrue(KlipyGifPipe.isAllowedUrl("https://static2.klipy.com/a.gif"))

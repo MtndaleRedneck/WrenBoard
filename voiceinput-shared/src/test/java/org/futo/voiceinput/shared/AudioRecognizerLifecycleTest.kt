@@ -1,6 +1,7 @@
 package org.futo.voiceinput.shared
 
 import android.content.Context
+import android.media.AudioRecord
 import kotlinx.coroutines.*
 import kotlinx.coroutines.test.*
 import org.futo.voiceinput.shared.types.*
@@ -21,6 +22,9 @@ class AudioRecognizerLifecycleTest {
         var starts = 0; var stops = 0; var releases = 0; var reads = 0
         var startFailure = false
         var blockAt = 0
+        var errorAt = 0   // read index that reports a dead route (-1), like a dropped headset
+        var loudUntilRead = 8 // reads up to this index are speech-loud; later fills are quiet
+        var fillReads = 8  // blocking reads delivering audio before end-of-stream (0)
         val entered = CountDownLatch(1)
         val unblock = CountDownLatch(1)
         var routeCallback: (() -> Unit)? = null
@@ -28,6 +32,8 @@ class AudioRecognizerLifecycleTest {
         override fun stop() { stops++ }
         override fun release() { releases++ }
         override fun read(samples: ShortArray, offset: Int, count: Int, mode: Int): Int {
+            // A non-blocking catch-up read on an idle fake has no buffered data.
+            if (mode == AudioRecord.READ_NON_BLOCKING) return 0
             reads++
             if (reads == blockAt) {
                 entered.countDown()
@@ -35,9 +41,13 @@ class AudioRecognizerLifecycleTest {
                 samples[0] = 2000
                 return 1
             }
-            if (reads == 2 && blockAt > 0) return 0
-            if (reads != 1) return -1
-            samples[0] = 1000; return 1
+            if (errorAt > 0 && reads == errorAt) return -1
+            if (reads > fillReads) return 0
+            // Amplitude 1000 (rms ~= 0.031) is speech-like; 100 (rms ~= 0.003) stays below
+            // the speech threshold so quiet reads never mark speech.
+            java.util.Arrays.fill(samples, offset, offset + count,
+                (if (reads <= loudUntilRead) 1000 else 100).toShort())
+            return count
         }
         override fun route(): Pair<Boolean, String> = false to "fixture"
         override fun onRouteChanged(callback: () -> Unit) { routeCallback = callback }
@@ -71,6 +81,11 @@ class AudioRecognizerLifecycleTest {
         var factoryFailure = false
         var startFailure = false
         var blockAt = 0
+        var loudUntilRead = 8
+        var fillReads = 8
+        var fakeDetectorSpeech: Boolean? = false // non-null: VAD seam answers this verdict
+        var errorFirstRecorderAt = 0 // only the first created recorder errors at this read
+        var errorAllRecordersAt = 0  // every created recorder errors at this read
         var createCount = 0
         var decodeCount = 0
         val decoded = mutableListOf<FloatArray>()
@@ -84,7 +99,20 @@ class AudioRecognizerLifecycleTest {
             override fun checkMain() { }
             override fun createRecorder(): CaptureRecorder {
                 createCount++; if (factoryFailure) error("factory failure")
-                return Recorder().also { it.startFailure = startFailure; it.blockAt = blockAt; recorders += it }
+                return Recorder().also {
+                    it.startFailure = startFailure; it.blockAt = blockAt; it.loudUntilRead = loudUntilRead
+                    it.fillReads = fillReads
+                    if (errorAllRecordersAt > 0) it.errorAt = errorAllRecordersAt
+                    else if (createCount == 1 && errorFirstRecorderAt > 0) it.errorAt = errorFirstRecorderAt
+                    recorders += it
+                }
+            }
+            override fun createSpeechDetector(): GateSpeechDetector? {
+                val verdict = fakeDetectorSpeech ?: return null
+                return object : GateSpeechDetector {
+                    override fun isSpeech(frame: ShortArray): Boolean = verdict
+                    override fun close() { }
+                }
             }
             override suspend fun preload() { }
             override suspend fun decode(samples: FloatArray, callback: ModelInferenceCallback): String {
@@ -173,9 +201,14 @@ class AudioRecognizerLifecycleTest {
                 r.recognizer.reset(); r.blockAt = 0; r.recognizer.start(); r.scheduler.runCurrent()
                 assertEquals(0, old.releases) // reader still owns the blocked native call
                 old.unblock.countDown()
-                await(r) { old.releases == 1 && r.recorders.last().reads >= 2 }
+                // Wait for the new capture's stream to end so the decoded array is deterministic.
+                await(r) { old.releases == 1 && r.recorders.last().reads >= 9 }
                 r.recognizer.finish(); await(r) { r.decodeCount == 1 && r.listener.events.contains("final:done") }
-                assertArrayEquals(floatArrayOf(1000f / Short.MAX_VALUE), r.decoded.single(), 0f)
+                val decoded = r.decoded.single()
+                // Only the new capture's speech-like samples; the old recorder's 2000-value
+                // sample must not contaminate it.
+                assertEquals(8 * 1600, decoded.size)
+                assertTrue(decoded.all { it == 1000f / Short.MAX_VALUE })
                 assertEquals(1, old.releases)
             } finally { r.recorders.forEach { it.unblock.countDown() }; r.close() }
         }
@@ -203,10 +236,99 @@ class AudioRecognizerLifecycleTest {
                 r.recognizer.finish(); old.unblock.countDown()
                 await(r) { r.listener.events.contains("final:done") }
                 assertEquals(1, r.createCount); assertEquals(1, r.decodeCount)
-                assertArrayEquals(floatArrayOf(1000f / Short.MAX_VALUE), r.decoded.single(), 0f)
+                val decoded = r.decoded.single()
+                // 2 speech-like reads plus the blocked read's distinctive single sample,
+                // in capture order.
+                assertEquals(2 * 1600 + 1, decoded.size)
+                assertTrue(decoded.take(2 * 1600).all { it == 1000f / Short.MAX_VALUE })
+                assertEquals(2000f / Short.MAX_VALUE, decoded.last(), 0f)
                 assertEquals(1, old.releases)
             } finally { r.recorders.forEach { it.unblock.countDown() }; r.close() }
         }
+    }
+
+    @Test fun noSpeechCaptureSkipsDecodeAndInsertsNothing() {
+        // Sheet 18 test: silence inserts nothing. Below-threshold noise (not exact zeros,
+        // so the exact-empty short circuit does not mask the gate) never marks speech.
+        val r = Rig(TestCoroutineScheduler()); r.loudUntilRead = 0
+        r.recognizer.start(); r.drain()
+        r.recognizer.finish(); r.drain()
+        assertEquals(0, r.decodeCount)
+        assertTrue(r.listener.events.contains("processing"))
+        assertEquals(1, r.listener.events.count { it == "final:" })
+        assertFalse(r.listener.events.any { it.startsWith("partial:") })
+        assertEquals(1, r.recorders.single().releases); r.close()
+    }
+
+    @Test fun quickSpeechWhollyInsideStartToneWindowStillDecodes() {
+        // The decode gate must not inherit the bar's 0.6s start-tone window: a genuine
+        // short word (here 0.2s of loud audio) spoken immediately after tapping the mic
+        // is real speech and decodes. Note a leaking start tone (~0.27s) is
+        // indistinguishable from this at capture level by design - Whisper's blank-output
+        // vocabulary (bell/music/beep) is the backstop there, never a phrase blacklist.
+        val r = Rig(TestCoroutineScheduler()); r.loudUntilRead = 2
+        r.recognizer.start(); r.drain()
+        r.recognizer.finish(); r.drain()
+        assertEquals(1, r.decodeCount)
+        assertTrue(r.listener.events.contains("final:done")); r.close()
+    }
+
+    @Test fun genuineSpeechMatchingPhantomPhraseIsInsertedVerbatim() {
+        // Sheet 18 test: real speech of "thanks for watching" inserts it. No phrase
+        // blacklist: decoded text is delivered unchanged even when it matches a known
+        // hallucination phrase, because the capture tripped the speech gate.
+        val r = Rig(TestCoroutineScheduler())
+        r.decodeBlock = { "Thanks for watching!" }
+        r.recognizer.start(); r.drain()
+        r.recognizer.finish(); r.drain()
+        assertEquals(1, r.decodeCount)
+        assertEquals(1, r.listener.events.count { it == "final:Thanks for watching!" }); r.close()
+    }
+
+    @Test fun quickQuietSpeechInsideToneWindowStillDecodesViaVad() {
+        // Explicit quiet-speech semantics: audio below the RMS threshold (rms ~= 0.003)
+        // is preserved when the speech detector sees sustained speech past the start-tone
+        // window. The detector always runs in production, in both auto-stop modes.
+        val r = Rig(TestCoroutineScheduler())
+        r.loudUntilRead = 0; r.fillReads = 2; r.fakeDetectorSpeech = true
+        r.recognizer.start(); r.drain()
+        r.recognizer.finish(); r.drain()
+        assertEquals(1, r.decodeCount)
+        assertTrue(r.listener.events.contains("final:done")); r.close()
+    }
+
+    @Test fun deadRouteReadErrorRecoversOnNewRecorderAndKeepsCapturing() {
+        // Sheet 18 test: a route dying mid-session (headset disconnect errors the blocking
+        // read) switches source instead of hanging; earlier samples survive the switch.
+        val r = Rig(TestCoroutineScheduler()); r.errorFirstRecorderAt = 3
+        r.recognizer.start(); r.drain()
+        r.recognizer.finish(); r.drain()
+        assertEquals(2, r.createCount)
+        assertEquals(1, r.recorders[0].stops); assertEquals(1, r.recorders[0].releases)
+        assertEquals(1, r.decodeCount)
+        // 2 reads before the error + 8 from the replacement recorder, decoded together.
+        assertEquals((2 + 8) * 1600, r.decoded.single().size)
+        assertTrue(r.listener.events.contains("final:done")); r.close()
+    }
+
+    @Test fun persistentlyDeadRouteFinishesAfterBoundedRecoveryInsteadOfHanging() {
+        // Every recorder errors immediately: bounded retries, then finish with the audio
+        // at hand (here none) rather than restarting forever.
+        val r = Rig(TestCoroutineScheduler()); r.errorAllRecordersAt = 1
+        r.recognizer.start(); r.drain()
+        assertEquals(1 + 2, r.createCount) // initial + MAX_ROUTE_RECOVERIES
+        assertTrue(r.recorders.all { it.releases == 1 })
+        assertEquals(0, r.decodeCount) // nothing captured: exact-empty short circuit
+        assertTrue(r.listener.events.contains("processing"))
+        assertEquals(1, r.listener.events.count { it == "final:" }); r.close()
+    }
+
+    @Test fun unavailableDetectorDoesNotSilentlyDropQuietSpeech() {
+        val r = Rig(TestCoroutineScheduler())
+        r.loudUntilRead = 0; r.fillReads = 2; r.fakeDetectorSpeech = null
+        r.recognizer.start(); r.drain(); r.recognizer.finish(); r.drain()
+        assertEquals(1, r.decodeCount)
+        assertTrue(r.listener.events.contains("final:done")); r.close()
     }
 
 }

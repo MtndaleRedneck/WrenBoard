@@ -1,0 +1,43 @@
+name: wren17-preflight
+on:
+  push:
+    branches: [wrenboard-1.7]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: wren17-preflight
+  cancel-in-progress: false
+jobs:
+  compile-tests:
+    if: github.repository == 'MtndaleRedneck/WrenBoard' && github.event.repository.private == false
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      VERSION_NAME: 1.7.0
+      VERSION_CODE: '8'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Initialize existing build dependencies
+        run: git submodule update --init java/assets/themes java/res-large libs translations voiceinput-shared/src/main/ml
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Unit tests and compile
+        run: ./gradlew --no-daemon --max-workers=2 -Dorg.gradle.jvmargs='-Xmx5g -Dfile.encoding=UTF-8' -Pkotlin.compiler.execution.strategy=in-process testStableDebugUnitTest :voiceinput-shared:testDebugUnitTest
+      - name: Test summary
+        if: always()
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import xml.etree.ElementTree as E
+          for p in sorted(Path('.').glob('**/build/test-results/**/TEST-*.xml')):
+              t=E.parse(p).getroot()
+              print(p, {k:t.get(k) for k in ['tests','failures','errors','skipped']})
+              for c in t.findall('.//testcase'):
+                  for f in c.findall('failure')+c.findall('error'):
+                      print(c.get('classname'), c.get('name'), f.text)
+          PY

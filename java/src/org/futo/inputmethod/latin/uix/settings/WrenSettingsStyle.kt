@@ -104,11 +104,7 @@ fun WrenSettingsTheme(content: @Composable () -> Unit) {
     }
 }
 
-/*
- * WrenBoard 1.6 (item 11, settings mock-ups v3 approved by Ezzy): a flat dark list. Page #141414, top bar #212121,
- * orange section labels, bold 16 sp row titles with 14 sp grey subtitles, orange switches, and the Feedback & bugs
- * and Updates cards (#2A2A31) at the bottom of the home page. Sizes are the mock-up's CSS px, which are dp.
- */
+
 object WrenFlat {
     val Page = Color(0xFF141414)
     val Bar = Color(0xFF212121)
@@ -119,8 +115,8 @@ object WrenFlat {
     val CardSub = Color(0xFFA6A6A6)
     val CardChevron = Color(0xFFB4B4BC)
     val Orange = Color(0xFFFF8710)
-    val ButtonTop = Color(0xFFFF9A26)
-    val ButtonBottom = Color(0xFFFF7A00)
+    val ButtonTop = Color(0xFFD88A2B)
+    val ButtonBottom = Color(0xFFC4771E)
     val ButtonText = Color(0xFF1A1A1A)
 }
 
@@ -181,7 +177,7 @@ fun WrenFlatSectionLabel(text: String) {
 
 /** One home row: 24 dp outline icon at 16 dp, title at 72 dp, 54 dp tall. */
 @Composable
-fun WrenHomeRow(title: String, icon: Int, iconSize: androidx.compose.ui.unit.Dp = 24.dp, onClick: () -> Unit) {
+fun WrenHomeRow(title: String, icon: Int, iconSize: androidx.compose.ui.unit.Dp = 24.dp, subtitle: String? = null, onClick: () -> Unit) {
     Row(
         Modifier.fillMaxWidth().heightIn(min = 54.dp).clickable(onClick = onClick).padding(horizontal = 16.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -190,7 +186,10 @@ fun WrenHomeRow(title: String, icon: Int, iconSize: androidx.compose.ui.unit.Dp 
             Icon(painterResource(icon), contentDescription = null, tint = WrenFlat.Icon, modifier = Modifier.size(iconSize))
         }
         Spacer(Modifier.width(32.dp))
-        Text(title, color = WrenFlat.Title, fontSize = 16.sp, fontWeight = FontWeight.Medium, lineHeight = 21.sp, modifier = Modifier.weight(1f))
+        Column(Modifier.weight(1f).padding(vertical = 10.dp)) {
+            Text(title, color = WrenFlat.Title, fontSize = 16.sp, fontWeight = FontWeight.Medium, lineHeight = 21.sp)
+            subtitle?.let { Text(it, color = WrenFlat.Sub, fontSize = 13.sp, lineHeight = 18.sp) }
+        }
     }
 }
 

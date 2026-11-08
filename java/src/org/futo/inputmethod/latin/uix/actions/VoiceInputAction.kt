@@ -163,6 +163,7 @@ private class VoiceInputActionWindow(
                 barStopped.value = false
                 wasFinished = false
                 cancelPlayed = false
+                offTonePlayed = false
                 startSoundGate.reset()
                 rv.reset()
                 rv.start()
@@ -302,15 +303,29 @@ private class VoiceInputActionWindow(
 
     private var wasFinished = false
     private var cancelPlayed = false
+    // One OFF cue per utterance, whichever path ends the capture first: a normal stop
+    // (processing) or a cancel. Never both. Reset when a new utterance starts.
+    private var offTonePlayed = false
     private val startSoundGate = CaptureStartSoundGate()
     override fun cancelled() {
         android.util.Log.i("WBDBG", "WINDOW VOICE capture cancelled wasFinished=$wasFinished")
         if (!wasFinished) {
-            if (shouldPlaySounds && !cancelPlayed) {
+            if (shouldPlaySounds && !cancelPlayed && !offTonePlayed) {
                 state.soundPlayer?.playCancelSound()
                 cancelPlayed = true
             }
             inputTransaction.cancel()
+        }
+    }
+
+    // 1.7 sheet 18: the mic-off cue was missing on a normal stop. processing() fires the
+    // moment recording actually stops (pill tap, chevron stop or VAD auto-stop), before
+    // decoding; honoring Indication sounds ON/OFF exactly like the start/cancel cues.
+    override fun processing() {
+        android.util.Log.i("WBDBG", "WINDOW VOICE capture processing")
+        if (shouldPlaySounds && !offTonePlayed) {
+            offTonePlayed = true
+            state.soundPlayer?.playStopSound()
         }
     }
 
