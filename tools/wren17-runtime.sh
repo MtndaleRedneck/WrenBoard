@@ -11,11 +11,17 @@ from pathlib import Path
 from PIL import Image
 import sys,io,base64
 for p in sorted(Path(sys.argv[1]).glob('*.png')):
- im=Image.open(p); im.thumbnail((540,1158)); b=io.BytesIO();im.convert('RGB').save(b,format='JPEG',quality=75)
+ im=Image.open(p); im.thumbnail((2160,2316) if p.stem.startswith("transition_") else (540,1158)); b=io.BytesIO();im.convert('RGB').save(b,format='JPEG',quality=75)
  print('W17_IMAGE_BEGIN '+p.stem)
  text=base64.b64encode(b.getvalue()).decode()
  for i in range(0,len(text),4096):print('W17_DATA '+text[i:i+4096])
  print('W17_IMAGE_END '+p.stem)
+for p in sorted(Path(sys.argv[1]).glob('review-transition-*.mp4')):
+ assert p.stat().st_size < 1500000, 'review video exceeded bounded log export size'
+ print('W17_VIDEO_BEGIN '+p.stem)
+ text=base64.b64encode(p.read_bytes()).decode()
+ for i in range(0,len(text),4096):print('W17_VIDEO_DATA '+text[i:i+4096])
+ print('W17_VIDEO_END '+p.stem)
 PY
 }
 finish_evidence() {
@@ -87,6 +93,7 @@ PYTRANSCOORD
  adb shell input keyevent KEYCODE_BACK
  wait "$RECORD_PID"
  adb pull /sdcard/w17-transition.mp4 "$OUT/transition-$TITLE.mp4" >/dev/null
+ ffmpeg -y -loglevel error -i "$OUT/transition-$TITLE.mp4" -vf 'scale=540:-2' -c:v libx264 -preset fast -crf 27 -an -movflags +faststart "$OUT/review-transition-$TITLE.mp4"
  # Export a contact sheet at8frames/sec so overlapping or stale pages can be inspected.
  ffmpeg -y -loglevel error -i "$OUT/transition-$TITLE.mp4" -vf 'fps=8,scale=270:-1,tile=8x4' -frames:v 1 "$OUT/transition_$TITLE.png"
 done
