@@ -24,7 +24,36 @@ for p in sorted(Path(sys.argv[1]).glob('review-transition-*.mp4')):
  print('W17_VIDEO_END '+p.stem)
 PY
 }
+baseline16() {
+# Baseline comparator: exact shipped1.6 binary, same synthetic path and geometry.
+# Runs only after1.7evidence is gathered. Fresh install avoids any learned-word carryover.
+curl --http1.1 -fL --retry 4 --retry-all-errors --retry-delay 3 --max-time 180 -o /tmp/wren16-baseline.apk https://github.com/MtndaleRedneck/WrenBoard/releases/download/v1.6.0/WrenBoard-1.6.apk
+echo '89e3c3a7f756816bb36f391a4179405942738be9bd2ff12f3f9c4c87459f453f  /tmp/wren16-baseline.apk' | sha256sum -c -
+adb uninstall "$PKG" >/dev/null
+adb install /tmp/wren16-baseline.apk
+rm /tmp/wren16-baseline.apk
+sleep 3
+BASEIME=$(adb shell ime list -a -s | tr -d '\r' | grep "^$PKG/" | head -1)
+test -n "$BASEIME"
+adb shell ime enable "$BASEIME"; adb shell ime set "$BASEIME"
+adb shell am force-stop com.wrenboard.imetarget
+adb shell am start -n com.wrenboard.imetarget/.TestInput >/dev/null
+sleep 3
+clear_fixture
+adb logcat -c
+adb shell sh /data/local/tmp/w17-swipe.sh; sleep 3
+report_fixture > "$OUT/baseline16-cat-report.txt"; shot baseline16_swipe_cat
+# Baseline is a comparison result, not a replacement pass for1.7accuracy.
+python3 - "$OUT/baseline16-cat-report.txt" <<'PYBASELINE'
+import re,sys
+f=re.findall(r'FIELD=(.*)',open(sys.argv[1]).read())[-1]
+print('BASELINE16 same cat path result',repr(f))
+PYBASELINE
+
+}
 finish_evidence() {
+ if adb shell test -f /data/local/tmp/w17-swipe.sh; then ( baseline16 ) || echo "BASELINE16 comparison unavailable"; fi
+
  for report in "$OUT"/*report.txt "$OUT"/instrumentation.txt; do
   [ ! -f "$report" ] || { echo "REPORT $report"; cat "$report"; }
  done
@@ -94,12 +123,15 @@ for n in E.parse(sys.argv[1]).iter('node'):
   a,b,c,d=map(int,re.findall(r'\d+',n.get('bounds')));print((a+c)//2,(b+d)//2);break
 PYTRANSCOORD
  read -r TX TY < "$OUT/transition-coordinates"
- adb shell screenrecord --time-limit 8 /sdcard/w17-transition.mp4 > "$OUT/recording-${TITLE// /_}.log" 2>&1 &
+ adb shell input tap "$TX" "$TY"
+ sleep 4
+ shot "transition_before_${TITLE// /_}"
+ adb shell screenrecord --time-limit 6 /sdcard/w17-transition.mp4 > "$OUT/recording-${TITLE// /_}.log" 2>&1 &
  RECORD_PID=$!
  sleep 0.5
- adb shell input tap "$TX" "$TY"
- sleep 3
  adb shell input keyevent KEYCODE_BACK
+ sleep 2
+ shot "transition_after_${TITLE// /_}"
  wait "$RECORD_PID"
  adb pull /sdcard/w17-transition.mp4 "$OUT/transition-${TITLE// /_}.mp4" >/dev/null
  ffmpeg -y -loglevel error -i "$OUT/transition-${TITLE// /_}.mp4" -vf 'scale=540:-2' -c:v libx264 -preset fast -crf 27 -an -movflags +faststart "$OUT/review-transition-${TITLE// /_}.mp4"
@@ -250,13 +282,8 @@ shot gif_keyed_recents
 adb shell input tap 350 950
 sleep 2
 for LETTER in c a t; do tap_letter "$LETTER"; done
-adb logcat -d -s WBDBG:I > "$OUT/gif-submit-positions.txt"
-read -r GOX GOY < <(python3 - "$OUT/gif-submit-positions.txt" <<'PYGO'
-import sys,re
-m=re.findall(r'EMOJISEARCHGO cx=(\d+) cy=(\d+)',open(sys.argv[1]).read());assert m;print(*m[-1])
-PYGO
-)
-adb shell input tap "$GOX" "$GOY"
+# Visible arrow measured on actual1080x2316 search-mode frame: centre1022,1200.
+adb shell input tap 1022 1200
 sleep 8
 shot gif_keyed_cat_results
 dump gif_keyed_cat_results
@@ -293,28 +320,4 @@ test -n "$RUNNER"
 adb shell am instrument -w -r -e class org.futo.inputmethod.keyboard.internal.KeyboardStateShiftCycleTests "$RUNNER" | tee "$OUT/instrumentation.txt"
 grep -Eq 'OK \([0-9]+ tests?\)' "$OUT/instrumentation.txt"
 ! grep -Eq 'FAILURES!!!|INSTRUMENTATION_FAILED|shortMsg=Process crashed' "$OUT/instrumentation.txt"
-# Baseline comparator: exact shipped1.6 binary, same synthetic path and geometry.
-# Runs only after1.7evidence is gathered. Fresh install avoids any learned-word carryover.
-curl --http1.1 -fL --retry 4 --retry-all-errors --retry-delay 3 --max-time 180 -o /tmp/wren16-baseline.apk https://github.com/MtndaleRedneck/WrenBoard/releases/download/v1.6.0/WrenBoard-1.6.apk
-echo '89e3c3a7f756816bb36f391a4179405942738be9bd2ff12f3f9c4c87459f453f  /tmp/wren16-baseline.apk' | sha256sum -c -
-adb uninstall "$PKG" >/dev/null
-adb install /tmp/wren16-baseline.apk
-rm /tmp/wren16-baseline.apk
-sleep 3
-BASEIME=$(adb shell ime list -a -s | tr -d '\r' | grep "^$PKG/" | head -1)
-test -n "$BASEIME"
-adb shell ime enable "$BASEIME"; adb shell ime set "$BASEIME"
-adb shell am force-stop com.wrenboard.imetarget
-adb shell am start -n com.wrenboard.imetarget/.TestInput >/dev/null
-sleep 3
-clear_fixture
-adb logcat -c
-adb shell sh /data/local/tmp/w17-swipe.sh; sleep 3
-report_fixture > "$OUT/baseline16-cat-report.txt"; shot baseline16_swipe_cat
-# Baseline is a comparison result, not a replacement pass for1.7accuracy.
-python3 - "$OUT/baseline16-cat-report.txt" <<'PYBASELINE'
-import re,sys
-f=re.findall(r'FIELD=(.*)',open(sys.argv[1]).read())[-1]
-print('BASELINE16 same cat path result',repr(f))
-PYBASELINE
 test "${REGRESSION_FAILED:-0}" = 0
