@@ -76,36 +76,25 @@ dump normal
 # UI text selects real buttons; no hard-coded app coordinates.
 coords() { python3 tools/wren17-screen-coords.py "$OUT/$1.png" "$2"; }
 taptext() { shot current; read -r X Y < <(coords current "$1"); adb shell input tap "$X" "$Y"; sleep 1; }
-taptext Reorder
-shot editor_initial
-dump editor_initial
-# Reorder the first visible action onto the fixed Hidden destination, using a true long-press drag.
-read -r SX SY < <(coords editor_initial Emojis)
-# Hidden count depends on the registry; derive its actual label instead of assuming12.
-coords editor_initial Hidden > "$OUT/hidden-coords"
-read -r HX HY < "$OUT/hidden-coords"
+# No separate editor: drag directly in the open action box, save only on completed drop.
+shot direct_initial
+read -r SX SY < <(coords direct_initial Emojis)
+read -r HX HY < <(coords direct_initial Hidden)
 adb shell input motionevent DOWN "$SX" "$SY"; sleep 0.8
 for I in $(seq 1 12); do
  X=$((SX+(HX-SX)*I/12));Y=$((SY+(HY-SY)*I/12));adb shell input motionevent MOVE "$X" "$Y";sleep 0.07
 done
-adb shell input motionevent UP "$HX" "$HY";sleep 1
-shot after_drag_hidden
-taptext Done
-shot after_done
-# Close editor and reopen: Done persists; unsaved draft must not overwrite it on disposal.
+adb shell input motionevent UP "$HX" "$HY";sleep 2
+shot after_drop_hidden
 adb shell input keyevent KEYCODE_BACK;sleep 1
-adb shell am broadcast -a com.wrenboard.keyboard.WBDBG -p "$PKG" --es cmd open:more >/dev/null;sleep 1
-taptext Reorder
-shot editor_reopened
-# Open the Hidden tile using derived bounds, independent of its count.
-dump reopened
-shot reopened
-coords reopened Hidden > "$OUT/open-hidden"
-read -r HX HY < "$OUT/open-hidden";adb shell input tap "$HX" "$HY";sleep 1
+adb shell am broadcast -a com.wrenboard.keyboard.WBDBG -p "$PKG" --es cmd open:more >/dev/null;sleep 2
+shot direct_reopened
+taptext Hidden
 shot hidden_open
 taptext Emojis
-shot restored_emoji_draft
-taptext Done
 shot restored_saved
-echo 'FOCUSED ACTIONS CAPTURE COMPLETE: inspect pixels and hierarchy before any drag/persistence verdict'
+adb shell input keyevent KEYCODE_BACK;sleep 1
+adb shell am broadcast -a com.wrenboard.keyboard.WBDBG -p "$PKG" --es cmd open:more >/dev/null;sleep 2
+shot restored_reopened
+echo 'FOCUSED DIRECT ACTIONS CAPTURE COMPLETE: inspect pixels before persistence verdict'
 adb logcat -d -s AndroidRuntime:E | tail -60

@@ -42,7 +42,7 @@ fun Context.readUnifiedActions(): OrderedActionIds = runBlocking {
     result!!
 }
 
-/** Explicit Done only. Editor drafts stay in memory until this function is called. */
+/** Atomic commit for a completed drop or explicit restore. Never called on move frames or disposal. */
 suspend fun Context.saveUnifiedActions(model: OrderedActionIds) {
     val safe = OrderedActionIds.normalize(model.visible, model.hidden, UnifiedKnownIds)
     dataStore.edit { it[UnifiedActionsKey] = safe.encode() }
