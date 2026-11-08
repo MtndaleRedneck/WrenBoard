@@ -114,7 +114,7 @@ fun ActionItem(action: Action, modifier: Modifier = Modifier, dragIcon: Boolean 
                 Column(
                     modifier = Modifier
                         .align(Center)
-                        .padding(6.dp)
+                        .padding(2.dp)
                 ) {
                     Spacer(modifier = Modifier.weight(1.0f))
                     Icon(
