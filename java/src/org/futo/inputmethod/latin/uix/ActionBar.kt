@@ -829,11 +829,10 @@ fun ActionItems(onSelect: (Action) -> Unit, onLongSelect: (Action) -> Unit) {
 
     val swiftKeySlots = isKeyStyledTheme()
     if (swiftKeySlots) {
-        // SwiftKey parity (pixel spec v1.1 item 45): seven fixed slots at a 52.8 dp pitch, centred, the first
-        // six chosen buttons and "..." (More) always in the last slot; the rest are behind More.
+        // Up to six visible actions, plus the fixed More entry. Fewer actions fill the row evenly.
         BoxWithConstraints(Modifier.safeKeyboardPadding().fillMaxSize()) {
-            val pitch = if (maxWidth >= 52.8.dp * 7) 52.8.dp else maxWidth / 7
             val shown = actionItems.filter { it != MoreActionsAction }.take(6) + MoreActionsAction
+            val pitch = maxWidth / shown.size
             Row(Modifier.fillMaxHeight().align(Alignment.Center)) {
                 LazyRow(userScrollEnabled = false) {
                     items(shown.size, key = { shown[it].name }) {
@@ -848,7 +847,7 @@ fun ActionItems(onSelect: (Action) -> Unit, onLongSelect: (Action) -> Unit) {
     BoxWithConstraints(Modifier.safeKeyboardPadding()) {
         // WrenBoard 1.2: the approved toolbar spreads up to seven chosen buttons plus More (always last)
         // evenly across the row; more than that falls back to FUTO's scrolling row with More first.
-        val evenSpread = actionItems.size in 1..7
+        val evenSpread = actionItems.size <= 6
         val shown = if (evenSpread) actionItems.filter { it != MoreActionsAction } + MoreActionsAction else actionItems
         val itemWidth = if (evenSpread) maxWidth / shown.size else 56.dp
         if (org.futo.inputmethod.latin.BuildConfig.DEBUG) {

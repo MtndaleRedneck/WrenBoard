@@ -1,10 +1,19 @@
 package org.futo.inputmethod.latin.uix.actions
 
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.LaunchedEffect
 import android.view.HapticFeedbackConstants
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.border
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.width
@@ -129,50 +138,79 @@ fun ActionItem(action: Action, modifier: Modifier = Modifier, dragIcon: Boolean 
 @Composable
 @Preview(showBackground = true)
 fun MoreActionsView() {
-    val manager = if(LocalInspectionMode.current) { null } else { LocalManager.current }
+    val manager = if(LocalInspectionMode.current) null else LocalManager.current
     val context = LocalContext.current
-
-    val unified = useUnifiedActions()
-    val actions = unified.visible.mapNotNull { AllActionsMap[it] }
-    var showHidden by remember { mutableStateOf(false) }
-    if (showHidden) {
-        Column {
-            TextButton(onClick = { showHidden = false }) { Text("Back to actions") }
-            LazyVerticalGrid(columns = GridCells.Fixed(4)) {
-                items(unified.hidden.mapNotNull { AllActionsMap[it] }.filter { it.shownInEditor }, key = { it.name }) { action ->
-                    ActionItem(action, Modifier.clickable { manager?.activateAction(action) })
+    val scope = rememberCoroutineScope()
+    val persisted = useUnifiedActions()
+    var draft by remember { mutableStateOf(persisted) }
+    var hiddenOpen by remember { mutableStateOf(false) }
+    var dragging by remember { mutableStateOf<String?>(null) }
+    var transaction by remember { mutableStateOf<ActionDragDraft?>(null) }
+    var pointer by remember { mutableStateOf(Offset.Zero) }
+    var overHidden by remember { mutableStateOf(false) }
+    val bounds = remember { mutableStateMapOf<String, Rect>() }
+    val latestDraft by rememberUpdatedState(draft)
+    LaunchedEffect(persisted.encode()) { if(dragging == null) draft = persisted }
+    fun persist(model: OrderedActionIds) {
+        draft = model
+        scope.launch { context.saveUnifiedActions(model) }
+    }
+    Column {
+        if(hiddenOpen) TextButton(onClick = { hiddenOpen = false }) { Text("Back") }
+        LazyVerticalGrid(columns = GridCells.Fixed(4), modifier = Modifier.fillMaxWidth().padding(8.dp)) {
+            val ids = (if(hiddenOpen) draft.hidden else draft.visible).filter { AllActionsMap[it]?.shownInEditor == true }
+            item(key = "hidden-destination") {
+                TextButton(onClick = { hiddenOpen = !hiddenOpen }, modifier = Modifier.height(74.dp)
+                    .onGloballyPositioned { bounds["hidden-destination"] = it.boundsInRoot() }) {
+                    Text(if(hiddenOpen) "Actions" else if(overHidden) "Drop to hide" else "Hidden (" + draft.hidden.count { AllActionsMap[it]?.shownInEditor == true } + ")")
                 }
             }
-        }
-        return
-    }
-    if(actions.isEmpty()) {
-        ScreenTitle(stringResource(R.string.action_editor_warning_no_actions))
-    }
+            items(ids, key = { it }) { id ->
+                val action = AllActionsMap[id]!!
+                var itemOrigin by remember { mutableStateOf(Offset.Zero) }
+                val gesture = if(hiddenOpen) Modifier.clickable {
+                    persist(draft.show(id, draft.visible.size))
+                } else Modifier
+                    .clickable { manager?.activateAction(action) }
+                    .pointerInput(id) {
+                        detectDragGesturesAfterLongPress(
+                            onDragStart = { offset ->
+                                transaction = ActionDragDraft(latestDraft)
+                                dragging = id
+                                pointer = itemOrigin + offset
+                                overHidden = false
+                            },
+                            onDrag = { change, delta ->
+                                change.consume()
+                                pointer += delta
+                                overHidden = bounds["hidden-destination"]?.contains(pointer) == true
+                                if(!overHidden) {
+                                    val target = bounds.entries.firstOrNull { it.key != "hidden-destination" && it.key != id && it.value.contains(pointer) }?.key
+                                    val index = latestDraft.visible.indexOf(target)
+                                    if(index >= 0) {
+                                        transaction?.move(id, index)
+                                        transaction?.preview()?.let { draft = it }
+                                    }
+                                }
+                            },
+                            onDragEnd = {
+                                if(overHidden) transaction?.hide(id)
+                                val completed = transaction?.drop()
+                                dragging = null; transaction = null; overHidden = false
+                                if(completed != null) persist(completed)
+                            },
+                            onDragCancel = {
+                                transaction?.cancel()
+                                transaction?.preview()?.let { draft = it }
+                                dragging = null; transaction = null; overHidden = false
+                            }
+                        )
+                    }
+                ActionItem(action, Modifier.alpha(if(dragging == id) 0.55f else 1.0f).onGloballyPositioned {
+                    bounds[id] = it.boundsInRoot(); itemOrigin = it.boundsInRoot().topLeft
+                }.then(gesture))
+            }
 
-    LazyVerticalGrid(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(8.dp),
-        columns = GridCells.Fixed(4),
-        horizontalArrangement = Arrangement.spacedBy(0.dp),
-        verticalArrangement = Arrangement.spacedBy(0.dp)
-    ) {
-        item(key = "hidden-destination") {
-            TextButton(onClick = { showHidden = true }, modifier = Modifier.height(74.dp)) { Text("Hidden") }
-        }
-        items(actions, key = { it.name }) {
-            // WrenBoard harness: log each grid tile's center in DEBUG builds, same as the toolbar.
-            val wbView = LocalView.current
-            val wbName = stringResource(it.name)
-            ActionItem(it, Modifier.onGloballyPositioned { c ->
-                if (org.futo.inputmethod.latin.BuildConfig.DEBUG) {
-                    val loc = IntArray(2); wbView.getLocationOnScreen(loc); val p = c.positionInRoot()
-                    org.futo.inputmethod.latin.uix.WbDebug.logWindow("ACTION name=${wbName.replace(' ', '_')} cx=${(loc[0] + p.x + c.size.width / 2).toInt()} cy=${(loc[1] + p.y + c.size.height / 2).toInt()}")
-                }
-            }.clickable {
-                manager!!.activateAction(it)
-            })
         }
     }
 }
@@ -180,54 +218,7 @@ fun MoreActionsView() {
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun ActionsEditor(header: @Composable () -> Unit) {
-    val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-    val inspecting = LocalInspectionMode.current
-    var draft by remember { mutableStateOf(if(inspecting) migrateUnifiedActionIds(ActionsSettings.default) else context.readUnifiedActions()) }
-    var hiddenOpen by remember { mutableStateOf(false) }
-    var saved by remember { mutableStateOf(false) }
-    val view = LocalView.current
-    val lazyState = rememberLazyGridState()
-    // Sentinel remains fixed and reachable. Moving onto it transfers the action to Hidden.
-    val shownIds = if(hiddenOpen) draft.hidden.filter { AllActionsMap[it]?.shownInEditor == true } else draft.visible
-    val reorder = rememberReorderableLazyGridState(lazyState) { from, to ->
-        val id = from.key as? String
-        if (id != null && id != "hidden-destination" && !hiddenOpen) {
-            draft = if(to.key == "hidden-destination") draft.hide(id)
-                else draft.move(id, shownIds.indexOf(to.key).coerceAtLeast(0))
-            saved = false
-            view.performHapticFeedback(HapticFeedbackConstants.SEGMENT_FREQUENT_TICK)
-        }
-    }
-    Column(Modifier.fillMaxSize()) {
-        header()
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            TextButton(onClick = { hiddenOpen = !hiddenOpen }) { Text(if(hiddenOpen) "Back to actions" else "Customize actions") }
-            TextButton(onClick = { scope.launch { context.saveUnifiedActions(draft); saved = true } }) { Text(if(saved) "Saved" else "Done") }
-        }
-        Text(if(hiddenOpen) "Tap an action to bring it back." else "Hold and drag to reorder. Drag onto Hidden to hide.",
-            Modifier.padding(8.dp), style = Typography.Small)
-        LazyVerticalGrid(state = lazyState, columns = GridCells.Fixed(4), modifier = Modifier.fillMaxSize().padding(8.dp)) {
-            item(key = "hidden-destination") {
-                ReorderableItem(reorder, key = "hidden-destination") {
-                    TextButton(onClick = { hiddenOpen = !hiddenOpen }, modifier = Modifier.height(74.dp)) {
-                        Text(if(hiddenOpen) "Actions" else "Hidden (" + draft.hidden.count { AllActionsMap[it]?.shownInEditor == true } + ")")
-                    }
-                }
-            }
-            items(shownIds, key = { it }) { id ->
-                val action = AllActionsMap[id]
-                if(action != null) {
-                    ReorderableItem(reorder, key = id) { _ ->
-                        val itemModifier = if(hiddenOpen) Modifier.clickable {
-                            draft = draft.show(id, draft.visible.size); saved = false
-                        } else Modifier.longPressDraggableHandle()
-                        ActionItem(action, itemModifier)
-                    }
-                }
-            }
-        }
-    }
+    MoreActionsView()
 }
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -264,11 +255,6 @@ val MoreActionsAction = Action(
                 Column {
                     Box(Modifier.fillMaxWidth().height(org.futo.inputmethod.latin.uix.ToolbarRowHeight)) {
                         org.futo.inputmethod.latin.uix.ActionItems({ manager.activateAction(it) }, { })
-                    }
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                        OutlinedButton(onClick = { manager.showActionEditor() }, modifier = Modifier.padding(horizontal = 8.dp)) {
-                            Text(stringResource(R.string.wren17_reorder))
-                        }
                     }
                     MoreActionsView()
                 }
