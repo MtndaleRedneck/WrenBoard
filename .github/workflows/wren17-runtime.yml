@@ -25,7 +25,7 @@ jobs:
         run: git submodule update --init java/assets/themes java/res-large libs translations voiceinput-shared/src/main/ml
       - name: Reuse shipped swipe weights for regression fixture
         run: |
-          curl -fL --retry 2 -o /tmp/wren16.apk https://github.com/MtndaleRedneck/WrenBoard/releases/download/v1.6.0/WrenBoard-1.6.apk
+          curl --http1.1 -fL --retry 4 --retry-all-errors --retry-delay 3 --connect-timeout 30 --max-time 180 -o /tmp/wren16.apk https://github.com/MtndaleRedneck/WrenBoard/releases/download/v1.6.0/WrenBoard-1.6.apk
           echo '89e3c3a7f756816bb36f391a4179405942738be9bd2ff12f3f9c4c87459f453f  /tmp/wren16.apk' | sha256sum -c -
           python3 - <<'PYWEIGHTS'
           from pathlib import Path
