@@ -801,7 +801,7 @@ fun ActionItems(onSelect: (Action) -> Unit, onLongSelect: (Action) -> Unit) {
     val context = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current
     val unified = org.futo.inputmethod.latin.uix.actions.useUnifiedActions()
-    val actionItems = unified.visible.take(6).mapNotNull { org.futo.inputmethod.latin.uix.actions.AllActionsMap[it] }
+    val actionItems = unified.visible.mapNotNull { org.futo.inputmethod.latin.uix.actions.AllActionsMap[it] }.filter { it.shownInEditor }.take(6)
     val scrollItemIndex = 0
     val scrollItemOffset = 0
 

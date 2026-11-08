@@ -144,5 +144,31 @@ shot fewer_than_six
 adb shell input keyevent KEYCODE_BACK;sleep 1
 adb shell am broadcast -a com.wrenboard.keyboard.WBDBG -p "$PKG" --es cmd open:more >/dev/null;sleep 2
 shot fewer_than_six_reopened
+# Exercise overflow beyond sixteen actions, including returning from Hidden before a multi-cell drag.
+taptext Hidden
+for LABEL in Emojis Clipboard GIF Share Info Settings Undo Redo 'Select All' 'Keyboard Modes' WordStyles 'Language switch key'; do
+ taptext "$LABEL"
+done
+taptext Back
+shot overflow_initial
+read -r SX SY < <(coords overflow_initial 'Text Editor')
+read -r HX HY < <(coords overflow_initial 'Voice Input')
+adb shell input motionevent DOWN "$SX" "$SY";sleep 0.8
+for I in $(seq 1 12); do
+ X=$((SX+(HX-SX)*I/12));Y=$((SY+(HY-SY)*I/12));adb shell input motionevent MOVE "$X" "$Y";sleep 0.07
+done
+adb shell input motionevent UP "$HX" "$HY";sleep 1
+shot overflow_reordered
+# Hidden is outside the scroll area and remains a live drop target.
+read -r SX SY < <(coords overflow_reordered 'Text Editor')
+read -r HX HY < <(coords overflow_reordered Hidden)
+adb shell input motionevent DOWN "$SX" "$SY";sleep 0.8
+for I in $(seq 1 12); do
+ X=$((SX+(HX-SX)*I/12));Y=$((SY+(HY-SY)*I/12));adb shell input motionevent MOVE "$X" "$Y";sleep 0.07
+done
+adb shell input motionevent UP "$HX" "$HY";sleep 1
+adb shell input keyevent KEYCODE_BACK;sleep 1
+adb shell am broadcast -a com.wrenboard.keyboard.WBDBG -p "$PKG" --es cmd open:more >/dev/null;sleep 2
+shot overflow_hidden_reopened
 echo 'FOCUSED DIRECT ACTIONS CAPTURE COMPLETE: inspect pixels before persistence verdict'
 adb logcat -d -s AndroidRuntime:E | tail -60

@@ -30,6 +30,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -163,12 +164,31 @@ fun MoreActionsView() {
         draft = model
         scope.launch { context.saveUnifiedActions(model) }
     }
+    val ids = (if(hiddenOpen) draft.hidden else draft.visible).filter { AllActionsMap[it]?.shownInEditor == true }
+    val overflow = !hiddenOpen && ids.size >= 16
+    val hideTile: @Composable () -> Unit = {
+                DisposableEffect(Unit) { onDispose { bounds.remove("hidden-destination") } }
+                val scheme = LocalKeyboardScheme.current
+                val hiddenLabel = if(scheme.keyboardSurface.luminance() < 0.5f) Color(0xFFE6E6E6) else Color(0xFF262626)
+                val label = if(overHidden) "Drop to hide" else "Hidden (" + draft.hidden.count { AllActionsMap[it]?.shownInEditor == true } + ")"
+                Surface(color = if(overHidden) hiddenLabel.copy(alpha = 0.16f) else Color.Transparent,
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.height(64.dp).fillMaxWidth()
+                        .onGloballyPositioned { bounds["hidden-destination"] = it.boundsInRoot() }
+                        .drawBehind { drawRoundRect(hiddenLabel.copy(alpha = 0.4f), cornerRadius = CornerRadius(12.dp.toPx()), style = Stroke(width = 1.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 3.dp.toPx())))) }
+                        .clickable { hiddenOpen = !hiddenOpen }) {
+                    Column(Modifier.fillMaxSize().padding(6.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.SpaceEvenly) {
+                        Icon(painterResource(R.drawable.visibility_off), contentDescription = null, tint = hiddenLabel.copy(alpha = 0.8f), modifier = Modifier.size(26.dp))
+                        Text(label, color = hiddenLabel, fontSize = 12.sp, maxLines = 1)
+                    }
+                }
+    }
     Column {
         if(hiddenOpen) TextButton(onClick = { hiddenOpen = false }) { Text("Back") }
-        LazyVerticalGrid(columns = GridCells.Fixed(4), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth().padding(8.dp)) {
-            val ids = (if(hiddenOpen) draft.hidden else draft.visible).filter { AllActionsMap[it]?.shownInEditor == true }
+        LazyVerticalGrid(columns = GridCells.Fixed(4), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth().then(if(overflow) Modifier.heightIn(max = 208.dp) else Modifier).padding(8.dp)) {
             items(ids, key = { it }) { id ->
                 val action = AllActionsMap[id]!!
+                DisposableEffect(id, hiddenOpen) { onDispose { bounds.remove(id) } }
                 var itemOrigin by remember { mutableStateOf(Offset.Zero) }
                 val gesture = if(hiddenOpen) Modifier.clickable {
                     persist(draft.show(id, draft.visible.size))
@@ -184,10 +204,10 @@ fun MoreActionsView() {
                             },
                             onDrag = { change, delta ->
                                 change.consume()
-                                pointer += delta
+                                pointer = itemOrigin + change.position
                                 overHidden = bounds["hidden-destination"]?.contains(pointer) == true
                                 if(!overHidden) {
-                                    val target = bounds.entries.firstOrNull { it.key != "hidden-destination" && it.key != id && it.value.contains(pointer) }?.key
+                                    val target = bounds.entries.firstOrNull { it.key in latestDraft.visible && it.key != id && !it.value.isEmpty && it.value.contains(pointer) }?.key
                                     val index = latestDraft.visible.indexOf(target)
                                     if(index >= 0) {
                                         transaction?.move(id, index)
@@ -213,24 +233,13 @@ fun MoreActionsView() {
                 }.then(gesture), dragIcon = !hiddenOpen, position = if(hiddenOpen) null else ids.indexOf(id) + 1)
             }
             // Keep the hide destination at the bottom right, after all action tiles.
-            if(!hiddenOpen) items((3 - ids.size % 4 + 4) % 4) { Spacer(Modifier.height(64.dp)) }
-            item(key = "hidden-destination") {
-                val scheme = LocalKeyboardScheme.current
-                val hiddenLabel = if(scheme.keyboardSurface.luminance() < 0.5f) Color(0xFFE6E6E6) else Color(0xFF262626)
-                val label = if(hiddenOpen) "Actions" else if(overHidden) "Drop to hide" else "Hidden (" + draft.hidden.count { AllActionsMap[it]?.shownInEditor == true } + ")"
-                Surface(color = if(overHidden) hiddenLabel.copy(alpha = 0.16f) else Color.Transparent,
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier.height(64.dp).fillMaxWidth()
-                        .onGloballyPositioned { bounds["hidden-destination"] = it.boundsInRoot() }
-                        .drawBehind { drawRoundRect(hiddenLabel.copy(alpha = 0.4f), cornerRadius = CornerRadius(12.dp.toPx()), style = Stroke(width = 1.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 3.dp.toPx())))) }
-                        .clickable { hiddenOpen = !hiddenOpen }) {
-                    Column(Modifier.fillMaxSize().padding(6.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.SpaceEvenly) {
-                        Icon(painterResource(R.drawable.visibility_off), contentDescription = null, tint = hiddenLabel.copy(alpha = 0.8f), modifier = Modifier.size(26.dp))
-                        Text(label, color = hiddenLabel, fontSize = 12.sp, maxLines = 1)
-                    }
-                }
-            }
+            if(!hiddenOpen && !overflow) items((3 - ids.size % 4 + 4) % 4) { Spacer(Modifier.height(64.dp)) }
+            if(!hiddenOpen && !overflow) item(key = "hidden-destination") { hideTile() }
 
+        }
+        // With many actions, keep Hidden reachable while the action grid scrolls.
+        if(overflow) Row(Modifier.fillMaxWidth().padding(8.dp), horizontalArrangement = Arrangement.End) {
+            Box(Modifier.fillMaxWidth(0.235f)) { hideTile() }
         }
     }
 }
