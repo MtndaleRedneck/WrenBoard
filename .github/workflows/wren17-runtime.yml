@@ -1,0 +1,53 @@
+name: wren17-runtime
+on:
+  push:
+    branches: [wrenboard-1.7]
+    paths: [.github/workflows/wren17-runtime.yml, tools/wren17-runtime.sh]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: wren17-runtime
+  cancel-in-progress: false
+jobs:
+  runtime:
+    if: github.repository == 'MtndaleRedneck/WrenBoard' && github.event.repository.private == false
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      VERSION_NAME: 1.7.0
+      VERSION_CODE: '8'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Build dependencies
+        run: git submodule update --init java/assets/themes java/res-large libs translations voiceinput-shared/src/main/ml
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Install NDK and image tools
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'ndk;28.2.13676358'
+          python3 -m pip install --break-system-packages pillow
+      - name: Build debug fixture APK
+        run: |
+          ./gradlew --no-daemon --max-workers=2 -Dorg.gradle.jvmargs='-Xmx5g -Dfile.encoding=UTF-8' -Pkotlin.compiler.execution.strategy=in-process assembleStableDebug -Pandroid.injected.build.abi=x86_64 -Pandroid.injected.testOnly=false
+          bash tools/ime-target/build.sh
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Capture isolated runtime screens
+        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
+        with:
+          api-level: 34
+          target: google_apis
+          arch: x86_64
+          profile: Nexus 6
+          ram-size: 4096M
+          disable-animations: true
+          script: bash tools/wren17-runtime.sh "$(find build/outputs/apk build/intermediates -name '*.apk' | grep -i debug | grep -vi androidtest | head -1)"
