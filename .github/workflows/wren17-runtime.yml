@@ -48,6 +48,7 @@ jobs:
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null || true
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'ndk;28.2.13676358'
           python3 -m pip install --break-system-packages pillow
+          sudo apt-get install -y -q ffmpeg
       - name: Build debug fixture APK
         env:
           KLIPY_APP_KEY: ${{ secrets.KLIPY_APP_KEY }}

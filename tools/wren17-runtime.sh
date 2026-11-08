@@ -65,6 +65,32 @@ PY
 read -r X Y < "$OUT/theme-coordinates"
 adb shell input tap "$X" "$Y"; sleep 2; shot themes_from_home; dump themes_from_home
 adb shell input keyevent KEYCODE_BACK; sleep 2; shot themes_back_home; dump themes_back_home
+# Inspect temporal navigation with ordinary Android animations enabled, not just settled frames.
+# Each 4-second clip starts on home, opens a real row and returns with system Back.
+adb shell settings put global window_animation_scale 1
+adb shell settings put global transition_animation_scale 1
+adb shell settings put global animator_duration_scale 1
+for TITLE in Themes Languages Typing; do
+ openpage home
+ python3 - "$OUT/home.xml" "$TITLE" > "$OUT/transition-coordinates" <<'PYTRANSCOORD'
+import sys,re,xml.etree.ElementTree as E
+for n in E.parse(sys.argv[1]).iter('node'):
+ if n.get('text')==sys.argv[2]:
+  a,b,c,d=map(int,re.findall(r'\d+',n.get('bounds')));print((a+c)//2,(b+d)//2);break
+PYTRANSCOORD
+ read -r TX TY < "$OUT/transition-coordinates"
+ adb shell screenrecord --time-limit 4 /sdcard/w17-transition.mp4 > "$OUT/recording-$TITLE.log" 2>&1 &
+ RECORD_PID=$!
+ sleep 0.5
+ adb shell input tap "$TX" "$TY"
+ sleep 0.8
+ adb shell input keyevent KEYCODE_BACK
+ wait "$RECORD_PID"
+ adb pull /sdcard/w17-transition.mp4 "$OUT/transition-$TITLE.mp4" >/dev/null
+ # Export a contact sheet at8frames/sec so overlapping or stale pages can be inspected.
+ ffmpeg -y -loglevel error -i "$OUT/transition-$TITLE.mp4" -vf 'fps=8,scale=270:-1,tile=8x4' -frames:v 1 "$OUT/transition_$TITLE.png"
+done
+
 # Keyboard and nested action panels in a synthetic blank editor.
 adb shell am start -n com.wrenboard.imetarget/.TestInput >/dev/null; sleep 3
 dump target
