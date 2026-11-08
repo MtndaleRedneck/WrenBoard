@@ -626,8 +626,7 @@ fun RowScope.SuggestionItems(words: SuggestedWords, onClick: (i: Int) -> Unit, o
     if (isKeyStyledTheme() && !layout.isGestureBatch) {
         val candidates = layout.sortedMatches
         centreSuggestion = spaceCommitSuggestion(layout.autocorrectMatch, layout.verbatimWord, candidates)
-        val left = layout.verbatimWord
-            ?: candidates.firstOrNull { it != centreSuggestion }
+        val left = leftSuggestion(layout.verbatimWord, centreSuggestion, candidates) { it.mWord }
         renderItem(left, leftWeight)
         SuggestionSeparator()
         renderItem(centreSuggestion, centreWeight)
@@ -637,7 +636,7 @@ fun RowScope.SuggestionItems(words: SuggestedWords, onClick: (i: Int) -> Unit, o
             SuggestionSeparator()
             renderItem(layout.emojiMatches.getOrNull(1), rightWeight / 2f)
         } else {
-            renderItem(candidates.firstOrNull { it != centreSuggestion && it != left }, rightWeight)
+            renderItem(candidates.firstOrNull { it.mWord != centreSuggestion?.mWord && it.mWord != left?.mWord }, rightWeight)
         }
         Spacer(Modifier.width(40.dp))
         return
