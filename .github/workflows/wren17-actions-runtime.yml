@@ -2,7 +2,7 @@ name: wren17-actions-runtime
 on:
   push:
     branches: [wrenboard-1.7]
-    paths: [.github/workflows/wren17-actions-runtime.yml, tools/wren17-actions-runtime.sh, tools/wren17-screen-coords.py]
+    paths: [.github/workflows/wren17-actions-runtime.yml, tools/wren17-actions-runtime.sh, tools/wren17-screen-coords.py, java/src/org/futo/inputmethod/latin/uix/actions/**, java/src/org/futo/inputmethod/latin/uix/settings/pages/WrenSettings.kt]
   workflow_dispatch:
 permissions:
   contents: read
