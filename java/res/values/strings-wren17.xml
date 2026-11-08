@@ -1,0 +1,17 @@
+<resources>
+<string name="wren17_corrections">Corrections</string>
+<string name="wren17_rich_input">Rich input</string>
+<string name="wren17_rich_summary">Voice typing, clipboard, toolbar</string>
+<string name="wren17_accents">Accented characters</string>
+<string name="wren17_accents_summary">Show accented letters when you hold a key</string>
+<string name="wren17_languages_summary">Languages, layouts and models</string>
+<string name="wren17_themes_summary">Keyboard appearance</string>
+<string name="wren17_typing_summary">Corrections, predictions and swipe typing</string>
+<string name="wren17_emoji_summary">Suggestions and recent emoji</string>
+<string name="wren17_layout_summary">Size, rows, keys and long-press</string>
+<string name="wren17_sound_summary">Key sounds and vibration</string>
+<string name="wren17_backup_summary">Export and import configuration</string>
+<string name="wren17_advanced_summary">Engine, keyboard and developer options</string>
+<string name="wren17_reorder">Reorder items</string>
+<string name="wren17_drag_hint">Drag icons to reorder or add to the toolbar</string>
+</resources>

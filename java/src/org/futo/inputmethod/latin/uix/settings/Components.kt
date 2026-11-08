@@ -691,10 +691,11 @@ enum class NavigationItemStyle {
 }
 
 @Composable
-fun NavigationItem(title: String, style: NavigationItemStyle, navigate: () -> Unit, icon: Painter? = null, subtitle: String? = null, compact: Boolean = false) {
+fun NavigationItem(title: String, style: NavigationItemStyle, navigate: () -> Unit, icon: Painter? = null, subtitle: String? = null, compact: Boolean = false, disabled: Boolean = false) {
     SettingItem(
         title = title,
         subtitle = subtitle,
+        disabled = disabled,
         onClick = navigate,
         compact = compact,
         icon = {

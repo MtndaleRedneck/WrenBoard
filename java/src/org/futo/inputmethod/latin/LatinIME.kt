@@ -802,12 +802,14 @@ class LatinIME : InputMethodServiceCompose(), LatinIMELegacy.SuggestionStripCont
         latinIMELegacy.updateFullscreenMode()
     }
 
+    private var actionBackConsumed = false
+
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
         // WrenBoard 1.4 (panel back behavior): system Back closes an open toolbar
         // panel instead of hiding the keyboard; the keyboard hides only from the
         // plain keyboard view.
-        if (keyCode == KeyEvent.KEYCODE_BACK && uixManager.hasOpenActionWindow()) {
-            uixManager.closeActionWindow(true)
+        if (keyCode == KeyEvent.KEYCODE_BACK && (actionBackConsumed || uixManager.navigateActionBack())) {
+            actionBackConsumed = true
             return true
         }
         if (keyCode == KeyEvent.KEYCODE_BACK && org.futo.inputmethod.latin.BuildConfig.DEBUG) {
@@ -817,6 +819,10 @@ class LatinIME : InputMethodServiceCompose(), LatinIMELegacy.SuggestionStripCont
     }
 
     override fun onKeyUp(keyCode: Int, event: KeyEvent?): Boolean {
+        if (keyCode == KeyEvent.KEYCODE_BACK && actionBackConsumed) {
+            actionBackConsumed = false
+            return true
+        }
         if (keyCode == KeyEvent.KEYCODE_BACK && org.futo.inputmethod.latin.BuildConfig.DEBUG) {
             org.futo.inputmethod.latin.uix.WbDebug.logBack("up", isInputViewShown, currentInputConnection != null)
         }

@@ -190,18 +190,7 @@ fun ThemeScreen(navController: NavHostController = rememberNavController()) {
     }
 
     Scaffold(
-        floatingActionButton = {
-            if (enableKeyboardPreview) {
-                SmallFloatingActionButton(
-                    onClick = {
-                        showKeyboard = !showKeyboard
-                    }
-                ) {
-                    RotatingChevronIcon(!showKeyboard)
-                }
-            }
-        },
-        floatingActionButtonPosition = FabPosition.Start
+
     ) { innerPadding ->
         Column(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
             ScreenTitle(stringResource(R.string.theme_settings_title), showBack = true, navController)

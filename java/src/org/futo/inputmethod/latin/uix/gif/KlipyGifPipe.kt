@@ -19,6 +19,13 @@ import java.util.UUID
  * or retained after the stream closes. (KLIPY's written OK on this pipe approach is still an
  * open item; the implementation follows their published "load media directly" requirement.)
  *
+ * 1.7: the pipe also carries animated MP4 for editors that accept video/mp4. MP4 URIs carry
+ * a format segment (content://<auth>/gif/mp4/<id>) so KbContentProvider.getType can report
+ * the exact inserted MIME statelessly - the pending store itself is one-shot and cannot
+ * answer getType after a read. GIF URIs keep their original content://<auth>/gif/<id> shape,
+ * with matching provider paths for both formats. A registered URI always
+ * maps to exactly one MIME, never one URI offered as two types.
+ *
  * Only KLIPY's documented media hosts are accepted, so the provider cannot be turned into a
  * general open proxy by a crafted URI.
  */
@@ -50,8 +57,11 @@ object KlipyGifPipe {
         fun size(): Int = synchronized(lock) { pending.size }
     }
 
-    /** Never buffer more than this for one insertion; KLIPY md/hd GIFs are normally 1-5 MB. */
+    /** Never buffer more than this for one insertion; KLIPY md/hd GIFs/MP4s are normally 1-5 MB. */
     private const val MAX_GIF_BYTES = 8 * 1024 * 1024
+
+    /** Pure format-token mapping, unit-tested without Android. */
+    fun mimeForFormatToken(token: String?): String = if (token == "mp4") "video/mp4" else "image/gif"
 
     private val pending = PendingUrls()
 
@@ -65,17 +75,24 @@ object KlipyGifPipe {
         u.protocol == "https" && ALLOWED_HOSTS.contains(u.host)
     } catch (_: Exception) { false }
 
-    /** Register a full-GIF URL for one insertion; returns the content:// URI to hand to commitContent. */
-    fun register(url: String): Uri {
+    /**
+     * Register a full-media URL for one insertion; returns the content:// URI to hand to
+     * commitContent. [mimeType] is the single MIME this URI will be offered and reported as.
+     */
+    fun register(url: String, mimeType: String = "image/gif"): Uri {
         require(isAllowedUrl(url)) { "Refusing non-KLIPY media URL" }
         val id = UUID.randomUUID()
         pending.put(id, url)
-        return Uri.parse("content://$AUTHORITY/gif/$id")
+        // GIF keeps the original two-segment shape; MP4 inserts the format segment so
+        // getType can distinguish it. Both parse back through mimeTypeFor below.
+        val path = if (mimeType == "video/mp4") "gif/mp4/$id" else "gif/$id"
+        return Uri.parse("content://$AUTHORITY/$path")
     }
 
-    fun mimeTypeFor(@Suppress("UNUSED_PARAMETER") uri: Uri): String = "image/gif"
+    /** The MIME this content URI was registered for, read from its path. Defaults to image/gif. */
+    fun mimeTypeFor(uri: Uri): String = mimeForFormatToken(uri.pathSegments.getOrNull(1))
 
-    /** Called by KbContentProvider.openFile for content://.../gif/<uuid>. */
+    /** Called by KbContentProvider.openFile for content://.../gif/<uuid> or .../gif/mp4/<uuid>; the uuid is the last segment. */
     fun openStream(id: UUID): ParcelFileDescriptor {
         val url = pending.take(id)
             ?: throw IllegalArgumentException("Unknown, expired or already-consumed GIF request")
@@ -91,6 +108,7 @@ object KlipyGifPipe {
                 // sees a complete GIF or a failure - never a decodable truncated stream (a
                 // mid-transfer failure after HTTP 200 would otherwise pass as a clean EOF).
                 connection = (URL(url).openConnection() as HttpURLConnection).apply {
+                    instanceFollowRedirects = false
                     connectTimeout = 15000
                     readTimeout = 30000
                     setRequestProperty("User-Agent", "WrenBoard-GIF")

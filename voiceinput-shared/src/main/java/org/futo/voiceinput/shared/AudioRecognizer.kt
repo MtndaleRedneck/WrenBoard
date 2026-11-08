@@ -50,12 +50,25 @@ import org.futo.voiceinput.shared.whisper.ModelManager
 import org.futo.voiceinput.shared.whisper.MultiModelRunConfiguration
 import org.futo.voiceinput.shared.whisper.MultiModelRunner
 import org.futo.voiceinput.shared.whisper.isBlankResult
+import java.io.Closeable
 import java.util.concurrent.atomic.AtomicBoolean
 import java.nio.FloatBuffer
 import java.nio.ShortBuffer
 import kotlin.math.min
 import kotlin.math.pow
 import kotlin.math.sqrt
+
+// RMS of one 100ms read above this counts as possible speech. Used by two independent
+// consumers: the bar's "hearing you" heuristic (which additionally ignores the first
+// 0.6s so a leaking start tone can't light it up) and the 1.7 no-speech decode gate
+// (which has NO time window, so genuine speech spoken immediately after tapping the mic
+// is never discarded). Value unchanged from the shipped UI heuristic.
+private const val SPEECH_RMS_THRESHOLD = 0.01f
+
+// Upper bound on recorder restarts after a dead route (headset unplugged, SCO dropped)
+// errors the blocking read. Bounded so a genuinely dead input finishes with the audio
+// already captured instead of restarting forever.
+private const val MAX_ROUTE_RECOVERIES = 2
 
 private fun getRecordingDeviceKind(type: Int): String {
     return when (type) {
@@ -110,11 +123,19 @@ internal interface CaptureRecorder {
 }
 
 // Narrow dependency boundary. Tests drive the real recognizer/session/queue, not a second model.
+// Narrow speech-detection seam for the decode gate: production wraps the VAD model,
+// tests substitute a fake. Detached from VadModel so JVM unit tests never load the
+// native library.
+internal interface GateSpeechDetector : Closeable {
+    fun isSpeech(frame: ShortArray): Boolean
+}
+
 internal interface CaptureDependencies {
     val main: CoroutineDispatcher
     val worker: CoroutineDispatcher
     fun checkMain()
     fun createRecorder(): CaptureRecorder
+    fun createSpeechDetector(): GateSpeechDetector? = null
     suspend fun preload()
     suspend fun decode(samples: FloatArray, callback: ModelInferenceCallback): String
 }
@@ -137,6 +158,17 @@ class AudioRecognizer internal constructor(
         val samples = SampleBuffer()
         @Volatile var capturing = true
         @Volatile var routeRequest = 0L
+        // Decode-gate evidence (1.7), deliberately separate from the bar's windowed
+        // hasTalked heuristic. sawLoudAudio: any single 100ms read above
+        // SPEECH_RMS_THRESHOLD anywhere in the capture. sawVadSpeech: sustained VAD
+        // speech (past the start-tone window, matching the shipped heuristic). Both are
+        // monotonic false->true; concurrent old/new readers during a route switch can
+        // only ever write true, so the races are benign.
+        @Volatile var sawLoudAudio = false
+        @Volatile var sawVadSpeech = false
+        @Volatile var speechDetectorUncertain = false
+        @Volatile var preferBluetooth = false
+        @Volatile var routeRecoveries = 0
         var recorder: OwnedRecorder? = null
         var reader: Job? = null
         var switchJob: Job? = null
@@ -405,7 +437,7 @@ class AudioRecognizer internal constructor(
         return false
     }
 
-    private suspend fun recordingJob(recorder: CaptureRecorder, vad: VadModel?, owner: CaptureSession, request: Long) {
+    private suspend fun recordingJob(recorder: CaptureRecorder, detector: GateSpeechDetector?, owner: CaptureSession, request: Long) {
         var hasTalked = false
         var anyNoiseAtAll = false
 
@@ -424,32 +456,23 @@ class AudioRecognizer internal constructor(
 
         val samples = ShortArray(1600)
 
-        while (current(owner) && owner.capturing && owner.routeRequest == request) {
-            yield()
-            if (!current(owner) || !owner.capturing || owner.routeRequest != request) return
-            val nRead = recorder.read(samples, 0, 1600, AudioRecord.READ_BLOCKING)
-            if (nRead <= 0) break
-            yield()
-            if (!current(owner) || !owner.capturing || owner.routeRequest != request) return
-
-            var isRunningOutOfSpace = (owner.samples.floats.remaining() < nRead.coerceAtLeast(1600)) && !expandSpaceIfAllowed(owner)
-
-            val hasNotTalkedRecently = hasTalked && (numConsecutiveNonSpeech > 66) && useVAD
-            if (isRunningOutOfSpace || hasNotTalkedRecently) {
-                yield()
-                withContext(main) {
-                    if (current(owner) && owner.routeRequest == request) finish()
-                }
-                return
-            }
-
-            // Run VAD
-            if(useVAD && vad != null) {
+        // Every captured sample that can reach the decoder goes through here - from the
+        // blocking read and from non-blocking catch-up reads alike: append, feed the
+        // speech detector, update decode-gate evidence. Returns the chunk RMS for the
+        // UI path. Only the UI/magnitude updates stay on the outer blocking read.
+        fun processChunk(chunk: ShortArray, nRead: Int): Float {
+            // Run speech detection
+            if (detector != null) {
                 var remainingSamples = nRead
                 var offset = 0
                 while (remainingSamples > 0) {
                     if (!vadSampleBuffer.hasRemaining()) {
-                        val isSpeech = vad.isSpeech(vadSampleBuffer.array())
+                        val isSpeech = try { detector.isSpeech(vadSampleBuffer.array()) } catch (_: Exception) {
+                            owner.speechDetectorUncertain = true
+                            false
+                        }
+                        // Transcription evidence is independent of UI start-tone suppression.
+                        if (isSpeech) owner.sawVadSpeech = true
                         vadSampleBuffer.clear()
                         vadSampleBuffer.rewind()
 
@@ -465,7 +488,7 @@ class AudioRecognizer internal constructor(
                     val samplesToRead = min(min(remainingSamples, 480), vadSampleBuffer.remaining())
                     for (i in 0 until samplesToRead) {
                         vadSampleBuffer.put(
-                            samples[offset]
+                            chunk[offset]
                         )
                         offset += 1
                         remainingSamples -= 1
@@ -473,10 +496,11 @@ class AudioRecognizer internal constructor(
                 }
             }
 
-            owner.samples.floats.put(samples.sliceArray(0 until nRead).map { it.toFloat() / Short.MAX_VALUE.toFloat() }.toFloatArray())
+            owner.samples.floats.put(chunk.sliceArray(0 until nRead).map { it.toFloat() / Short.MAX_VALUE.toFloat() }.toFloatArray())
 
-            // Don't set hasTalked if the start sound may still be playing, otherwise on some
-            // devices the rms just explodes and `hasTalked` is always true
+            // Don't set the UI heuristic or VAD gate evidence if the start sound may still
+            // be playing, otherwise on some devices the rms just explodes and they are
+            // always true
             val startSoundPassed = (owner.samples.floats.position() > 16000 * 0.6)
             if (!startSoundPassed) {
                 numConsecutiveSpeech = 0
@@ -484,9 +508,46 @@ class AudioRecognizer internal constructor(
             }
 
             // Only valid samples from this read; the rest of the buffer may be stale.
-            val rms = validSampleRms(samples, nRead)
+            val rms = validSampleRms(chunk, nRead)
 
-            if (startSoundPassed && ((rms > 0.01) || (numConsecutiveSpeech > 8))) {
+            // Unwindowed evidence for the decode gate: real loudness at ANY point,
+            // including inside the start-tone window, must count as possible speech.
+            if (rms > SPEECH_RMS_THRESHOLD) owner.sawLoudAudio = true
+            return rms
+        }
+
+        while (current(owner) && owner.capturing && owner.routeRequest == request) {
+            yield()
+            if (!current(owner) || !owner.capturing || owner.routeRequest != request) return
+            val nRead = recorder.read(samples, 0, 1600, AudioRecord.READ_BLOCKING)
+            // Negative = the route died under us (e.g. headset unplugged, SCO dropped).
+            // Recover on another recorder instead of leaving the bar capturing forever.
+            if (nRead < 0) {
+                scheduleRouteRecovery(owner, request)
+                return
+            }
+            if (nRead == 0) break
+            owner.routeRecoveries = 0
+            yield()
+            if (!current(owner) || !owner.capturing || owner.routeRequest != request) return
+
+            var isRunningOutOfSpace = (owner.samples.floats.remaining() < nRead.coerceAtLeast(1600)) && !expandSpaceIfAllowed(owner)
+
+            val hasNotTalkedRecently = hasTalked && (numConsecutiveNonSpeech > 66) && useVAD
+            if (isRunningOutOfSpace || hasNotTalkedRecently) {
+                yield()
+                withContext(main) {
+                    if (current(owner) && owner.routeRequest == request) finish()
+                }
+                return
+            }
+
+            val rms = processChunk(samples, nRead)
+
+            // UI heuristic only (the bar's "hearing you" state): unchanged, still ignores
+            // the start-tone window. The decode gate does not depend on this.
+            val startSoundPassed = (owner.samples.floats.position() > 16000 * 0.6)
+            if (startSoundPassed && ((rms > SPEECH_RMS_THRESHOLD) || (numConsecutiveSpeech > 8))) {
                 hasTalked = true
             }
 
@@ -534,7 +595,8 @@ class AudioRecognizer internal constructor(
                         }
                         break
                     }
-                    owner.samples.floats.put(samples.sliceArray(0 until nRead2).map { it.toFloat() / Short.MAX_VALUE.toFloat() }.toFloatArray())
+                    // Catch-up audio can reach the decoder, so it must also feed the gate.
+                    processChunk(samples, nRead2)
                 } else {
                     break
                 }
@@ -547,6 +609,22 @@ class AudioRecognizer internal constructor(
         return Vad.builder().setModel(Model.WEB_RTC_GMM).setMode(Mode.VERY_AGGRESSIVE)
             .setFrameSize(FrameSize.FRAME_SIZE_480).setSampleRate(SampleRate.SAMPLE_RATE_16K)
             .setSpeechDurationMs(150).setSilenceDurationMs(300).build()
+    }
+
+    // The speech detector always runs in production, even when VAD auto-stop is off: it
+    // is what lets the decode gate keep genuine speech quieter than the RMS threshold.
+    // Auto-stop behavior stays gated on useVADAutoStop; only detection widened. If the
+    // detector cannot be created, the gate fails open.
+    private fun createSpeechDetector(): GateSpeechDetector? {
+        return try {
+            val vad = createVad()
+            object : GateSpeechDetector {
+                override fun isSpeech(frame: ShortArray): Boolean = vad.isSpeech(frame)
+                override fun close() = vad.close()
+            }
+        } catch (t: Throwable) {
+            null
+        }
     }
 
     @Throws(SecurityException::class)
@@ -571,9 +649,26 @@ class AudioRecognizer internal constructor(
         }
     }
 
+    // Dispatched off the reader when its blocking read errors: restart capture on the
+    // current route preference. Runs as a sibling of the reader (never inside it), so
+    // createRecorderAndJob cancelling/joining the old reader cannot cancel the recovery.
+    private fun scheduleRouteRecovery(owner: CaptureSession, request: Long) {
+        lifecycleScope.launch(main) {
+            if (!current(owner) || !owner.capturing || owner.routeRequest != request) return@launch
+            if (owner.routeRecoveries >= MAX_ROUTE_RECOVERIES) {
+                // Input is genuinely gone: finish with whatever audio was captured.
+                finish()
+            } else {
+                owner.routeRecoveries++
+                createRecorderAndJob(owner.preferBluetooth, owner)
+            }
+        }
+    }
+
     private fun createRecorderAndJob(preferBluetoothMic: Boolean, owner: CaptureSession) {
         requireMain()
         if (!current(owner) || !owner.capturing) return
+        owner.preferBluetooth = preferBluetoothMic
         val oldReader = owner.reader // capture before suspension, never adopt a newer reader
         val oldRecorder = owner.recorder
         owner.switchJob?.cancel()
@@ -617,7 +712,11 @@ class AudioRecognizer internal constructor(
                 }
                 val reader = lifecycleScope.launch(worker, start = CoroutineStart.LAZY) {
                     if (!current(owner) || !owner.capturing || owner.routeRequest != request) return@launch
-                    if (useVAD) createVad().use { recordingJob(activeRecorder.value, it, owner, request) }
+                    // Under test dependencies the seam decides (default null = no detector);
+                    // never fall through to the real VAD from a test rig.
+                    val detector = if (dependencies != null) dependencies.createSpeechDetector() else createSpeechDetector()
+                    if (detector == null) owner.speechDetectorUncertain = true
+                    if (detector != null) detector.use { recordingJob(activeRecorder.value, it, owner, request) }
                     else recordingJob(activeRecorder.value, null, owner, request)
                 }
                 // Handler registered before start, including already-cancelled lifecycle scope.
@@ -705,6 +804,16 @@ class AudioRecognizer internal constructor(
         val floatArray = owner.samples.floats.array().sliceArray(0 until owner.samples.floats.position())
         // Exact zero only. This does not classify nonzero noise or reject quiet speech.
         if (isExactEmptyCapture(floatArray)) {
+            publishFinal(owner, "")
+            return
+        }
+
+        // Suppress an all-quiet capture only when speech detection was available and
+        // did not identify any speech. Never filter the decoded words. Detector failures
+        // fail open: an uncertain capture is safer to decode than to silently lose speech.
+        // Loud non-speech and indication-tone leakage can still pass this conservative
+        // gate; real-device silence/quiet-speech checks remain necessary.
+        if (!owner.speechDetectorUncertain && !owner.sawLoudAudio && !owner.sawVadSpeech) {
             publishFinal(owner, "")
             return
         }

@@ -8,6 +8,8 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -156,32 +158,25 @@ fun ThemePreview(colors: KeyboardColorScheme, name: String, loading: Boolean, is
                 style = Typography.SmallMl
             )
 
-            // Keyboard contents
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(8.dp)
-            ) {
-                // Spacebar
-                Surface(
-                    modifier = Modifier
-                        .fillMaxWidth(0.5f)
-                        .height(18.dp)
-                        .align(Alignment.BottomCenter),
-                    color = spacebarColor,
-                    shape = RoundedCornerShape(4.dp)
-                ) { }
-
-                // Enter key
-                Surface(
-                    modifier = Modifier
-                        .width(24.dp)
-                        .height(18.dp)
-                        .align(Alignment.BottomEnd)
-                        .padding(0.dp, 1.dp),
-                    color = actionColor,
-                    shape = RoundedCornerShape(4.dp)
-                ) { }
+            // Use the theme's actual key, container and accent colours in a miniature keyboard.
+            Column(Modifier.fillMaxSize().padding(top = 32.dp, start = 7.dp, end = 7.dp, bottom = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                listOf("qwertyuiop", "asdfghjkl", "zxcvbnm").forEachIndexed { row, letters ->
+                    Row(Modifier.fillMaxWidth().weight(1f).padding(horizontal = (row * 4).dp),
+                        horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                        letters.forEach { letter ->
+                            Box(Modifier.weight(1f).fillMaxSize().background(colors.keyboardContainer, RoundedCornerShape(2.dp)),
+                                contentAlignment = Alignment.Center) {
+                                Text(letter.toString(), color = colors.onKeyboardContainer, fontSize = androidx.compose.ui.unit.TextUnit(7f, androidx.compose.ui.unit.TextUnitType.Sp))
+                            }
+                        }
+                    }
+                }
+                Row(Modifier.fillMaxWidth().height(15.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Box(Modifier.weight(1f).fillMaxSize().background(spacebarColor, RoundedCornerShape(3.dp)))
+                    Box(Modifier.weight(3f).fillMaxSize().background(spacebarColor, RoundedCornerShape(3.dp)))
+                    Box(Modifier.weight(1f).fillMaxSize().background(actionColor, RoundedCornerShape(3.dp)))
+                }
             }
         }
     }
@@ -352,7 +347,7 @@ fun ThemePicker(onDeleteCustomTheme: (String) -> Unit, onCustomTheme: () -> Unit
         CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
             LazyVerticalGrid(
                 modifier = Modifier.fillMaxWidth(),
-                columns = GridCells.Adaptive(minSize = 172.dp),
+                columns = GridCells.Fixed(2),
                 horizontalArrangement = if (LocalLayoutDirection.current == LayoutDirection.Rtl) {
                     Arrangement.End
                 } else {

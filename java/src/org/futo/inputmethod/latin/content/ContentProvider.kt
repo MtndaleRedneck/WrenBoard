@@ -19,7 +19,10 @@ private val CODE_KLIPY_GIF = 2
 private val URI_MATCHER = UriMatcher(UriMatcher.NO_MATCH).apply {
     addURI(FONT_AUTHORITY, "render/*", CODE_RENDERED_FONT_IMAGE)
     // WrenBoard 1.5 (item 1): in-memory piped KLIPY GIFs, nothing kept on disk
+    // WrenBoard 1.7: MP4 insertions add a format segment (gif/mp4/<uuid>) so getType can
+    // report video/mp4; GIF keeps the original gif/<uuid> shape (see KlipyGifPipe).
     addURI(FONT_AUTHORITY, "gif/*", CODE_KLIPY_GIF)
+    addURI(FONT_AUTHORITY, "gif/mp4/*", CODE_KLIPY_GIF)
 }
 
 class KbContentProvider: ContentProvider() {
@@ -60,7 +63,7 @@ class KbContentProvider: ContentProvider() {
     override fun getType(uri: Uri): String =
         when(URI_MATCHER.match(uri)) {
             CODE_RENDERED_FONT_IMAGE -> "image/png"
-            CODE_KLIPY_GIF -> "image/gif"
+            CODE_KLIPY_GIF -> org.futo.inputmethod.latin.uix.gif.KlipyGifPipe.mimeTypeFor(uri)
             else -> throw IllegalArgumentException("Unsupported URI: $uri")
         }
 
