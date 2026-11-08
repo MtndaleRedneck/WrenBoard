@@ -23,7 +23,14 @@ adb shell wm size 1080x2316
 adb shell wm density 420
 adb install -r -t "$APK"
 adb install -r tools/ime-target/out/imetarget.apk
-IME=$(adb shell ime list -a -s | tr -d '\r' | grep "^$PKG/" | head -1)
+adb shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1 >/dev/null
+IME=""
+for attempt in $(seq 1 15); do
+ IME=$(adb shell ime list -a -s | tr -d '\r' | grep "^$PKG/" | head -1 || true)
+ [ -n "$IME" ] && break
+ sleep 2
+done
+adb shell ime list -a -s
 test -n "$IME"
 adb shell ime enable "$IME"
 adb shell ime set "$IME"
@@ -154,7 +161,7 @@ print('PASS swipe word hello',repr(f))
 PYSWIPE
 
 # Instrumentation uses the installed runner reported by PackageManager, not a guessed package ID.
-TEST_APK=$(find build/outputs/apk -iname '*androidtest*.apk' | head -1)
+TEST_APK=w17-tests.apk
 test -n "$TEST_APK"
 adb install -r -t "$TEST_APK"
 RUNNER=$(adb shell pm list instrumentation | tr -d '\r' | grep "target=$PKG)" | sed -n 's/^instrumentation:\([^ ]*\).*/\1/p' | head -1)

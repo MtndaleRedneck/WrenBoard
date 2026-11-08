@@ -52,6 +52,25 @@ jobs:
         run: |
           ./gradlew --no-daemon --max-workers=2 -Dorg.gradle.jvmargs='-Xmx5g -Dfile.encoding=UTF-8' -Pkotlin.compiler.execution.strategy=in-process assembleStableDebug assembleStableDebugAndroidTest -Pandroid.injected.build.abi=x86_64 -Pandroid.injected.testOnly=false
           bash tools/ime-target/build.sh
+          python3 - <<'PYAPK'
+          from pathlib import Path
+          import zipfile,hashlib,shutil
+          app={}; tests={}
+          for p in Path('build').rglob('*.apk'):
+              try:
+                  with zipfile.ZipFile(p) as z:
+                      names=z.namelist()
+                      if 'classes.dex' not in names: continue
+                      isapp=any(n.startswith('lib/') and n.endswith('.so') for n in names)
+                  digest=hashlib.sha256(p.read_bytes()).hexdigest()
+                  (app if isapp else tests)[digest]=p
+              except zipfile.BadZipFile: pass
+          assert len(app)==1, ('expected one full app APK',list(app.values()))
+          assert len(tests)==1, ('expected one test APK',list(tests.values()))
+          shutil.copyfile(next(iter(app.values())), 'w17-debug.apk')
+          shutil.copyfile(next(iter(tests.values())), 'w17-tests.apk')
+          print('Resolved full app and test APKs',list(app.values()),list(tests.values()))
+          PYAPK
       - name: Enable KVM
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
@@ -66,4 +85,4 @@ jobs:
           profile: Nexus 6
           ram-size: 4096M
           disable-animations: true
-          script: bash tools/wren17-runtime.sh "$(find build/outputs/apk build/intermediates -name '*.apk' | grep -i debug | grep -vi androidtest | head -1)"
+          script: bash tools/wren17-runtime.sh w17-debug.apk
