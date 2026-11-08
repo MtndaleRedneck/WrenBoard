@@ -150,6 +150,7 @@ fun MoreActionsView() {
     val manager = if(LocalInspectionMode.current) null else LocalManager.current
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val rootView = LocalView.current
     val persisted = useUnifiedActions()
     var draft by remember { mutableStateOf(persisted) }
     var hiddenOpen by remember { mutableStateOf(false) }
@@ -168,6 +169,9 @@ fun MoreActionsView() {
     val toolbarIds = allVisible.take(6)
     val boxIds = if(hiddenOpen) draft.hidden.filter { AllActionsMap[it]?.shownInEditor == true } else allVisible.drop(6)
     val gridState = rememberLazyGridState()
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val edgeZone = with(density) { 48.dp.toPx() }
+    val scrollStep = with(density) { 6.dp.toPx() }
     var rootOrigin by remember { mutableStateOf(Offset.Zero) }
     var gridBounds by remember { mutableStateOf<Rect?>(null) }
     val latestHidden by rememberUpdatedState(hiddenOpen)
@@ -221,10 +225,10 @@ fun MoreActionsView() {
     LaunchedEffect(dragging, pointer) {
         while(dragging != null) {
             val rect = gridBounds
-            if(rect != null && !overHidden) {
+            if(rect != null && rect.contains(pointer) && !overHidden) {
                 val amount = when {
-                    pointer.y > rect.bottom - 32 -> 18f
-                    pointer.y < rect.top + 32 -> -18f
+                    pointer.y > rect.bottom - edgeZone -> scrollStep
+                    pointer.y < rect.top + edgeZone -> -scrollStep
                     else -> 0f
                 }
                 if(amount != 0f) gridState.scroll { scrollBy(amount) }
@@ -238,6 +242,12 @@ fun MoreActionsView() {
             .onGloballyPositioned {
                 val rect = it.boundsInRoot()
                 bounds[id] = if(inBar) rect else gridBounds?.intersect(rect) ?: Rect.Zero
+                if(inBar && org.futo.inputmethod.latin.BuildConfig.DEBUG) {
+                    val action = AllActionsMap[id]!!
+                    val name = if(action == org.futo.inputmethod.latin.uix.actions.clipboard.ClipboardHistoryAction) context.getString(R.string.wren_home_clipboard) else context.getString(action.name)
+                    val screen = IntArray(2); rootView.getLocationOnScreen(screen)
+                    android.util.Log.i("WBDBG", "UNIFIED_BAR name=" + name.replace(' ', '_') + " cx=" + (screen[0] + rect.center.x).toInt() + " cy=" + (screen[1] + rect.center.y).toInt())
+                }
             }
     }
     Column(Modifier.onGloballyPositioned { rootOrigin = it.boundsInRoot().topLeft }.then(dragModifier)) {
@@ -255,7 +265,7 @@ fun MoreActionsView() {
             }
         }
         if(hiddenOpen) TextButton(onClick = { hiddenOpen = false }) { Text("Back") }
-        LazyVerticalGrid(state = gridState, columns = GridCells.Fixed(4), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp),
+        LazyVerticalGrid(state = gridState, userScrollEnabled = dragging == null, columns = GridCells.Fixed(4), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp),
             modifier = Modifier.fillMaxWidth().heightIn(max = 304.dp).padding(8.dp).onGloballyPositioned { gridBounds = it.boundsInRoot() }) {
             items(boxIds, key = { it }) { id ->
                 val action = AllActionsMap[id]!!
