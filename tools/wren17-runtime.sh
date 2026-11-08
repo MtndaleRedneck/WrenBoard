@@ -134,14 +134,14 @@ print('PASS backspace swipe deletes text',repr(f))
 PYDELETE
 clear_fixture
 # Actual multi-segment swipe word. The path comes from current keyboard geometry.
-python3 - "$OUT/gesture-geometry.txt" > "$OUT/swipe-hello.sh" <<'PYPATH'
+python3 - "$OUT/gesture-geometry.txt" > "$OUT/swipe-cat.sh" <<'PYPATH'
 import re,sys
 keys={}
 for l in open(sys.argv[1]):
  if 'KEY ' not in l:continue
  d=dict(re.findall(r'(\w+)=([^ ]+)',l.strip()))
  if 'label' in d:keys[d['label'].lower()]=(int(d['cx']),int(d['cy']))
-p=[keys[c] for c in 'helo']
+p=[keys[c] for c in 'cat']
 print('input motionevent DOWN %d %d'%p[0])
 for a,b in zip(p,p[1:]):
  for k in range(1,5):
@@ -149,15 +149,54 @@ for a,b in zip(p,p[1:]):
   print('input motionevent MOVE %d %d'%(x,y))
 print('input motionevent UP %d %d'%p[-1])
 PYPATH
-adb push "$OUT/swipe-hello.sh" /data/local/tmp/w17-swipe.sh >/dev/null
+adb push "$OUT/swipe-cat.sh" /data/local/tmp/w17-swipe.sh >/dev/null
 adb shell sh /data/local/tmp/w17-swipe.sh; sleep 3
-report_fixture > "$OUT/swipe-report.txt"; shot swipe_hello
+report_fixture > "$OUT/swipe-report.txt"; shot swipe_cat
 python3 - "$OUT/swipe-report.txt" <<'PYSWIPE' || REGRESSION_FAILED=1
 import re,sys
 s=open(sys.argv[1]).read();f=re.findall(r'FIELD=(.*)',s)[-1]
-assert f.strip().lower()=='hello',('hello swipe expected hello',f)
-print('PASS swipe word hello',repr(f))
+assert f.strip().lower()=='cat',('controlled cat swipe expected cat',f)
+print('PASS controlled swipe word cat',repr(f))
 PYSWIPE
+
+# Real installed-IME taps, with sentence capitalization disabled in the synthetic editor.
+clear_fixture
+adb shell am broadcast -a com.wrenboard.imetarget.CAPSENT -p com.wrenboard.imetarget --ez on false >/dev/null
+sleep 1
+refresh_keys() { adb logcat -c; adb shell am broadcast -a com.wrenboard.keyboard.WBDBG -p "$PKG" --es cmd geom >/dev/null; sleep 0.4; adb logcat -d -s WBDBG:I > "$OUT/caps-geometry.txt"; }
+tap_code() { refresh_keys; read -r AX AY < <(python3 tools/wb12_kv.py "$OUT/caps-geometry.txt" xy KEY code "$1"); adb shell input tap "$AX" "$AY"; sleep 0.4; }
+# Begin lowercase, then one-shot uppercase must revert after exactly one letter.
+shot caps_lower
+tap_code -1; shot caps_oneshot
+tap_code 97; tap_code 98
+report_fixture > "$OUT/caps-oneshot-report.txt"
+python3 - "$OUT/caps-oneshot-report.txt" <<'PYONESHOT' || REGRESSION_FAILED=1
+import re,sys
+f=re.findall(r'FIELD=(.*)',open(sys.argv[1]).read())[-1]
+assert f=='Ab',('one-shot should produce Ab',f)
+print('PASS actual UI one-shot reverts after one letter',repr(f))
+PYONESHOT
+clear_fixture
+tap_code -1; sleep 1; tap_code -1; shot caps_locked
+tap_code 97; tap_code 32; tap_code 98
+# Symbols and back must preserve lock.
+tap_code -3; shot caps_symbols; tap_code -3; shot caps_after_symbols
+tap_code 99; tap_code -1; shot caps_unlocked; tap_code 100
+report_fixture > "$OUT/caps-cycle-report.txt"
+python3 - "$OUT/caps-cycle-report.txt" <<'PYCAPSCYCLE' || REGRESSION_FAILED=1
+import re,sys
+f=re.findall(r'FIELD=(.*)',open(sys.argv[1]).read())[-1]
+assert f=='A BCd',('caps must survive words and symbols, then unlock',f)
+print('PASS actual UI caps cycle across words and symbols',repr(f))
+PYCAPSCYCLE
+clear_fixture
+# Search the actual emoji catalog for newer glyphs, with system/compat diagnostics.
+adb shell am broadcast -a com.wrenboard.keyboard.WBDBG -p "$PKG" --es cmd open:emoji >/dev/null
+sleep 1
+adb shell input tap 350 950
+adb shell input text shaking; sleep 2; shot emoji_shaking_search
+adb logcat -d -s WBGLYPH:D > "$OUT/glyph-report.txt"
+adb shell input keyevent KEYCODE_BACK; sleep 1
 
 # Instrumentation uses the installed runner reported by PackageManager, not a guessed package ID.
 TEST_APK=w17-tests.apk
