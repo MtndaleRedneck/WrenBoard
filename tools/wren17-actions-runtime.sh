@@ -105,5 +105,17 @@ shot restored_saved
 adb shell input keyevent KEYCODE_BACK;sleep 1
 adb shell am broadcast -a com.wrenboard.keyboard.WBDBG -p "$PKG" --es cmd open:more >/dev/null;sleep 2
 shot restored_reopened
+# Verify visible reorder, not only hide: bring the restored end item to the first action.
+read -r SX SY < <(coords restored_reopened Emojis)
+read -r HX HY < <(coords restored_reopened Clipboard)
+adb shell input motionevent DOWN "$SX" "$SY"; sleep 0.8
+for I in $(seq 1 12); do
+ X=$((SX+(HX-SX)*I/12));Y=$((SY+(HY-SY)*I/12));adb shell input motionevent MOVE "$X" "$Y";sleep 0.07
+done
+adb shell input motionevent UP "$HX" "$HY";sleep 2
+shot reordered_visible
+adb shell input keyevent KEYCODE_BACK;sleep 1
+adb shell am broadcast -a com.wrenboard.keyboard.WBDBG -p "$PKG" --es cmd open:more >/dev/null;sleep 2
+shot reordered_reopened
 echo 'FOCUSED DIRECT ACTIONS CAPTURE COMPLETE: inspect pixels before persistence verdict'
 adb logcat -d -s AndroidRuntime:E | tail -60
