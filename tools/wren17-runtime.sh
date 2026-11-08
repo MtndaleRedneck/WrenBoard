@@ -104,16 +104,6 @@ cat "$OUT/nested-back.txt"
 echo 'Nested Back awaits visual verification of nested_more_before/nested_clipboard/nested_back_more'
 adb shell input keyevent KEYCODE_BACK; sleep 1; shot nested_back_keyboard
 
-# Instrumentation uses the installed runner reported by PackageManager, not a guessed package ID.
-TEST_APK=w17-tests.apk
-test -n "$TEST_APK"
-adb install -r -t "$TEST_APK"
-RUNNER=$(adb shell pm list instrumentation | tr -d '\r' | grep "target=$PKG)" | sed -n 's/^instrumentation:\([^ ]*\).*/\1/p' | head -1)
-test -n "$RUNNER"
-adb shell am instrument -w -r -e class org.futo.inputmethod.keyboard.internal.KeyboardStateShiftCycleTests,org.futo.inputmethod.latin.ShiftModeTests "$RUNNER" | tee "$OUT/instrumentation.txt"
-grep -Eq 'OK \([0-9]+ tests?\)' "$OUT/instrumentation.txt"
-! grep -Eq 'FAILURES!!!|INSTRUMENTATION_FAILED|shortMsg=Process crashed' "$OUT/instrumentation.txt"
-
 # Space cursor and backspace gesture regressions on synthetic text.
 clear_fixture() { adb shell am broadcast -a com.wrenboard.imetarget.CLEAR -p com.wrenboard.imetarget >/dev/null; sleep 1; }
 report_fixture() { adb shell am broadcast -a com.wrenboard.imetarget.REPORT -p com.wrenboard.imetarget >/dev/null; sleep 0.5; adb logcat -d -s IMETARGET:I | tr -d '\r'; }
@@ -124,7 +114,7 @@ sleep 1; adb logcat -d -s WBDBG:I > "$OUT/gesture-geometry.txt"
 read -r SX SY < <(python3 tools/wb12_kv.py "$OUT/gesture-geometry.txt" xy KEY code 32)
 adb shell input swipe "$SX" "$SY" "$((SX-180))" "$SY" 300
 report_fixture > "$OUT/cursor-report.txt"; shot cursor_swipe
-python3 - "$OUT/cursor-report.txt" <<'PYCURSOR'
+python3 - "$OUT/cursor-report.txt" <<'PYCURSOR' || REGRESSION_FAILED=1
 import re,sys
 s=open(sys.argv[1]).read();fields=re.findall(r'FIELD=(.*)',s);sel=re.findall(r'SELECTION=(\d+):(\d+)',s)
 assert fields[-1]=='hello world',(fields[-1], 'cursor swipe must leave text unchanged')
@@ -136,7 +126,7 @@ adb shell input text 'hello%sworld'; sleep 1
 read -r DX DY < <(python3 tools/wb12_kv.py "$OUT/gesture-geometry.txt" xy KEY code -5)
 adb shell input swipe "$DX" "$DY" "$((DX-350))" "$DY" 350
 report_fixture > "$OUT/delete-report.txt"; shot backspace_swipe
-python3 - "$OUT/delete-report.txt" <<'PYDELETE'
+python3 - "$OUT/delete-report.txt" <<'PYDELETE' || REGRESSION_FAILED=1
 import re,sys
 s=open(sys.argv[1]).read();f=re.findall(r'FIELD=(.*)',s)[-1]
 assert len(f)<11,('backspace swipe did not delete',f)
@@ -162,10 +152,20 @@ PYPATH
 adb push "$OUT/swipe-hello.sh" /data/local/tmp/w17-swipe.sh >/dev/null
 adb shell sh /data/local/tmp/w17-swipe.sh; sleep 3
 report_fixture > "$OUT/swipe-report.txt"; shot swipe_hello
-python3 - "$OUT/swipe-report.txt" <<'PYSWIPE'
+python3 - "$OUT/swipe-report.txt" <<'PYSWIPE' || REGRESSION_FAILED=1
 import re,sys
 s=open(sys.argv[1]).read();f=re.findall(r'FIELD=(.*)',s)[-1]
 assert f.strip().lower()=='hello',('hello swipe expected hello',f)
 print('PASS swipe word hello',repr(f))
 PYSWIPE
 
+# Instrumentation uses the installed runner reported by PackageManager, not a guessed package ID.
+TEST_APK=w17-tests.apk
+test -n "$TEST_APK"
+adb install -r -t "$TEST_APK"
+RUNNER=$(adb shell pm list instrumentation | tr -d '\r' | grep "target=$PKG)" | sed -n 's/^instrumentation:\([^ ]*\).*/\1/p' | head -1)
+test -n "$RUNNER"
+adb shell am instrument -w -r -e class org.futo.inputmethod.keyboard.internal.KeyboardStateShiftCycleTests "$RUNNER" | tee "$OUT/instrumentation.txt"
+grep -Eq 'OK \([0-9]+ tests?\)' "$OUT/instrumentation.txt"
+! grep -Eq 'FAILURES!!!|INSTRUMENTATION_FAILED|shortMsg=Process crashed' "$OUT/instrumentation.txt"
+test "${REGRESSION_FAILED:-0}" = 0
