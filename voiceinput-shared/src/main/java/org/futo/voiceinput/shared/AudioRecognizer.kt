@@ -160,8 +160,8 @@ class AudioRecognizer internal constructor(
         @Volatile var routeRequest = 0L
         // Decode-gate evidence (1.7), deliberately separate from the bar's windowed
         // hasTalked heuristic. sawLoudAudio: any single 100ms read above
-        // SPEECH_RMS_THRESHOLD anywhere in the capture. sawVadSpeech: sustained VAD
-        // speech (past the start-tone window, matching the shipped heuristic). Both are
+        // SPEECH_RMS_THRESHOLD anywhere in the capture. sawVadSpeech: any detector
+        // speech verdict, including the start-tone window. Both are
         // monotonic false->true; concurrent old/new readers during a route switch can
         // only ever write true, so the races are benign.
         @Volatile var sawLoudAudio = false
@@ -498,9 +498,8 @@ class AudioRecognizer internal constructor(
 
             owner.samples.floats.put(chunk.sliceArray(0 until nRead).map { it.toFloat() / Short.MAX_VALUE.toFloat() }.toFloatArray())
 
-            // Don't set the UI heuristic or VAD gate evidence if the start sound may still
-            // be playing, otherwise on some devices the rms just explodes and they are
-            // always true
+            // Reset only the UI/auto-stop counters during the indication-tone window.
+            // Decode evidence above is deliberately not reset.
             val startSoundPassed = (owner.samples.floats.position() > 16000 * 0.6)
             if (!startSoundPassed) {
                 numConsecutiveSpeech = 0
