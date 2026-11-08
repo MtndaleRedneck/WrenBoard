@@ -18,7 +18,13 @@ for p in sorted(Path(sys.argv[1]).glob('*.png')):
  print('W17_IMAGE_END '+p.stem)
 PY
 }
-trap export_screens EXIT
+finish_evidence() {
+ for report in "$OUT"/*report.txt "$OUT"/instrumentation.txt; do
+  [ ! -f "$report" ] || { echo "REPORT $report"; cat "$report"; }
+ done
+ export_screens
+}
+trap finish_evidence EXIT
 adb shell wm size 1080x2316
 adb shell wm density 420
 adb install -r -t "$APK"
@@ -86,11 +92,13 @@ done
 adb logcat -c
 adb shell am broadcast -a com.wrenboard.keyboard.WBDBG -p "$PKG" --es cmd open:more >/dev/null
 sleep 2; adb logcat -d -s WBDBG:I > "$OUT/more-positions.txt"
-python3 - "$OUT/more-positions.txt" > "$OUT/nested-coordinates" <<'PYNEST'
-import re,sys
-m=re.findall(r'WINDOW ACTION name=Clipboard cx=(\d+) cy=(\d+)',open(sys.argv[1]).read())
-assert m,'Clipboard tile absent from More'
-print(*m[-1])
+dump more_nested
+python3 - "$OUT/more_nested.xml" > "$OUT/nested-coordinates" <<'PYNEST'
+import re,sys,xml.etree.ElementTree as E
+nodes=[n for n in E.parse(sys.argv[1]).iter('node') if n.get('text')=='Clipboard' or n.get('content-desc')=='Clipboard']
+assert nodes,'Clipboard tile absent from More UI'
+a,b,c,d=map(int,re.findall(r'\d+',nodes[-1].get('bounds')))
+print((a+c)//2,(b+d)//2)
 PYNEST
 read -r NX NY < "$OUT/nested-coordinates"
 adb shell input tap "$NX" "$NY"; sleep 2; shot nested_clipboard

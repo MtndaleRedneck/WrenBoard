@@ -109,14 +109,10 @@ fun ActionItem(action: Action, modifier: Modifier = Modifier, dragIcon: Boolean 
 
                     Spacer(modifier = Modifier.weight(1.0f))
 
-                    Text(
+                    org.futo.inputmethod.latin.uix.AutoFitText(
                         if (action == org.futo.inputmethod.latin.uix.actions.clipboard.ClipboardHistoryAction) stringResource(R.string.wren_home_clipboard) else stringResource(id = action.name),
-                        modifier = Modifier.align(
-                            CenterHorizontally
-                        ),
-                        style = Typography.Small.copy(lineHeight = 12.sp),
-                        textAlign = TextAlign.Center,
-                        maxLines = 1, overflow = TextOverflow.Ellipsis
+                        modifier = Modifier.fillMaxWidth().height(20.dp),
+                        style = Typography.Small.copy(lineHeight = 12.sp, color = LocalContentColor.current)
                     )
                 }
             }
