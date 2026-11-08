@@ -142,12 +142,12 @@ for l in open(sys.argv[1]):
  d=dict(re.findall(r'(\w+)=([^ ]+)',l.strip()))
  if 'label' in d:keys[d['label'].lower()]=(int(d['cx']),int(d['cy']))
 p=[keys[c] for c in 'cat']
-print('input motionevent DOWN %d %d'%p[0])
+print('input motionevent DOWN %d %d'%p[0]);print('sleep 0.08')
 for a,b in zip(p,p[1:]):
  for k in range(1,5):
   x=round(a[0]+(b[0]-a[0])*k/4);y=round(a[1]+(b[1]-a[1])*k/4)
   print('input motionevent MOVE %d %d'%(x,y))
-print('input motionevent UP %d %d'%p[-1])
+print('sleep 0.08');print('input motionevent UP %d %d'%p[-1])
 PYPATH
 adb push "$OUT/swipe-cat.sh" /data/local/tmp/w17-swipe.sh >/dev/null
 adb shell sh /data/local/tmp/w17-swipe.sh; sleep 3
@@ -165,10 +165,11 @@ adb shell am broadcast -a com.wrenboard.imetarget.CAPSENT -p com.wrenboard.imeta
 sleep 1
 refresh_keys() { adb logcat -c; adb shell am broadcast -a com.wrenboard.keyboard.WBDBG -p "$PKG" --es cmd geom >/dev/null; sleep 0.4; adb logcat -d -s WBDBG:I > "$OUT/caps-geometry.txt"; }
 tap_code() { refresh_keys; read -r AX AY < <(python3 tools/wb12_kv.py "$OUT/caps-geometry.txt" xy KEY code "$1"); adb shell input tap "$AX" "$AY"; sleep 0.4; }
+tap_letter() { refresh_keys; read -r AX AY < <(python3 tools/wb12_kv.py "$OUT/caps-geometry.txt" xy KEY label "$1"); adb shell input tap "$AX" "$AY"; sleep 0.4; }
 # Begin lowercase, then one-shot uppercase must revert after exactly one letter.
 shot caps_lower
 tap_code -1; shot caps_oneshot
-tap_code 97; tap_code 98
+tap_letter a; tap_letter b
 report_fixture > "$OUT/caps-oneshot-report.txt"
 python3 - "$OUT/caps-oneshot-report.txt" <<'PYONESHOT' || REGRESSION_FAILED=1
 import re,sys
@@ -178,10 +179,10 @@ print('PASS actual UI one-shot reverts after one letter',repr(f))
 PYONESHOT
 clear_fixture
 tap_code -1; sleep 1; tap_code -1; shot caps_locked
-tap_code 97; tap_code 32; tap_code 98
+tap_letter a; tap_code 32; tap_letter b
 # Symbols and back must preserve lock.
 tap_code -3; shot caps_symbols; tap_code -3; shot caps_after_symbols
-tap_code 99; tap_code -1; shot caps_unlocked; tap_code 100
+tap_letter c; tap_code -1; shot caps_unlocked; tap_letter d
 report_fixture > "$OUT/caps-cycle-report.txt"
 python3 - "$OUT/caps-cycle-report.txt" <<'PYCAPSCYCLE' || REGRESSION_FAILED=1
 import re,sys
@@ -207,11 +208,28 @@ adb shell input text cat
 sleep 5
 shot gif_keyed_cat_results
 dump gif_keyed_cat_results
+adb logcat -d -s WBDBG:I > "$OUT/gif-positions.txt"
 python3 - "$OUT/gif_keyed_cat_results.xml" <<'PYGIFUI'
 import sys,xml.etree.ElementTree as E
 r=E.parse(sys.argv[1])
 print('GIF UI',[(n.get('text'),n.get('content-desc')) for n in r.iter('node') if n.get('text') or n.get('content-desc')])
 PYGIFUI
+python3 - "$OUT/gif-positions.txt" > "$OUT/gif-first-cell" <<'PYGIFCELL'
+import re,sys
+m=re.findall(r'GIFCELL i=0 cx=(\d+) cy=(\d+) w=(\d+) h=(\d+)',open(sys.argv[1]).read())
+assert m,'no GIF tile geometry; not a handoff pass'
+x,y,w,h=map(int,m[-1]);print(x,y)
+PYGIFCELL
+read -r GX GY < "$OUT/gif-first-cell"
+adb shell input tap "$GX" "$GY"; sleep 10
+adb logcat -d -s IMETARGET:I > "$OUT/gif-handoff-report.txt"
+python3 - "$OUT/gif-handoff-report.txt" <<'PYGIFCHECK' || REGRESSION_FAILED=1
+import re,sys
+s=open(sys.argv[1]).read();m=re.findall(r'CONTENT= mime=image/gif bytes=(\d+) sig=GIF',s)
+assert m and int(m[-1])>100,'actual image/gif handoff did not drain complete media'
+print('PASS actual GIF-only editor received GIF signature and bytes',m[-1])
+PYGIFCHECK
+shot gif_after_handoff
 adb shell input keyevent KEYCODE_BACK; sleep 1
 
 # Instrumentation uses the installed runner reported by PackageManager, not a guessed package ID.
