@@ -40,8 +40,8 @@ class KlipyClientTest {
         assertEquals("hello-hi-662", gif.slug)
         assertEquals(8041071659142944L, gif.id)
         assertEquals("https://static.klipy.com/ii/x/14/af/um0L4dFH.gif", gif.fullGif()?.url)
-        // Lightest tier (md jpg, 9000 bytes) wins for the grid preview.
-        assertEquals("https://static.klipy.com/ii/x/14/af/mdSmall.jpg", gif.gridPreview()?.url)
+        // 1.7 uses an animated preview at tile scale, not the smallest static JPG.
+        assertEquals("https://static.klipy.com/ii/x/14/af/8GCrVAB7.gif", gif.gridPreview()?.url)
     }
 
     @Test fun failedResultYieldsEmpty() {

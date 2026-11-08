@@ -575,7 +575,7 @@ fun RowScope.SuggestionItems(words: SuggestedWords, onClick: (i: Int) -> Unit, o
                 words,
                 idx,
                 isPrimary = !boldCentre && idx == SuggestedWords.INDEX_OF_AUTO_CORRECTION,
-                forcePrimary = suggestion == layout.swipePrimaryElement || (boldCentre && suggestion == centreSuggestion && w == centreWeight),
+                forcePrimary = if (boldCentre) suggestion == centreSuggestion && w == centreWeight else suggestion == layout.swipePrimaryElement,
                 onClick = { onClick(idx) },
                 onLongClick = { onLongClick(idx) },
                 isEmoji = suggestion in layout.emojiMatches,
@@ -625,7 +625,7 @@ fun RowScope.SuggestionItems(words: SuggestedWords, onClick: (i: Int) -> Unit, o
     // Keep empty chip geometry stable while the engine is starting or returning no words.
     if (isKeyStyledTheme() && !layout.isGestureBatch) {
         val candidates = layout.sortedMatches
-        centreSuggestion = layout.autocorrectMatch ?: candidates.firstOrNull() ?: layout.verbatimWord
+        centreSuggestion = spaceCommitSuggestion(layout.autocorrectMatch, layout.verbatimWord, candidates)
         val left = layout.verbatimWord
             ?: candidates.firstOrNull { it != centreSuggestion }
         renderItem(left, leftWeight)

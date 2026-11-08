@@ -125,6 +125,7 @@ public class TestInput extends Activity {
                         // On-demand current-content read: FIELD= is otherwise only logged on
                         // change, so an UNCHANGED field is invisible after a logcat clear.
                         Log.i("IMETARGET", "FIELD=" + edit.getText().toString());
+                        Log.i("IMETARGET", "SELECTION=" + edit.getSelectionStart() + ":" + edit.getSelectionEnd());
                     } else if ("com.wrenboard.imetarget.SETCLIP".equals(a)) {
                         ClipboardManager cm =
                                 (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
