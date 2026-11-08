@@ -96,8 +96,7 @@ PYCOORD
  python3 - "$OUT/locator.log" "$2" <<'PYICON'
 import sys,re
 text=open(sys.argv[1]).read();label=sys.argv[2].replace(' ','_')
-if label=='Clipboard':label='Clipboard_Manager'
-items=re.findall(r'WINDOW ACTION name='+re.escape(label)+r' cx=(\d+) cy=(\d+)',text)
+items=re.findall(r'UNIFIED_BAR name='+re.escape(label)+r' cx=(\d+) cy=(\d+)',text)
 assert items, 'No rendered/debug icon bounds for '+label
 print(*items[-1])
 PYICON
@@ -180,7 +179,7 @@ for I in $(seq 1 12); do
 done
 adb shell input motionevent UP "$HX" "$HY";sleep 1
 shot overflow_reordered
-# Hidden is outside the scroll area and remains a live drop target.
+# Hidden stays last inside the scrolling grid; this setup must bring it into view.
 read -r SX SY < <(coords overflow_reordered 'Text Editor')
 read -r HX HY < <(coords overflow_reordered Hidden)
 adb shell input motionevent DOWN "$SX" "$SY";sleep 0.8
