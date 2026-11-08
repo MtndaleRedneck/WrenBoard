@@ -208,5 +208,44 @@ adb shell input motionevent UP "$HX" "$HY";sleep 1
 adb shell input keyevent KEYCODE_BACK;sleep 1
 adb shell am broadcast -a com.wrenboard.keyboard.WBDBG -p "$PKG" --es cmd open:more >/dev/null;sleep 2
 shot overflow_hidden_reopened
+# A real box tile crosses two rows, then crosses up into the actual toolbar.
+dragtext() {
+ shot vertical_current
+ read -r SX SY < <(coords vertical_current "$1")
+ read -r HX HY < <(coords vertical_current "$2")
+ adb shell input motionevent DOWN "$SX" "$SY";sleep 0.8
+ for I in $(seq 1 18); do
+  X=$((SX+(HX-SX)*I/18));Y=$((SY+(HY-SY)*I/18));adb shell input motionevent MOVE "$X" "$Y";sleep 0.07
+ done
+ adb shell input motionevent UP "$HX" "$HY";sleep 1
+}
+dragtext GIF WordStyles
+shot box_two_rows_down
+dragtext GIF 'Voice Input'
+shot box_to_bar
+# Restore every remaining hidden action, producing twenty-four visible actions.
+taptext Hidden
+for LABEL in 'Debug Info' 'Copy to Clipboard' 'Cut to Clipboard' 'Paste from Clipboard' 'Arrow Up' 'Arrow Down' 'Arrow Right' 'Text Editor'; do
+ taptext "$LABEL"
+done
+taptext Back
+shot true_overflow_initial
+# Hold a real box drag near the grid's bottom edge until its last Hidden target scrolls in.
+read -r SX SY < <(coords true_overflow_initial Clipboard)
+read -r EX EY < <(coords true_overflow_initial WordStyles)
+# The currently rendered bottom tile's lower edge is the scroll zone, not a guessed screen point.
+EY=$((EY+28))
+adb shell input motionevent DOWN "$SX" "$SY";sleep 0.8
+for I in $(seq 1 18); do
+ X=$((SX+(EX-SX)*I/18));Y=$((SY+(EY-SY)*I/18));adb shell input motionevent MOVE "$X" "$Y";sleep 0.07
+done
+sleep 3
+shot true_overflow_scrolled
+read -r HX HY < <(coords true_overflow_scrolled Hidden)
+adb shell input motionevent MOVE "$HX" "$HY";sleep 0.3
+adb shell input motionevent UP "$HX" "$HY";sleep 1
+adb shell input keyevent KEYCODE_BACK;sleep 1
+adb shell am broadcast -a com.wrenboard.keyboard.WBDBG -p "$PKG" --es cmd open:more >/dev/null;sleep 2
+shot true_overflow_hidden_reopened
 echo 'FOCUSED DIRECT ACTIONS CAPTURE COMPLETE: inspect pixels before persistence verdict'
 adb logcat -d -s AndroidRuntime:E | tail -60
