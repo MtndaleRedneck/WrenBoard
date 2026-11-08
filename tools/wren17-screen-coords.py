@@ -14,12 +14,22 @@ for mode in ['original','orange']:
     if r>g*1.2 and g>b*1.2 and r>80:dst[x,y]=0
  temp=p.with_suffix('.ocr.png');screen.resize((im.width*2,im.height*2)).save(temp)
  data=subprocess.check_output(['tesseract',str(temp),'stdout','--psm','11','tsv'],stderr=subprocess.DEVNULL).decode()
+ rows=list(csv.DictReader(io.StringIO(data),delimiter='\t'))
  found=[]
- for r in csv.DictReader(io.StringIO(data),delimiter='\t'):
-  text=re.sub('[^a-z]','',r['text'].casefold())
-  if text!=re.sub('[^a-z]','',wanted):continue
+ clean=lambda t:re.sub('[^a-z]','',t.casefold())
+ wanted_clean=clean(wanted)
+ for i,r in enumerate(rows):
   if float(r['conf'])<15:continue
-  found.append(((int(r['left'])+int(r['width'])/2)/2,(int(r['top'])+int(r['height'])/2)/2))
+  joined=''; group=[]
+  for r2 in rows[i:i+5]:
+   if float(r2['conf'])<15:break
+   if abs(int(r2['top'])-int(r['top']))>35:break
+   joined+=clean(r2['text']);group.append(r2)
+   if joined==wanted_clean:
+    left=min(int(v['left']) for v in group);right=max(int(v['left'])+int(v['width']) for v in group)
+    top=min(int(v['top']) for v in group);bottom=max(int(v['top'])+int(v['height']) for v in group)
+    found.append(((left+right)/4,(top+bottom)/4));break
+   if not wanted_clean.startswith(joined):break
  if len(found)==1:
   temp.unlink(missing_ok=True)
   x,y=found[0];print(round(x),round(y));print(f'SCREEN_TEXT {wanted} via {mode} x={x} y={y}',file=sys.stderr);sys.exit(0)
