@@ -355,14 +355,6 @@ fun ThemePicker(onDeleteCustomTheme: (String) -> Unit, onCustomTheme: () -> Unit
                     Arrangement.Start
                 }
             ) {
-                // Owner requested WrenBoard first. Presentation only: selection and stored key stay unchanged.
-                item {
-                    ThemePreview(WrenBoardTheme, isSelected = WrenBoardTheme.key == currentTheme) {
-                        lifecycle.lifecycleScope.launch {
-                            context.setSetting(THEME_KEY, WrenBoardTheme.key)
-                        }
-                    }
-                }
                 item(span = { GridItemSpan(maxLineSpan) }) {
                     ScreenTitle(stringResource(R.string.theme_settings_custom_themes))
                 }
@@ -391,6 +383,14 @@ fun ThemePicker(onDeleteCustomTheme: (String) -> Unit, onCustomTheme: () -> Unit
                 item(span = { GridItemSpan(maxLineSpan) }) { }
                 item(span = { GridItemSpan(maxLineSpan) }) {
                     ScreenTitle(stringResource(R.string.theme_settings_default_themes))
+                }
+                // First entry within the existing built-in list; keep selection and stored key unchanged.
+                item {
+                    ThemePreview(WrenBoardTheme, isSelected = WrenBoardTheme.key == currentTheme) {
+                        lifecycle.lifecycleScope.launch {
+                            context.setSetting(THEME_KEY, WrenBoardTheme.key)
+                        }
+                    }
                 }
                 items(assetThemes) { name ->
                     ZipThemePreview(name, isSelected = currentTheme == name.toSetting(), modifier = Modifier, onLongClick = {}) {
