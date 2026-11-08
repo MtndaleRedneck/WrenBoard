@@ -16,9 +16,9 @@ jobs:
   android:
     runs-on: ubuntu-latest
     env:
-      # WrenBoard 1.5 release packaging: the in-app updater offers 1.5 only above 1.4.0/5
-      VERSION_NAME: 1.5.0
-      VERSION_CODE: "6"
+      # WrenBoard 1.6 release packaging: the in-app updater offers 1.6 only above 1.5.0/6
+      VERSION_NAME: 1.6.0
+      VERSION_CODE: "7"
     steps:
       - uses: actions/checkout@v4
       - name: Init build submodules (bundled English voice model cleared, provenance in README-WRENBOARD.md)
@@ -53,24 +53,92 @@ jobs:
         run: |
           echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/release.keystore"
           printf 'storeFile=%s\nkeyAlias=wrenboard\nkeyPassword=%s\nstorePassword=%s\n' "$RUNNER_TEMP/release.keystore" "$KEYSTORE_PASSWORD" "$KEYSTORE_PASSWORD" > keystore.properties
+          # 1.6 gate: fail closed if the release key is absent (build.gradle would otherwise
+          # silently sign release with the committed debug keystore java/shared.keystore)
+          test -n "$KEYSTORE_B64" || { echo "KEYSTORE_B64 empty"; exit 1; }
+          test -n "$KEYSTORE_PASSWORD" || { echo "KEYSTORE_PASSWORD empty"; exit 1; }
+          test -s "$RUNNER_TEMP/release.keystore" || { echo "release keystore empty"; exit 1; }
+          test -s keystore.properties || { echo "keystore.properties missing"; exit 1; }
       - name: Build stable release APK
         env:
           # WrenBoard 1.5 (item 1): KLIPY GIF test key, owner-authorized Nov 3; empty = placeholder state
           KLIPY_APP_KEY: ${{ secrets.KLIPY_APP_KEY }}
         run: ./gradlew --no-daemon assembleStableRelease
-      - name: Build stable DEBUG preview APK (layout screenshots only, never published)
-        env:
-          KLIPY_APP_KEY: ${{ secrets.KLIPY_APP_KEY }}
-        run: ./gradlew --no-daemon assembleStableDebug
       - name: Cleanup signing material
         if: always()
         run: rm -f keystore.properties "$RUNNER_TEMP/release.keystore"
+      # 1.6 gate: the release APK leaves the runner only age-encrypted to a public recipient
+      # key (private key held only on the reviewer-verifier's machine, never in repo/CI).
+      # Signer pinned to the WrenBoard 1.5.0 certificate; any mismatch fails before upload.
+      - name: Verify signer and encrypt release APK
+        env:
+          AGE_RECIPIENT: age10y8z2hrk99pat4as2c0fffp6svqsjql98x0qcun02dsljvs3uvvs8cvnx6
+          EXPECTED_CERT_SHA256: ad41ab713027aca87389019721d102d67cacaae349cc625aa14f76240801f7fc
+        run: |
+          set -euo pipefail
+          trap 'rc=$?; rm -f build/outputs/apk/stable/*/*.apk signer.txt badging.txt; if [ "$rc" -ne 0 ]; then rm -rf enc; fi' EXIT
+          test -n "$AGE_RECIPIENT"
+          sudo apt-get install -y -q age
+          age --version
+          shopt -s nullglob
+          apks=(build/outputs/apk/stable/release/*.apk)
+          test "${#apks[@]}" -eq 1 || { echo "expected exactly 1 release APK, got ${#apks[@]}"; exit 1; }
+          bt="$ANDROID_HOME/build-tools/$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -1)"
+          "$bt/apksigner" verify --print-certs "${apks[0]}" > signer.txt
+          python3 - "$EXPECTED_CERT_SHA256" signer.txt <<'PY_SIGNER'
+          import re
+          import sys
+          from pathlib import Path
+          
+          pin = sys.argv[1]
+          if not re.fullmatch(r"[0-9a-f]{64}", pin):
+              raise SystemExit("invalid certificate pin")
+          blocks = {}
+          for line in Path(sys.argv[2]).read_text().splitlines():
+              if "certificate DN" not in line and "certificate SHA-256 digest" not in line:
+                  continue
+              match = re.fullmatch(r"(Signer #[1-9][0-9]* |V[23] Signer: )certificate (DN|SHA-256 digest): (.+)", line)
+              if not match:
+                  raise SystemExit("unknown certificate output")
+              identity, field, value = match.groups()
+              block = blocks.setdefault(identity, {})
+              if field in block:
+                  raise SystemExit("duplicate certificate field")
+              block[field] = value
+          if not blocks:
+              raise SystemExit("missing certificate output")
+          old = [identity for identity in blocks if identity.startswith("Signer #")]
+          if old and set(blocks) != {"Signer #1 "}:
+              raise SystemExit("multiple or mixed signer identities")
+          # In the observed scheme layout each V2/V3 block describes its scheme's
+          # certificate. Equal SHA-256 values identify the same certificate across schemes.
+          for block in blocks.values():
+              if set(block) != {"DN", "SHA-256 digest"}:
+                  raise SystemExit("incomplete certificate block")
+              if not re.fullmatch(r"[0-9a-f]{64}", block["SHA-256 digest"]):
+                  raise SystemExit("invalid certificate digest")
+              if block["SHA-256 digest"] != pin:
+                  raise SystemExit("signer mismatch")
+          if len({block["DN"] for block in blocks.values()}) != 1:
+              raise SystemExit("inconsistent scheme certificate identity")
+          print("exact certificate pin verified; one certificate identity")
+          PY_SIGNER
+          "$bt/aapt2" dump badging "${apks[0]}" > badging.txt
+          grep -m1 '^package:' badging.txt
+          mkdir -p enc
+          f="${apks[0]}"
+          sha256sum "$f" | sed 's#  .*/#  #' > enc/SHA256SUMS
+          age -r "$AGE_RECIPIENT" -o "enc/$(basename "$f").age" "$f"
+          test -s "enc/$(basename "$f").age"
+          cp signer.txt enc/SIGNER.txt
+          rm -f build/outputs/apk/stable/*/*.apk signer.txt badging.txt
+          cat enc/SHA256SUMS enc/SIGNER.txt
       - uses: actions/upload-artifact@v4
         with:
-          name: WrenBoard-baseline-apk
-          path: build/outputs/apk/stable/release/*.apk
-      - uses: actions/upload-artifact@v4
-        with:
-          name: WrenBoard-debug-preview-apk
-          path: build/outputs/apk/stable/debug/*.apk
+          name: WrenBoard-apk-encrypted
+          path: |
+            enc/*.apk.age
+            enc/SHA256SUMS
+            enc/SIGNER.txt
+          if-no-files-found: error
           retention-days: 3
