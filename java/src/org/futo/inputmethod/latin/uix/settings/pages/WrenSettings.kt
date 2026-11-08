@@ -126,7 +126,6 @@ val WrenLayoutMenu = UserSettingsMenu(
     title = R.string.wren_home_layout,
     navPath = "wren_layout", registerNavPath = true,
     settings = layoutSize + layoutRows + layoutKeys +
-        ActionsScreen.named(R.string.action_settings_quick_option_enable_action_key, R.string.action_settings_quick_option_language_switch_key) +
         TypingSettingsMenu.named(R.string.popup_on_keypress)
 )
 
