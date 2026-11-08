@@ -4,6 +4,28 @@ import csv, io, re, subprocess, sys
 from pathlib import Path
 from PIL import Image
 p=Path(sys.argv[1]); wanted=sys.argv[2].casefold(); im=Image.open(p).convert('RGB')
+# Tile-column crops prevent labels such as Debug Info/Copy to Clipboard from
+# being mistaken for the separate Info/Clipboard tiles.
+if len(sys.argv)>3 and sys.argv[3]=='hidden':
+ matches=[]
+ for col in range(4):
+  x0=im.width*col//4;x1=im.width*(col+1)//4;y0=int(im.height*0.63)
+  crop=im.crop((x0,y0,x1,im.height-60)).resize(((x1-x0)*3,(im.height-60-y0)*3))
+  temp=p.with_suffix('.hidden.png');crop.save(temp)
+  data=subprocess.check_output(['tesseract',str(temp),'stdout','--psm','6','tsv'],stderr=subprocess.DEVNULL).decode()
+  groups={}
+  for row in csv.DictReader(io.StringIO(data),delimiter='\t'):
+   if float(row['conf'])<15:continue
+   key=(row['block_num'],row['par_num'],row['line_num']);groups.setdefault(key,[]).append(row)
+  for rows in groups.values():
+   words=''.join(re.sub('[^a-z]','',r['text'].casefold()) for r in rows)
+   if words==re.sub('[^a-z]','',wanted):
+    left=min(int(r['left']) for r in rows);right=max(int(r['left'])+int(r['width'])for r in rows)
+    top=min(int(r['top'])for r in rows);bottom=max(int(r['top'])+int(r['height'])for r in rows)
+    matches.append((round(x0+(left+right)/6),round(y0+(top+bottom)/6)))
+  temp.unlink(missing_ok=True)
+ if len(matches)==1:print(*matches[0]);sys.exit(0)
+ raise SystemExit('Hidden tile label missing or ambiguous: '+wanted)
 for mode in ['original','orange']:
  screen=im
  if mode=='orange':

@@ -108,7 +108,7 @@ taptext() {
   for I in 1 2 3; do adb shell input swipe 800 1510 800 2050 300;done
   for I in 1 2 3 4 5 6; do
    shot current
-   if POS=$(python3 tools/wren17-screen-coords.py "$OUT/current.png" "$1" 2>/dev/null); then
+   if POS=$(python3 tools/wren17-screen-coords.py "$OUT/current.png" "$1" hidden 2>/dev/null); then
     read -r X Y <<< "$POS";adb shell input tap "$X" "$Y";sleep 1;return
    fi
    adb shell input swipe 800 2040 800 1480 350;sleep 0.5
