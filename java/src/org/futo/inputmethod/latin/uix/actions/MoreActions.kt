@@ -89,7 +89,7 @@ fun ActionItem(action: Action, modifier: Modifier = Modifier, dragIcon: Boolean 
     Surface(color = LocalKeyboardScheme.current.onSurface.copy(alpha = 0.10f),
         modifier = modifier
             .fillMaxWidth()
-            .height(70.dp),
+            .height(64.dp),
         shape = RoundedCornerShape(12.dp)
     ) {
         CompositionLocalProvider(LocalContentColor provides LocalKeyboardScheme.current.onKeyboardContainer) {
@@ -209,13 +209,13 @@ fun MoreActionsView() {
                 }.then(gesture), dragIcon = !hiddenOpen, position = if(hiddenOpen) null else ids.indexOf(id) + 1)
             }
             // Keep the hide destination at the bottom right, after all action tiles.
-            if(!hiddenOpen) items((3 - ids.size % 4 + 4) % 4) { Spacer(Modifier.height(70.dp)) }
+            if(!hiddenOpen) items((3 - ids.size % 4 + 4) % 4) { Spacer(Modifier.height(64.dp)) }
             item(key = "hidden-destination") {
                 val scheme = LocalKeyboardScheme.current
                 val label = if(hiddenOpen) "Actions" else if(overHidden) "Drop to hide" else "Hidden (" + draft.hidden.count { AllActionsMap[it]?.shownInEditor == true } + ")"
                 Surface(color = if(overHidden) scheme.onSurface.copy(alpha = 0.16f) else Color.Transparent,
                     shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier.height(70.dp).fillMaxWidth()
+                    modifier = Modifier.height(64.dp).fillMaxWidth()
                         .onGloballyPositioned { bounds["hidden-destination"] = it.boundsInRoot() }
                         .drawBehind { drawRoundRect(scheme.onSurface.copy(alpha = 0.4f), cornerRadius = CornerRadius(12.dp.toPx()), style = Stroke(width = 1.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 3.dp.toPx())))) }
                         .clickable { hiddenOpen = !hiddenOpen }) {
