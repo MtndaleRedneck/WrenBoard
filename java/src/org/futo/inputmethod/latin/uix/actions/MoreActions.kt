@@ -209,7 +209,7 @@ fun ActionsEditor(header: @Composable () -> Unit) {
             Modifier.padding(8.dp), style = Typography.Small)
         LazyVerticalGrid(state = lazyState, columns = GridCells.Fixed(4), modifier = Modifier.fillMaxSize().padding(8.dp)) {
             item(key = "hidden-destination") {
-                ReorderableItem(reorder, key = "hidden-destination", enabled = false) {
+                ReorderableItem(reorder, key = "hidden-destination") {
                     TextButton(onClick = { hiddenOpen = !hiddenOpen }, modifier = Modifier.height(74.dp)) {
                         Text(if(hiddenOpen) "Actions" else "Hidden (" + draft.hidden.count { AllActionsMap[it]?.shownInEditor == true } + ")")
                     }
