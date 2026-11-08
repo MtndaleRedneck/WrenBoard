@@ -8,6 +8,8 @@ import org.futo.inputmethod.latin.uix.dataStore
 import org.futo.inputmethod.latin.uix.SettingsKey
 import org.futo.inputmethod.latin.uix.settings.useDataStoreValue
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalContext
 
 // One atomic value owns the visible order and Hidden order. Legacy preferences are read only
 // during first migration; a saved unified value is never rebuilt from old categories.
@@ -51,4 +53,9 @@ suspend fun Context.saveUnifiedActions(model: OrderedActionIds) {
 val UnifiedActionsSetting = SettingsKey(UnifiedActionsKey, migrateUnifiedActionIds(ActionsSettings.default).encode())
 
 @Composable
-fun useUnifiedActions(): OrderedActionIds = useDataStoreValue(UnifiedActionsSetting).decodeUnified()
+fun useUnifiedActions(): OrderedActionIds {
+    val context = LocalContext.current
+    // Settings may open before the IME after an update. Migrate before exposing a draft.
+    remember(context) { context.readUnifiedActions() }
+    return useDataStoreValue(UnifiedActionsSetting).decodeUnified()
+}
