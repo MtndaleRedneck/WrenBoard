@@ -2,7 +2,7 @@ name: wren17-actions-runtime
 on:
   push:
     branches: [wrenboard-1.7]
-    paths: [.github/workflows/wren17-actions-runtime.yml, tools/wren17-actions-runtime.sh]
+    paths: [.github/workflows/wren17-actions-runtime.yml, tools/wren17-actions-runtime.sh, tools/wren17-screen-coords.py]
   workflow_dispatch:
 permissions:
   contents: read
@@ -72,6 +72,8 @@ jobs:
           shutil.copyfile(next(iter(tests.values())), 'w17-tests.apk')
           print('Resolved full app and test APKs',list(app.values()),list(tests.values()))
           PYAPK
+      - name: Install screenshot text locator
+        run: sudo apt-get update -q && sudo apt-get install -y -q tesseract-ocr
       - name: Enable KVM
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
