@@ -18,12 +18,12 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           persist-credentials: false
-          ref: 1952c53560360bf48f92e236591c499894900540
+          ref: 37413dc07273921735958c065f64dca42b1a896c
           fetch-depth: 1
       - name: Verify exact reviewed app source
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD)" = 1952c53560360bf48f92e236591c499894900540
+          test "$(git rev-parse HEAD)" = 37413dc07273921735958c065f64dca42b1a896c
           test -z "$(git status --porcelain)"
       - name: Init build submodules (bundled English voice model cleared, provenance in README-WRENBOARD.md)
         run: git submodule update --init java/assets/themes java/res-large libs translations voiceinput-shared/src/main/ml
