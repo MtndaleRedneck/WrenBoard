@@ -76,7 +76,7 @@ adb shell input keyevent KEYCODE_BACK; sleep 2; shot themes_back_home; dump them
 adb shell settings put global window_animation_scale 1
 adb shell settings put global transition_animation_scale 1
 adb shell settings put global animator_duration_scale 1
-for TITLE in Themes Languages Typing; do
+for TITLE in Themes Languages Typing "Layout & keys" FUTO "Rich input"; do
  openpage home
  python3 - "$OUT/home.xml" "$TITLE" > "$OUT/transition-coordinates" <<'PYTRANSCOORD'
 import sys,re,xml.etree.ElementTree as E
@@ -85,17 +85,17 @@ for n in E.parse(sys.argv[1]).iter('node'):
   a,b,c,d=map(int,re.findall(r'\d+',n.get('bounds')));print((a+c)//2,(b+d)//2);break
 PYTRANSCOORD
  read -r TX TY < "$OUT/transition-coordinates"
- adb shell screenrecord --time-limit 4 /sdcard/w17-transition.mp4 > "$OUT/recording-$TITLE.log" 2>&1 &
+ adb shell screenrecord --time-limit 4 /sdcard/w17-transition.mp4 > "$OUT/recording-${TITLE// /_}.log" 2>&1 &
  RECORD_PID=$!
  sleep 0.5
  adb shell input tap "$TX" "$TY"
  sleep 0.8
  adb shell input keyevent KEYCODE_BACK
  wait "$RECORD_PID"
- adb pull /sdcard/w17-transition.mp4 "$OUT/transition-$TITLE.mp4" >/dev/null
- ffmpeg -y -loglevel error -i "$OUT/transition-$TITLE.mp4" -vf 'scale=540:-2' -c:v libx264 -preset fast -crf 27 -an -movflags +faststart "$OUT/review-transition-$TITLE.mp4"
+ adb pull /sdcard/w17-transition.mp4 "$OUT/transition-${TITLE// /_}.mp4" >/dev/null
+ ffmpeg -y -loglevel error -i "$OUT/transition-${TITLE// /_}.mp4" -vf 'scale=540:-2' -c:v libx264 -preset fast -crf 27 -an -movflags +faststart "$OUT/review-transition-${TITLE// /_}.mp4"
  # Export a contact sheet at8frames/sec so overlapping or stale pages can be inspected.
- ffmpeg -y -loglevel error -i "$OUT/transition-$TITLE.mp4" -vf 'fps=8,scale=270:-1,tile=8x4' -frames:v 1 "$OUT/transition_$TITLE.png"
+ ffmpeg -y -loglevel error -i "$OUT/transition-${TITLE// /_}.mp4" -vf 'fps=8,scale=270:-1,tile=8x4' -frames:v 1 "$OUT/transition_${TITLE// /_}.png"
 done
 
 # Keyboard and nested action panels in a synthetic blank editor.
@@ -228,17 +228,19 @@ clear_fixture
 adb shell am broadcast -a com.wrenboard.keyboard.WBDBG -p "$PKG" --es cmd open:emoji >/dev/null
 sleep 1
 adb shell input tap 350 950
-adb shell input text shaking; sleep 2; shot emoji_shaking_search
+for LETTER in s h a k i n g; do tap_letter "$LETTER"; done
+sleep 2; shot emoji_shaking_search
 adb logcat -d -s WBGLYPH:D > "$OUT/glyph-report.txt"
 adb shell input keyevent KEYCODE_BACK; sleep 1
 
 # Only synthetic GIF query terms; the existing test app key is injected at build time.
 adb shell am broadcast -a com.wrenboard.keyboard.WBDBG -p "$PKG" --es cmd open:gif >/dev/null
-sleep 2
+sleep 8
 shot gif_keyed_recents
 adb shell input tap 350 950
-adb shell input text cat
-sleep 5
+for LETTER in c a t; do tap_letter "$LETTER"; done
+tap_code 10
+sleep 8
 shot gif_keyed_cat_results
 dump gif_keyed_cat_results
 adb logcat -d -s WBDBG:I > "$OUT/gif-positions.txt"

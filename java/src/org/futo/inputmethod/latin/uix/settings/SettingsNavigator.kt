@@ -161,7 +161,12 @@ fun SettingsNavigator(
             enterTransition = { EnterTransition.None },
             exitTransition = { ExitTransition.None },
             popEnterTransition = { EnterTransition.None },
-            popExitTransition = { ExitTransition.None }
+            popExitTransition = { ExitTransition.None },
+            // Navigation 2.10 has separate predictive-pop defaults. Disable those too:
+            // ordinary pop transitions alone do not prevent the outgoing page shrinking
+            // over home during system Back.
+            predictivePopEnterTransition = { EnterTransition.None },
+            predictivePopExitTransition = { ExitTransition.None }
         ) {
             with(NavGraphBuilderWrapper(this)) {
                 composable<Route.AddLayout> { SelectLayoutsScreen(nav, it.lang.toLocale()) }
