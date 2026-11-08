@@ -198,6 +198,22 @@ adb shell input text shaking; sleep 2; shot emoji_shaking_search
 adb logcat -d -s WBGLYPH:D > "$OUT/glyph-report.txt"
 adb shell input keyevent KEYCODE_BACK; sleep 1
 
+# Only synthetic GIF query terms; the existing test app key is injected at build time.
+adb shell am broadcast -a com.wrenboard.keyboard.WBDBG -p "$PKG" --es cmd open:gif >/dev/null
+sleep 2
+shot gif_keyed_recents
+adb shell input tap 350 950
+adb shell input text cat
+sleep 5
+shot gif_keyed_cat_results
+dump gif_keyed_cat_results
+python3 - "$OUT/gif_keyed_cat_results.xml" <<'PYGIFUI'
+import sys,xml.etree.ElementTree as E
+r=E.parse(sys.argv[1])
+print('GIF UI',[(n.get('text'),n.get('content-desc')) for n in r.iter('node') if n.get('text') or n.get('content-desc')])
+PYGIFUI
+adb shell input keyevent KEYCODE_BACK; sleep 1
+
 # Instrumentation uses the installed runner reported by PackageManager, not a guessed package ID.
 TEST_APK=w17-tests.apk
 test -n "$TEST_APK"
