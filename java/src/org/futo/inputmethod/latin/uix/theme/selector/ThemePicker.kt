@@ -76,6 +76,7 @@ import org.futo.inputmethod.latin.uix.theme.presets.DefaultLightScheme
 import org.futo.inputmethod.latin.uix.theme.presets.DynamicDarkTheme
 import org.futo.inputmethod.latin.uix.theme.presets.DynamicLightTheme
 import org.futo.inputmethod.latin.uix.theme.presets.DynamicSystemTheme
+import org.futo.inputmethod.latin.uix.theme.presets.WrenBoardTheme
 import org.futo.inputmethod.latin.uix.theme.presets.VoiceInputTheme
 import org.futo.inputmethod.updates.openURI
 
@@ -354,6 +355,14 @@ fun ThemePicker(onDeleteCustomTheme: (String) -> Unit, onCustomTheme: () -> Unit
                     Arrangement.Start
                 }
             ) {
+                // Owner requested WrenBoard first. Presentation only: selection and stored key stay unchanged.
+                item {
+                    ThemePreview(WrenBoardTheme, isSelected = WrenBoardTheme.key == currentTheme) {
+                        lifecycle.lifecycleScope.launch {
+                            context.setSetting(THEME_KEY, WrenBoardTheme.key)
+                        }
+                    }
+                }
                 item(span = { GridItemSpan(maxCurrentLineSpan) }) {
                     ScreenTitle(stringResource(R.string.theme_settings_custom_themes))
                 }
@@ -391,8 +400,7 @@ fun ThemePicker(onDeleteCustomTheme: (String) -> Unit, onCustomTheme: () -> Unit
                     }
                 }
 
-                items(availableThemeOptions.size) {
-                    val themeOption = availableThemeOptions[it].second
+                items(availableThemeOptions.filterNot { it.first == WrenBoardTheme.key }) { (_, themeOption) ->
 
                     ThemePreview(themeOption, isSelected = themeOption.key == currentTheme) {
                         lifecycle.lifecycleScope.launch {

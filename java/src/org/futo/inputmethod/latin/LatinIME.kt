@@ -1,5 +1,6 @@
 package org.futo.inputmethod.latin
 
+import org.futo.inputmethod.latin.uix.actions.readUnifiedActions
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -413,6 +414,7 @@ class LatinIME : InputMethodServiceCompose(), LatinIMELegacy.SuggestionStripCont
 
         scheduleUpdateCheckingJob(this)
         org.futo.inputmethod.latin.uix.actions.migrateToolbarForSaveWord(this)
+        this.readUnifiedActions()
         launchJob { uixManager.showUpdateNoticeIfNeeded() }
 
         launchJob {
