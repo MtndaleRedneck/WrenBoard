@@ -1,10 +1,5 @@
 name: build
 on:
-  push:
-    paths-ignore:
-      - 'tools/**'
-      - '.github/**'
-      - '**.md'
   workflow_dispatch:
     inputs:
       publish:
@@ -14,6 +9,10 @@ permissions:
   contents: read
 jobs:
   android:
+    if: github.event_name == 'workflow_dispatch' && inputs.publish == true && github.repository == 'MtndaleRedneck/WrenBoard' && github.ref == 'refs/heads/tab2/release-1.6.0-v3c-independent-signer'
+    permissions:
+      contents: write
+    timeout-minutes: 60
     runs-on: ubuntu-latest
     env:
       # WrenBoard 1.6 release packaging: the in-app updater offers 1.6 only above 1.5.0/6
@@ -21,6 +20,14 @@ jobs:
       VERSION_CODE: "7"
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Verify frozen app source
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = 0056e31502c3e9a0579c456e72bd85218325fc20
+          test "$(git diff --name-only HEAD^ HEAD)" = .github/workflows/build.yml
       - name: Init build submodules (bundled English voice model cleared, provenance in README-WRENBOARD.md)
         run: git submodule update --init java/assets/themes java/res-large libs translations voiceinput-shared/src/main/ml
       - name: Init swipe model submodule (FUTO Swipe weights, FUTO Model Weights License 1.0; notice in Settings > Credits)
@@ -67,11 +74,13 @@ jobs:
       - name: Cleanup signing material
         if: always()
         run: rm -f keystore.properties "$RUNNER_TEMP/release.keystore"
-      # 1.6 gate: the release APK leaves the runner only age-encrypted to a public recipient
-      # key (private key held only on the reviewer-verifier's machine, never in repo/CI).
+      # Independent review gets age-encrypted bytes. Raw APK goes only to the owned draft.
+      # Private age identities never enter CI. Only final manual review may publish.
       # Signer pinned to the WrenBoard 1.5.0 certificate; any mismatch fails before upload.
-      - name: Verify signer and encrypt release APK
+      - name: Verify signer, encrypt review copy, and upload to owned draft
         env:
+          GH_TOKEN: ${{ github.token }}
+          REVIEWER_RECIPIENT: age14glqdym3cnvmqzdzmdd02gkppqwg0epmug0040d99juja2ct856s3mcxqa
           AGE_RECIPIENT: age10y8z2hrk99pat4as2c0fffp6svqsjql98x0qcun02dsljvs3uvvs8cvnx6
           EXPECTED_CERT_SHA256: ad41ab713027aca87389019721d102d67cacaae349cc625aa14f76240801f7fc
         run: |
@@ -125,12 +134,52 @@ jobs:
           PY_SIGNER
           "$bt/aapt2" dump badging "${apks[0]}" > badging.txt
           grep -m1 '^package:' badging.txt
+          python3 - <<'PY_METADATA'
+          import re
+          from pathlib import Path
+          line = next(x for x in Path('badging.txt').read_text().splitlines() if x.startswith('package:'))
+          fields = dict(re.findall(r"(\w+)='([^']*)'", line))
+          assert fields.get('name') == 'com.wrenboard.keyboard', 'package mismatch'
+          assert fields.get('versionName') == '1.6.0', 'version mismatch'
+          assert fields.get('versionCode') == '7', 'version code mismatch'
+          PY_METADATA
           mkdir -p enc
           f="${apks[0]}"
           sha256sum "$f" | sed 's#  .*/#  #' > enc/SHA256SUMS
-          age -r "$AGE_RECIPIENT" -o "enc/$(basename "$f").age" "$f"
+          age -r "$AGE_RECIPIENT" -r "$REVIEWER_RECIPIENT" -o "enc/$(basename "$f").age" "$f"
           test -s "enc/$(basename "$f").age"
           cp signer.txt enc/SIGNER.txt
+          # Do not publish, create tags, overwrite assets, or follow an arbitrary upload URL.
+          export WREN_APK="$f"
+          python3 - <<'PY_DRAFT'
+          import hashlib, json, os, urllib.request
+          from pathlib import Path
+          api = 'https://api.github.com/repos/MtndaleRedneck/WrenBoard'
+          headers = {'Authorization': 'Bearer ' + os.environ['GH_TOKEN'], 'Accept': 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28'}
+          def get(path):
+              with urllib.request.urlopen(urllib.request.Request(api + path, headers=headers)) as r:
+                  return json.load(r)
+          release = get('/releases/438012520')
+          assert release['id'] == 438012520 and release['draft'] is True, 'not owned draft'
+          assert release['tag_name'] == 'v1.6.0', 'unexpected tag'
+          assert release['target_commitish'] == 'tab2/release-1.6.0-v3c-independent-signer', 'unexpected release target'
+          assert not release['assets'], 'draft not empty; no overwrite permitted'
+          apk = Path(os.environ['WREN_APK'])
+          data = apk.read_bytes()
+          digest = hashlib.sha256(data).hexdigest()
+          assert len(data) > 100000000, 'unexpected APK size'
+          url = 'https://uploads.github.com/repos/MtndaleRedneck/WrenBoard/releases/438012520/assets?name=WrenBoard-1.6.apk'
+          h = dict(headers, **{'Content-Type': 'application/vnd.android.package-archive', 'Content-Length': str(len(data))})
+          with urllib.request.urlopen(urllib.request.Request(url, data=data, headers=h, method='POST'), timeout=300) as r:
+              asset = json.load(r)
+          assert asset['name'] == 'WrenBoard-1.6.apk' and asset['state'] == 'uploaded', 'upload not complete'
+          assert asset['size'] == len(data), 'uploaded size mismatch'
+          assert asset.get('digest') == 'sha256:' + digest, 'uploaded digest mismatch'
+          after = get('/releases/438012520')
+          assert after['draft'] is True and len(after['assets']) == 1, 'draft state changed'
+          assert after['assets'][0]['id'] == asset['id'], 'unexpected asset'
+          print(json.dumps({'release_id': 438012520, 'asset_id': asset['id'], 'size': len(data), 'sha256': digest, 'draft': True}))
+          PY_DRAFT
           rm -f build/outputs/apk/stable/*/*.apk signer.txt badging.txt
           cat enc/SHA256SUMS enc/SIGNER.txt
       - uses: actions/upload-artifact@v4
