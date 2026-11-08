@@ -52,7 +52,7 @@ dump() {
  done
  echo "No valid UI hierarchy for $1 after5attempts" >&2;return 1
 }
-openpage() { adb shell input keyevent KEYCODE_HOME; adb shell am start -n "$PKG/org.futo.inputmethod.latin.uix.settings.SettingsActivity" -f 0x34000000 --es navDest "$1" >/dev/null; sleep 3; dump "$1"; shot "$1"; }
+openpage() { adb shell am start -W -n "$PKG/org.futo.inputmethod.latin.uix.settings.SettingsActivity" -f 0x34000000 --es navDest "$1" >/dev/null; sleep 5; dump "$1"; shot "$1"; adb shell dumpsys activity activities | grep -E "mResumedActivity|topResumedActivity" || true; }
 
 # Focused new action design check only. No swipe/old baseline/GIF/signing.
 openpage themes
@@ -76,7 +76,7 @@ else:raise SystemExit('Missing text '+sys.argv[2])
 PYCOORD
 }
 taptext() { dump current; read -r X Y < <(coords current "$1"); adb shell input tap "$X" "$Y"; sleep 1; }
-taptext Reorder
+taptext "Reorder items"
 shot editor_initial
 dump editor_initial
 # Reorder the first visible action onto the fixed Hidden destination, using a true long-press drag.
@@ -101,7 +101,7 @@ shot after_done
 # Close editor and reopen: Done persists; unsaved draft must not overwrite it on disposal.
 adb shell input keyevent KEYCODE_BACK;sleep 1
 adb shell am broadcast -a com.wrenboard.keyboard.WBDBG -p "$PKG" --es cmd open:more >/dev/null;sleep 1
-taptext Reorder
+taptext "Reorder items"
 shot editor_reopened
 # Open the Hidden tile using derived bounds, independent of its count.
 dump reopened
