@@ -17,6 +17,7 @@ import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.layout.Row
@@ -86,7 +87,10 @@ import sh.calvin.reorderable.rememberReorderableLazyGridState
 
 @Composable
 fun ActionItem(action: Action, modifier: Modifier = Modifier, dragIcon: Boolean = false, dragIconModifier: Modifier = Modifier, position: Int? = null) {
-    Surface(color = LocalKeyboardScheme.current.onSurface.copy(alpha = 0.10f),
+    val darkTiles = LocalKeyboardScheme.current.keyboardSurface.luminance() < 0.5f
+    val tileLabel = if(darkTiles) Color(0xFFE6E6E6) else Color(0xFF262626)
+    val tileFill = if(darkTiles) Color(0xFF484848) else Color(0xFFE3E3E3)
+    Surface(color = tileFill,
         modifier = modifier
             .fillMaxWidth()
             .height(64.dp),
@@ -99,7 +103,7 @@ fun ActionItem(action: Action, modifier: Modifier = Modifier, dragIcon: Boolean 
                     .padding(6.dp)
             ) {
 
-                if (position != null && position <= 6) Text(position.toString(), color = LocalKeyboardScheme.current.onSurface.copy(alpha = 0.55f), fontSize = 10.sp, modifier = Modifier.align(Alignment.TopStart))
+                if (position != null && position <= 6) Text(position.toString(), color = tileLabel.copy(alpha = 0.55f), fontSize = 10.sp, modifier = Modifier.align(Alignment.TopStart))
                 if (dragIcon) {
                     Icon(
                         painterResource(id = R.drawable.move),
@@ -107,7 +111,7 @@ fun ActionItem(action: Action, modifier: Modifier = Modifier, dragIcon: Boolean 
                         modifier = dragIconModifier
                             .size(16.dp)
                             .align(Alignment.TopEnd),
-                        tint = LocalContentColor.current.copy(alpha = 0.6f)
+                        tint = tileLabel.copy(alpha = 0.5f)
                     )
                 }
 
@@ -130,7 +134,7 @@ fun ActionItem(action: Action, modifier: Modifier = Modifier, dragIcon: Boolean 
                     org.futo.inputmethod.latin.uix.AutoFitText(
                         if (action == org.futo.inputmethod.latin.uix.actions.clipboard.ClipboardHistoryAction) stringResource(R.string.wren_home_clipboard) else stringResource(id = action.name),
                         modifier = Modifier.fillMaxWidth().height(20.dp),
-                        style = Typography.Small.copy(lineHeight = 12.sp, color = LocalKeyboardScheme.current.onSurface)
+                        style = Typography.Small.copy(lineHeight = 12.sp, color = tileLabel)
                     )
                 }
             }
@@ -212,16 +216,17 @@ fun MoreActionsView() {
             if(!hiddenOpen) items((3 - ids.size % 4 + 4) % 4) { Spacer(Modifier.height(64.dp)) }
             item(key = "hidden-destination") {
                 val scheme = LocalKeyboardScheme.current
+                val hiddenLabel = if(scheme.keyboardSurface.luminance() < 0.5f) Color(0xFFE6E6E6) else Color(0xFF262626)
                 val label = if(hiddenOpen) "Actions" else if(overHidden) "Drop to hide" else "Hidden (" + draft.hidden.count { AllActionsMap[it]?.shownInEditor == true } + ")"
-                Surface(color = if(overHidden) scheme.onSurface.copy(alpha = 0.16f) else Color.Transparent,
+                Surface(color = if(overHidden) hiddenLabel.copy(alpha = 0.16f) else Color.Transparent,
                     shape = RoundedCornerShape(12.dp),
                     modifier = Modifier.height(64.dp).fillMaxWidth()
                         .onGloballyPositioned { bounds["hidden-destination"] = it.boundsInRoot() }
-                        .drawBehind { drawRoundRect(scheme.onSurface.copy(alpha = 0.4f), cornerRadius = CornerRadius(12.dp.toPx()), style = Stroke(width = 1.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 3.dp.toPx())))) }
+                        .drawBehind { drawRoundRect(hiddenLabel.copy(alpha = 0.4f), cornerRadius = CornerRadius(12.dp.toPx()), style = Stroke(width = 1.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 3.dp.toPx())))) }
                         .clickable { hiddenOpen = !hiddenOpen }) {
                     Column(Modifier.fillMaxSize().padding(6.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.SpaceEvenly) {
-                        Icon(painterResource(R.drawable.visibility_off), contentDescription = null, tint = scheme.onSurface.copy(alpha = 0.8f), modifier = Modifier.size(26.dp))
-                        Text(label, color = scheme.onSurface, fontSize = 12.sp, maxLines = 1)
+                        Icon(painterResource(R.drawable.visibility_off), contentDescription = null, tint = hiddenLabel.copy(alpha = 0.8f), modifier = Modifier.size(26.dp))
+                        Text(label, color = hiddenLabel, fontSize = 12.sp, maxLines = 1)
                     }
                 }
             }
