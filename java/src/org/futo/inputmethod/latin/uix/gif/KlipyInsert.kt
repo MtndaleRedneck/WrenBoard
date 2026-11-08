@@ -23,11 +23,12 @@ object KlipyInsert {
 
 
     fun pickVariant(gif: KlipyClient.KlipyGif, supports: (String) -> Boolean): Pair<KlipyClient.KlipyVariant, String>? {
-        if (supports("video/mp4")) {
-            gif.fullMp4()?.takeIf { KlipyGifPipe.isAllowedUrl(it.url) }?.let { return it to "video/mp4" }
-        }
         if (supports("image/gif")) {
             gif.fullGif()?.takeIf { KlipyGifPipe.isAllowedUrl(it.url) }?.let { return it to "image/gif" }
+            return null
+        }
+        if (supports("video/mp4")) {
+            gif.fullMp4()?.takeIf { KlipyGifPipe.isAllowedUrl(it.url) }?.let { return it to "video/mp4" }
         }
         return null
     }

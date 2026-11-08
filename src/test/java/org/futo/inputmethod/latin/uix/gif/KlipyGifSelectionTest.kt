@@ -80,14 +80,21 @@ class KlipyGifSelectionTest {
     ))
 
     @Test
-    fun pick_mp4OnlyWhenEditorAcceptsIt() {
+    fun pick_gifPreferredWhenBothAccepted() {
         val pick = KlipyInsert.pickVariant(BOTH) { it == "video/mp4" || it == "image/gif" }
-        assertEquals("video/mp4", pick?.second)
-        assertEquals("https://static.klipy.com/hd.mp4", pick?.first?.url)
+        assertEquals("image/gif", pick?.second)
+        assertEquals("https://static.klipy.com/hd.gif", pick?.first?.url)
     }
 
     @Test
-    fun pick_gifFallbackWhenMp4NotAccepted() {
+    fun pick_noVideoSubstitutionWhenGifAcceptedButUnavailable() {
+        val mp4Only = gifWith(mapOf("hd" to KlipyFileSet(
+            mp4 = v("https://static.klipy.com/hd.mp4", 640, 360, 700_000))))
+        assertNull(KlipyInsert.pickVariant(mp4Only) { true })
+    }
+
+    @Test
+    fun pick_gifWhenOnlyGifAccepted() {
         val pick = KlipyInsert.pickVariant(BOTH) { it == "image/gif" }
         assertEquals("image/gif", pick?.second)
         assertEquals("https://static.klipy.com/hd.gif", pick?.first?.url)
