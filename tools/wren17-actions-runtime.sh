@@ -81,6 +81,7 @@ shot unified_normal
 dump normal
 # UI text selects real buttons; no hard-coded app coordinates.
 coords() {
+ if python3 tools/wren17-screen-coords.py "$OUT/$1.png" "$2" hidden 2>/dev/null; then return; fi
  if python3 tools/wren17-screen-coords.py "$OUT/$1.png" "$2" 2>/dev/null; then return; fi
  dump locator
  if python3 - "$OUT/locator.xml" "$2" <<'PYCOORD'
@@ -232,7 +233,7 @@ taptext Back
 shot true_overflow_initial
 # Hold a real box drag near the grid's bottom edge until its last Hidden target scrolls in.
 read -r SX SY < <(coords true_overflow_initial Clipboard)
-read -r EX EY < <(coords true_overflow_initial WordStyles)
+read -r EX EY < <(coords true_overflow_initial 'Arrow Down')
 # The currently rendered bottom tile's lower edge is the scroll zone, not a guessed screen point.
 EY=$((EY+28))
 adb shell input motionevent DOWN "$SX" "$SY";sleep 0.8
