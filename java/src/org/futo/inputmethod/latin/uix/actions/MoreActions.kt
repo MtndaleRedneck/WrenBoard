@@ -90,7 +90,7 @@ import sh.calvin.reorderable.rememberReorderableLazyGridState
 fun ActionItem(action: Action, modifier: Modifier = Modifier, dragIcon: Boolean = false, dragIconModifier: Modifier = Modifier, position: Int? = null) {
     val darkTiles = LocalKeyboardScheme.current.keyboardSurface.luminance() < 0.5f
     val tileLabel = if(darkTiles) Color(0xFFE6E6E6) else Color(0xFF262626)
-    val tileFill = if(darkTiles) Color(0xFF484848) else Color(0xFFE3E3E3)
+    val tileFill = LocalKeyboardScheme.current.keyboardContainer
     Surface(color = tileFill,
         modifier = modifier
             .fillMaxWidth()
@@ -164,82 +164,117 @@ fun MoreActionsView() {
         draft = model
         scope.launch { context.saveUnifiedActions(model) }
     }
-    val ids = (if(hiddenOpen) draft.hidden else draft.visible).filter { AllActionsMap[it]?.shownInEditor == true }
-    val overflow = !hiddenOpen && ids.size >= 16
-    val hideTile: @Composable () -> Unit = {
-                DisposableEffect(Unit) { onDispose { bounds.remove("hidden-destination") } }
-                val scheme = LocalKeyboardScheme.current
-                val hiddenLabel = if(scheme.keyboardSurface.luminance() < 0.5f) Color(0xFFE6E6E6) else Color(0xFF262626)
-                val label = if(overHidden) "Drop to hide" else "Hidden (" + draft.hidden.count { AllActionsMap[it]?.shownInEditor == true } + ")"
-                Surface(color = if(overHidden) hiddenLabel.copy(alpha = 0.16f) else Color.Transparent,
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier.height(64.dp).fillMaxWidth()
-                        .onGloballyPositioned { bounds["hidden-destination"] = it.boundsInRoot() }
-                        .drawBehind { drawRoundRect(hiddenLabel.copy(alpha = 0.4f), cornerRadius = CornerRadius(12.dp.toPx()), style = Stroke(width = 1.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 3.dp.toPx())))) }
-                        .clickable { hiddenOpen = !hiddenOpen }) {
-                    Column(Modifier.fillMaxSize().padding(6.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.SpaceEvenly) {
-                        Icon(painterResource(R.drawable.visibility_off), contentDescription = null, tint = hiddenLabel.copy(alpha = 0.8f), modifier = Modifier.size(26.dp))
-                        Text(label, color = hiddenLabel, fontSize = 12.sp, maxLines = 1)
+    val allVisible = draft.visible.filter { AllActionsMap[it]?.shownInEditor == true }
+    val toolbarIds = allVisible.take(6)
+    val boxIds = if(hiddenOpen) draft.hidden.filter { AllActionsMap[it]?.shownInEditor == true } else allVisible.drop(6)
+    val gridState = rememberLazyGridState()
+    var rootOrigin by remember { mutableStateOf(Offset.Zero) }
+    var gridBounds by remember { mutableStateOf<Rect?>(null) }
+    val latestHidden by rememberUpdatedState(hiddenOpen)
+    val latestRoot by rememberUpdatedState(rootOrigin)
+    val currentVisible by rememberUpdatedState(allVisible)
+    // The detector lives on a stable parent so a tile may cross toolbar/grid without cancelling.
+    val dragModifier = Modifier.pointerInput(Unit) {
+        detectDragGesturesAfterLongPress(
+            onDragStart = { offset ->
+                pointer = latestRoot + offset
+                val id = if(latestHidden) null else bounds.entries.firstOrNull {
+                    it.key in currentVisible && it.value.contains(pointer)
+                }?.key
+                if(id != null) {
+                    transaction = ActionDragDraft(latestDraft)
+                    dragging = id
+                    overHidden = false
+                }
+            },
+            onDrag = { change, _ ->
+                if(dragging != null) {
+                    change.consume()
+                    pointer = latestRoot + change.position
+                    overHidden = bounds["hidden-destination"]?.contains(pointer) == true
+                    if(!overHidden) {
+                        val target = bounds.entries.firstOrNull {
+                            it.key in currentVisible && it.key != dragging && it.value.contains(pointer)
+                        }?.key
+                        val index = latestDraft.visible.indexOf(target)
+                        if(index >= 0) {
+                            transaction?.move(dragging!!, index)
+                            transaction?.preview()?.let { draft = it }
+                        }
                     }
                 }
-    }
-    Column {
-        if(hiddenOpen) TextButton(onClick = { hiddenOpen = false }) { Text("Back") }
-        LazyVerticalGrid(columns = GridCells.Fixed(4), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth().then(if(overflow) Modifier.heightIn(max = 208.dp) else Modifier).padding(8.dp)) {
-            items(ids, key = { it }) { id ->
-                val action = AllActionsMap[id]!!
-                DisposableEffect(id, hiddenOpen) { onDispose { bounds.remove(id) } }
-                var itemOrigin by remember { mutableStateOf(Offset.Zero) }
-                val gesture = if(hiddenOpen) Modifier.clickable {
-                    persist(draft.show(id, draft.visible.size))
-                } else Modifier
-                    .clickable { manager?.activateAction(action) }
-                    .pointerInput(id) {
-                        detectDragGesturesAfterLongPress(
-                            onDragStart = { offset ->
-                                transaction = ActionDragDraft(latestDraft)
-                                dragging = id
-                                pointer = itemOrigin + offset
-                                overHidden = false
-                            },
-                            onDrag = { change, delta ->
-                                change.consume()
-                                pointer = itemOrigin + change.position
-                                overHidden = bounds["hidden-destination"]?.contains(pointer) == true
-                                if(!overHidden) {
-                                    val target = bounds.entries.firstOrNull { it.key in latestDraft.visible && it.key != id && !it.value.isEmpty && it.value.contains(pointer) }?.key
-                                    val index = latestDraft.visible.indexOf(target)
-                                    if(index >= 0) {
-                                        transaction?.move(id, index)
-                                        transaction?.preview()?.let { draft = it }
-                                    }
-                                }
-                            },
-                            onDragEnd = {
-                                if(overHidden) transaction?.hide(id)
-                                val completed = transaction?.drop()
-                                dragging = null; transaction = null; overHidden = false
-                                if(completed != null) persist(completed)
-                            },
-                            onDragCancel = {
-                                transaction?.cancel()
-                                transaction?.preview()?.let { draft = it }
-                                dragging = null; transaction = null; overHidden = false
-                            }
-                        )
-                    }
-                ActionItem(action, Modifier.alpha(if(dragging == id) 0.55f else 1.0f).onGloballyPositioned {
-                    bounds[id] = it.boundsInRoot(); itemOrigin = it.boundsInRoot().topLeft
-                }.then(gesture), dragIcon = !hiddenOpen, position = if(hiddenOpen) null else ids.indexOf(id) + 1)
+            },
+            onDragEnd = {
+                dragging?.let { if(overHidden) transaction?.hide(it) }
+                val completed = transaction?.drop()
+                dragging = null; transaction = null; overHidden = false
+                if(completed != null) persist(completed)
+            },
+            onDragCancel = {
+                transaction?.cancel()
+                transaction?.preview()?.let { draft = it }
+                dragging = null; transaction = null; overHidden = false
             }
-            // Keep the hide destination at the bottom right, after all action tiles.
-            if(!hiddenOpen && !overflow) items((3 - ids.size % 4 + 4) % 4) { Spacer(Modifier.height(64.dp)) }
-            if(!hiddenOpen && !overflow) item(key = "hidden-destination") { hideTile() }
-
+        )
+    }
+    // Hidden stays the last item. Edge scrolling brings it into reach during long drags.
+    LaunchedEffect(dragging, pointer) {
+        while(dragging != null) {
+            val rect = gridBounds
+            if(rect != null && !overHidden) {
+                val amount = when {
+                    pointer.y > rect.bottom - 32 -> 18f
+                    pointer.y < rect.top + 32 -> -18f
+                    else -> 0f
+                }
+                if(amount != 0f) gridState.scroll { scrollBy(amount) }
+            }
+            kotlinx.coroutines.delay(35)
         }
-        // With many actions, keep Hidden reachable while the action grid scrolls.
-        if(overflow) Row(Modifier.fillMaxWidth().padding(8.dp), horizontalArrangement = Arrangement.End) {
-            Box(Modifier.fillMaxWidth(0.235f)) { hideTile() }
+    }
+    val tileModifier: @Composable (String) -> Modifier = { id ->
+        DisposableEffect(id, hiddenOpen) { onDispose { bounds.remove(id) } }
+        Modifier.alpha(if(dragging == id) 0.55f else 1f)
+            .onGloballyPositioned { bounds[id] = it.boundsInRoot() }
+    }
+    Column(Modifier.onGloballyPositioned { rootOrigin = it.boundsInRoot().topLeft }.then(dragModifier)) {
+        Row(Modifier.fillMaxWidth().height(org.futo.inputmethod.latin.uix.ToolbarRowHeight), verticalAlignment = Alignment.CenterVertically) {
+            toolbarIds.forEach { id ->
+                androidx.compose.runtime.key(id) {
+                    val action = AllActionsMap[id]!!
+                    Box(tileModifier(id).weight(1f).fillMaxHeight().clickable { manager?.activateAction(action) }, contentAlignment = Alignment.Center) {
+                        Icon(painterResource(action.icon), contentDescription = stringResource(action.name), tint = LocalKeyboardScheme.current.onKeyboardContainer)
+                    }
+                }
+            }
+            Box(Modifier.weight(1f).fillMaxHeight().clickable { manager?.activateAction(MoreActionsAction) }, contentAlignment = Alignment.Center) {
+                Icon(painterResource(R.drawable.more_horizontal), contentDescription = "More", tint = LocalKeyboardScheme.current.onKeyboardContainer)
+            }
+        }
+        if(hiddenOpen) TextButton(onClick = { hiddenOpen = false }) { Text("Back") }
+        LazyVerticalGrid(state = gridState, columns = GridCells.Fixed(4), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.fillMaxWidth().heightIn(max = 304.dp).padding(8.dp).onGloballyPositioned { gridBounds = it.boundsInRoot() }) {
+            items(boxIds, key = { it }) { id ->
+                val action = AllActionsMap[id]!!
+                ActionItem(action, tileModifier(id).clickable {
+                    if(hiddenOpen) persist(draft.show(id, draft.visible.size)) else manager?.activateAction(action)
+                }, dragIcon = !hiddenOpen)
+            }
+            if(!hiddenOpen) item(key = "hidden-destination") {
+                DisposableEffect(Unit) { onDispose { bounds.remove("hidden-destination") } }
+                val scheme = LocalKeyboardScheme.current
+                val labelColor = if(scheme.keyboardSurface.luminance() < 0.5f) Color(0xFFE0E0E0) else Color(0xFF252525)
+                Surface(color = if(overHidden) scheme.keyboardContainer else Color.Transparent, shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.height(64.dp).fillMaxWidth()
+                        .onGloballyPositioned { bounds["hidden-destination"] = it.boundsInRoot() }
+                        .drawBehind { drawRoundRect(labelColor.copy(alpha = 0.4f), cornerRadius = CornerRadius(12.dp.toPx()), style = Stroke(width = 1.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 3.dp.toPx())))) }
+                        .clickable { hiddenOpen = true }) {
+                    Column(Modifier.fillMaxSize().padding(6.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.SpaceEvenly) {
+                        Icon(painterResource(R.drawable.visibility_off), contentDescription = null, tint = labelColor, modifier = Modifier.size(26.dp))
+                        Text(if(overHidden) "Drop to hide" else "Hidden (" + draft.hidden.count { AllActionsMap[it]?.shownInEditor == true } + ")", color = labelColor, fontSize = 12.sp, maxLines = 1)
+                    }
+                }
+            }
         }
     }
 }
@@ -282,9 +317,6 @@ val MoreActionsAction = Action(
             @Composable
             override fun WindowContents(keyboardShown: Boolean) {
                 Column {
-                    Box(Modifier.fillMaxWidth().height(org.futo.inputmethod.latin.uix.ToolbarRowHeight)) {
-                        org.futo.inputmethod.latin.uix.ActionItems({ manager.activateAction(it) }, { })
-                    }
                     MoreActionsView()
                 }
             }

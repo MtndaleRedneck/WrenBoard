@@ -80,7 +80,18 @@ sleep 2
 shot unified_normal
 dump normal
 # UI text selects real buttons; no hard-coded app coordinates.
-coords() { python3 tools/wren17-screen-coords.py "$OUT/$1.png" "$2"; }
+coords() {
+ if python3 tools/wren17-screen-coords.py "$OUT/$1.png" "$2" 2>/dev/null; then return; fi
+ dump locator
+ python3 - "$OUT/locator.xml" "$2" <<'PYCOORD'
+import sys,xml.etree.ElementTree as E,re
+root=E.parse(sys.argv[1]).getroot();label=sys.argv[2].lower()
+nodes=[n for n in root.iter('node') if n.get('text','').lower()==label]
+if not nodes:nodes=[n for n in root.iter('node') if n.get('content-desc','').lower()==label]
+assert nodes, 'No actual text or accessible icon for '+label
+v=list(map(int,re.findall(r'\d+',nodes[0].get('bounds'))));print((v[0]+v[2])//2,(v[1]+v[3])//2)
+PYCOORD
+}
 taptext() { shot current; read -r X Y < <(coords current "$1"); adb shell input tap "$X" "$Y"; sleep 1; }
 # No separate editor: drag directly in the open action box, save only on completed drop.
 shot direct_initial
