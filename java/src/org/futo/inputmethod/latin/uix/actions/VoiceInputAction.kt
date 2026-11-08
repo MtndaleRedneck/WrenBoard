@@ -322,7 +322,9 @@ private class VoiceInputActionWindow(
     // moment recording actually stops (pill tap, chevron stop or VAD auto-stop), before
     // decoding; honoring Indication sounds ON/OFF exactly like the start/cancel cues.
     override fun processing() {
-        android.util.Log.i("WBDBG", "WINDOW VOICE capture processing")
+        if (org.futo.inputmethod.latin.BuildConfig.DEBUG) {
+            android.util.Log.i("WBDBG", "WINDOW VOICE capture processing")
+        }
         if (shouldPlaySounds && !offTonePlayed) {
             offTonePlayed = true
             state.soundPlayer?.playStopSound()
