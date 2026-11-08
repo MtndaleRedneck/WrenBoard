@@ -49,6 +49,8 @@ jobs:
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'ndk;28.2.13676358'
           python3 -m pip install --break-system-packages pillow
       - name: Build debug fixture APK
+        env:
+          KLIPY_APP_KEY: ${{ secrets.KLIPY_APP_KEY }}
         run: |
           ./gradlew --no-daemon --max-workers=2 -Dorg.gradle.jvmargs='-Xmx5g -Dfile.encoding=UTF-8' -Pkotlin.compiler.execution.strategy=in-process assembleStableDebug assembleStableDebugAndroidTest -Pandroid.injected.build.abi=x86_64 -Pandroid.injected.testOnly=false
           bash tools/ime-target/build.sh
