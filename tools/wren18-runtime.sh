@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -euxo pipefail
 APK=$1
 TESTS=$2
 PKG=com.wrenboard.keyboard
@@ -17,7 +17,14 @@ adb install -r -t "$APK"
 adb install -r -t "$TESTS"
 adb install -r tools/ime-target/out/imetarget.apk
 adb shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1 >/dev/null
-IME=$(adb shell ime list -a -s | tr -d '\r' | grep "^$PKG/" | head -1)
+IME=""
+for attempt in $(seq 1 20); do
+ IME=$(adb shell ime list -a -s | tr -d '\r' | grep "^$PKG/" | head -1 || true)
+ [ -n "$IME" ] && break
+ sleep 2
+done
+adb shell ime list -a -s
+adb shell pm list packages | grep wrenboard
 test -n "$IME"
 adb shell ime enable "$IME"
 adb shell ime set "$IME"
