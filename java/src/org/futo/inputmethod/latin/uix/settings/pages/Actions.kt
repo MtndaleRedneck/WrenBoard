@@ -58,8 +58,11 @@ val ActionsScreen = UserSettingsMenu(
 @Preview(showBackground = true)
 @Composable
 fun ActionEditorScreen(navController: NavHostController = rememberNavController()) {
+    val nestedBack = androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<(() -> Boolean)?>(null) }
     Column {
-        ScreenTitle(stringResource(R.string.action_editor_title), showBack = true, navController)
-        ActionsEditor { }
+        ScreenTitle(stringResource(R.string.action_editor_title), showBack = true, navController, onBack = {
+            if(nestedBack.value?.invoke() != true) navController.popBackStack()
+        })
+        ActionsEditor(setNestedBack = { nestedBack.value = it }) { }
     }
 }

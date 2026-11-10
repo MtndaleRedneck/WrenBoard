@@ -110,11 +110,11 @@ import org.futo.inputmethod.latin.uix.theme.Typography
 import kotlin.math.pow
 
 @Composable
-fun ScreenTitle(title: String, showBack: Boolean = false, navController: NavHostController? = LocalNavController.current ?: rememberNavController()) {
+fun ScreenTitle(title: String, showBack: Boolean = false, navController: NavHostController? = LocalNavController.current ?: rememberNavController(), onBack: (() -> Unit)? = null) {
     // WrenBoard 1.6 (item 11): in the WrenBoard look a page title is the mock-up's top bar, and a title used as a
     // heading inside a page (no back arrow) is an orange section label.
     if(LocalWrenStyle.current) {
-        if(showBack) WrenTopBar(title, onBack = { navController?.navigateUp() })
+        if(showBack) WrenTopBar(title, onBack = { if(onBack != null) onBack() else navController?.navigateUp() })
         else if(title.isNotEmpty()) WrenFlatSectionLabel(title)
         return
     }
@@ -122,7 +122,7 @@ fun ScreenTitle(title: String, showBack: Boolean = false, navController: NavHost
         Modifier
             .fillMaxWidth()
             .clickable(onClickLabel = "Navigate back") {
-                navController!!.navigateUp()
+                if(onBack != null) onBack() else navController!!.navigateUp()
             }
     } else {
         Modifier.fillMaxWidth()

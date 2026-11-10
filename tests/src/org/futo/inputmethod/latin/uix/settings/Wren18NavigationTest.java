@@ -79,7 +79,9 @@ public class Wren18NavigationTest {
         assertTrue(device.takeScreenshot(new File(out, "hidden.png")));
         device.dumpWindowHierarchy(new File(out, "hidden.xml"));
         assertNotNull(device.findObject(By.text("Hidden")));
-        device.pressBack(); SystemClock.sleep(300);
+        UiObject2 hiddenBack = device.findObject(By.desc("Back"));
+        assertNotNull("Hidden in-app back arrow", hiddenBack);
+        hiddenBack.click(); SystemClock.sleep(300);
         waitRoute(activity, "actionEdit");
         assertNull("Nested Hidden Back must return to actions", device.findObject(By.text("Hidden")));
         device.pressBack(); waitRoute(activity, "wren_toolbar");
