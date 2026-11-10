@@ -123,6 +123,36 @@ public class Wren18NavigationTest {
         assertTrue(device.takeScreenshot(new File(out,"hidden_back.png")));
         android.graphics.Bitmap returned = android.graphics.BitmapFactory.decodeFile(new File(out,"hidden_back.png").getPath());
         assertTrue("Nested Hidden Back must visually return to actions", changedPixels(before,returned) < 1000);
+        org.futo.inputmethod.latin.uix.actions.OrderedActionIds oldOrder =
+            org.futo.inputmethod.latin.uix.actions.UnifiedActionsKt.readUnifiedActions(activity);
+        android.app.Instrumentation inst = InstrumentationRegistry.getInstrumentation();
+        float sx=device.getDisplayWidth()*0.13f, sy=device.getDisplayHeight()*0.21f;
+        float ex=device.getDisplayWidth()*0.38f;
+        long down=SystemClock.uptimeMillis();
+        inst.sendPointerSync(android.view.MotionEvent.obtain(down,down,android.view.MotionEvent.ACTION_DOWN,sx,sy,0));
+        SystemClock.sleep(750);
+        for(int i=1;i<=12;i++) {
+            inst.sendPointerSync(android.view.MotionEvent.obtain(down,SystemClock.uptimeMillis(),android.view.MotionEvent.ACTION_MOVE,sx+(ex-sx)*i/12f,sy+20,0));
+            SystemClock.sleep(35);
+            if(i==7) assertTrue(device.takeScreenshot(new File(out,"drag_mid.png")));
+        }
+        inst.sendPointerSync(android.view.MotionEvent.obtain(down,SystemClock.uptimeMillis(),android.view.MotionEvent.ACTION_UP,ex,sy+20,0));
+        SystemClock.sleep(600);
+        org.futo.inputmethod.latin.uix.actions.OrderedActionIds reordered =
+            org.futo.inputmethod.latin.uix.actions.UnifiedActionsKt.readUnifiedActions(activity);
+        assertFalse("Completed finger drag must persist a new order",oldOrder.visible.equals(reordered.visible));
+        assertTrue(device.takeScreenshot(new File(out,"drag_end.png")));
+        // The Hidden destination stays last and its + restores one action persistently.
+        device.click(Math.round(device.getDisplayWidth()*0.865f),Math.round(device.getDisplayHeight()*0.305f));
+        SystemClock.sleep(500);
+        device.click(Math.round(device.getDisplayWidth()*0.20f),Math.round(device.getDisplayHeight()*0.245f));
+        SystemClock.sleep(600);
+        org.futo.inputmethod.latin.uix.actions.OrderedActionIds restored =
+            org.futo.inputmethod.latin.uix.actions.UnifiedActionsKt.readUnifiedActions(activity);
+        assertEquals("Hidden + restores one tile",reordered.hidden.size()-1,restored.hidden.size());
+        assertEquals(reordered.visible.size()+1,restored.visible.size());
+        assertTrue(device.takeScreenshot(new File(out,"hidden_restored.png")));
+        device.pressBack(); waitRoute(activity,"actionEdit");
         device.pressBack(); waitRoute(activity, "wren_toolbar");
         device.pressBack(); waitRoute(activity, "wren_rich_input");
         device.pressBack(); waitRoute(activity, "home");
