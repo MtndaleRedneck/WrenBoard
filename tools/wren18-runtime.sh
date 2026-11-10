@@ -52,6 +52,16 @@ for attempt in $(seq 1 8); do
  adb shell ime set "$IME"
 done
 adb exec-out screencap -p > "$OUT/keyboard.png"
+# Runtime Back matrix: use normal Android Back, never the debug close shortcut.
+for PANEL in emoji gif clipboard_history text_edit more; do
+ adb shell am broadcast -a "$PKG.WBDBG" -p "$PKG" --es cmd "open:$PANEL" >/dev/null
+ sleep 2
+ adb exec-out screencap -p > "$OUT/panel_${PANEL}_open.png"
+ adb shell input keyevent KEYCODE_BACK
+ sleep 2
+ adb exec-out screencap -p > "$OUT/panel_${PANEL}_back.png"
+ python3 tools/wren18-panel-check.py "$OUT/keyboard.png" "$OUT/panel_${PANEL}_open.png" "$OUT/panel_${PANEL}_back.png" "$PANEL" | tee -a "$OUT/panel-back.txt"
+done
 read -r PX PY < "$OUT/period-coordinates"
 adb shell input motionevent DOWN "$PX" "$PY"
 sleep 1
