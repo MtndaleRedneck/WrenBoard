@@ -317,11 +317,10 @@ public final class MoreKeysKeyboard extends Keyboard {
                     && provider.getMoreKeysTextColor() == 0xFFFF8710;
             final int keyWidth, rowHeight;
             if (mParams.mApprovedPeriodPopup) {
-                // Approved period-only mockup. Convert dp with this device's real density.
-                // Owner's actual SwiftKey reference: 405px wide on a 1048px board,
-                // 299px tall against 146px letter rows. Preserve these measured ratios.
-                keyWidth = Math.round((keyboard.mId.mWidth * (405f / 1048f) - 6f * density) / 4f);
-                rowHeight = Math.round(key.getHeight() * (299f / 146f) - 6f * density);
+                // Final teardown section 16: 139.7 x 94.7 dp including 3 dp padding.
+                // Owner's screenshot independently measures 405 x 299 px, not a row-height rule.
+                keyWidth = Math.round((139.7f - 6f) * density / 4f);
+                rowHeight = Math.round((94.7f - 6f) * density);
                 mParams.mVerticalGap = 0;
                 mParams.mTopPadding = mParams.mBottomPadding = Math.round(3f * density);
             } else if (isSingleMoreKeyWithPreview) {
