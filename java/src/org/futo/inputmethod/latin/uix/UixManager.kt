@@ -787,6 +787,7 @@ class UixManager(private val latinIME: LatinIME) {
     private fun enterActionWindowView(action: Action) {
         assert(action.windowImpl != null)
 
+        if(action == MoreActionsAction) moreClosePending.value = true
         currWindowAction.value = action
         if(BuildConfig.DEBUG) WbDebug.logWindow("open ${org.futo.inputmethod.latin.uix.actions.ActionRegistry.actionToStringId(action)}")
 
@@ -1501,6 +1502,8 @@ class UixManager(private val latinIME: LatinIME) {
             }
         }
     }
+
+    val moreClosePending = mutableStateOf(false)
 
     fun hasOpenActionWindow(): Boolean = currWindowActionWindow.value != null
 

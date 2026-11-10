@@ -24,11 +24,14 @@ private val MoreAccelerate = CubicBezierEasing(0.4f, 0f, 1f, 1f)
 
 /** Original drawing, with separate measured open and close motion. */
 @Composable
-fun WrenMoreIcon(active: Boolean, modifier: Modifier = Modifier) {
+fun WrenMoreIcon(active: Boolean, modifier: Modifier = Modifier, play: Boolean = true, onFinished: () -> Unit = {}) {
     val progress = remember { Animatable(if(active) 0f else 1f) }
-    LaunchedEffect(active) {
-        progress.snapTo(0f)
-        progress.animateTo(1f, tween(if(active) 475 else 485, easing = LinearEasing))
+    LaunchedEffect(active, play) {
+        if(play) {
+            progress.snapTo(0f)
+            progress.animateTo(1f, tween(if(active) 475 else 485, easing = LinearEasing))
+            onFinished()
+        } else progress.snapTo(1f)
     }
     Canvas(modifier.size(24.dp).semantics { contentDescription = if(active) "Close actions" else "More actions" }) {
         val ms = progress.value * if(active) 475f else 485f

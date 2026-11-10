@@ -1,7 +1,5 @@
 name: wren18-preflight
 on:
-  push:
-    branches: [wrenboard-1.8-partial]
   workflow_dispatch:
 permissions:
   contents: read
