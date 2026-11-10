@@ -13,6 +13,8 @@ cleanup() {
 trap cleanup EXIT
 adb shell wm size 1080x2316
 adb shell wm density 420
+# Keep the unrelated Pixel Launcher out of the fixture and its ANR dialogs out of screenshots.
+adb shell am force-stop com.google.android.apps.nexuslauncher || true
 adb install -r -t "$APK"
 adb install -r -t "$TESTS"
 adb install -r tools/ime-target/out/imetarget.apk
@@ -37,6 +39,16 @@ adb shell input tap 400 500
 sleep 3
 sleep 4
 adb exec-out screencap -p > "$OUT/keyboard.png"
+adb shell am broadcast -a "$PKG.WBDBG" -p "$PKG" --es cmd geom >/dev/null
+sleep 1
+adb logcat -d -s WBDBG:I > "$OUT/period-geometry.txt"
+python3 tools/wb12_kv.py "$OUT/period-geometry.txt" xy KEY label . > "$OUT/period-coordinates"
+read -r PX PY < "$OUT/period-coordinates"
+adb shell input motionevent DOWN "$PX" "$PY"
+sleep 1
+adb exec-out screencap -p > "$OUT/period_hold.png"
+adb shell input motionevent UP "$PX" "$PY"
+sleep 1
 adb shell am broadcast -a "$PKG.WBDBG" -p "$PKG" --es cmd geom >/dev/null
 adb shell screenrecord --time-limit 12 /sdcard/wren18-more.mp4 > "$OUT/screenrecord.txt" 2>&1 &
 RECORDER=$!

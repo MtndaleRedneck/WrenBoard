@@ -36,9 +36,11 @@ import javax.annotation.Nonnull;
 public final class MoreKeysKeyboard extends Keyboard {
     private final int mDefaultKeyCoordX;
     private final Key mDesignatedDefaultKey;
+    public final boolean mApprovedPeriodPopup;
 
     MoreKeysKeyboard(final MoreKeysKeyboardParams params) {
         super(params);
+        mApprovedPeriodPopup = params.mApprovedPeriodPopup;
         mDefaultKeyCoordX = params.getDefaultKeyCoordX() + params.mDefaultKeyWidth / 2;
         mDesignatedDefaultKey = params.mDesignatedDefaultKey;
     }
@@ -55,6 +57,7 @@ public final class MoreKeysKeyboard extends Keyboard {
     @UsedForTesting
     static class MoreKeysKeyboardParams extends KeyboardParams {
         public boolean mIsMoreKeysFixedOrder;
+        public boolean mApprovedPeriodPopup;
         /* package */int mTopRowAdjustment;
         public int mNumRows;
         public int mNumColumns;
@@ -309,8 +312,17 @@ public final class MoreKeysKeyboard extends Keyboard {
             // This {@link MoreKeysKeyboard} is invoked from the <code>key</code>.
             mParentKey = key;
 
+            final float density = context.getResources().getDisplayMetrics().density;
+            mParams.mApprovedPeriodPopup = key.getCode() == 46 && key.getMoreKeys().size() == 4
+                    && provider.getMoreKeysTextColor() == 0xFFFF8710;
             final int keyWidth, rowHeight;
-            if (isSingleMoreKeyWithPreview) {
+            if (mParams.mApprovedPeriodPopup) {
+                // Approved period-only mockup. Convert dp with this device's real density.
+                keyWidth = Math.round(33.33f * density);
+                rowHeight = Math.round(89f * density);
+                mParams.mVerticalGap = 0;
+                mParams.mTopPadding = mParams.mBottomPadding = Math.round(3f * density);
+            } else if (isSingleMoreKeyWithPreview) {
                 // Use pre-computed width and height if this more keys keyboard has only one key to
                 // mitigate visual flicker between key preview and more keys keyboard.
                 // Caveats for the visual assets: To achieve this effect, both the key preview

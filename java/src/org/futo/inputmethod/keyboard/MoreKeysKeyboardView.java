@@ -95,6 +95,39 @@ public class MoreKeysKeyboardView extends KeyboardView implements MoreKeysPanel 
     }
 
     @Override
+    protected void onDraw(final Canvas canvas) {
+        final Keyboard keyboard = getKeyboard();
+        if (!(keyboard instanceof MoreKeysKeyboard) || !((MoreKeysKeyboard)keyboard).mApprovedPeriodPopup) {
+            super.onDraw(canvas);
+            return;
+        }
+        final float dp = getResources().getDisplayMetrics().density;
+        final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        paint.setColor(0xFF333333);
+        canvas.drawRoundRect(0, 0, getWidth(), getHeight(), 5*dp, 5*dp, paint);
+        final float top = 3*dp, bottom = getHeight()-3*dp;
+        for (final Key key : keyboard.getSortedKeys()) {
+            final float left = getPaddingLeft()+key.getX();
+            final float right = left+key.getWidth();
+            if (key == mCurrentKey) {
+                paint.setColor(0xFF4E4E4E);
+                canvas.drawRoundRect(left, top, right, bottom, 5*dp, 5*dp, paint);
+            }
+            paint.setColor(0xFFFF8710);
+            paint.setTypeface(android.graphics.Typeface.DEFAULT);
+            // The approved reference specifies visible glyph height, not a font-scale guess.
+            paint.setTextSize(31*dp);
+            paint.setTextAlign(Paint.Align.CENTER);
+            final String label = key.getLabel();
+            if (label != null) {
+                final Rect ink = new Rect();
+                paint.getTextBounds(label, 0, label.length(), ink);
+                canvas.drawText(label, (left+right)/2, (top+bottom-ink.top-ink.bottom)/2, paint);
+            }
+        }
+    }
+
+    @Override
     protected void onDrawKeyTopVisuals(final Key key, final Canvas canvas, final Paint paint,
            final KeyDrawParams params, final KeyDrawingConfiguration kdc,
                                        final int keyWidth, final int keyHeight) {
