@@ -152,7 +152,7 @@ public class Wren18NavigationTest {
         // The Hidden destination stays last and its + restores one action persistently.
         openHidden(activity,device);
         SystemClock.sleep(500);
-        device.click(Math.round(device.getDisplayWidth()*0.20f),Math.round(device.getDisplayHeight()*0.245f));
+        device.click(Math.round(device.getDisplayWidth()*0.20f),Math.round(device.getDisplayHeight()*0.18f));
         SystemClock.sleep(600);
         org.futo.inputmethod.latin.uix.actions.OrderedActionIds restored =
             org.futo.inputmethod.latin.uix.actions.UnifiedActionsKt.readUnifiedActions(activity);
