@@ -71,6 +71,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.border
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.geometry.Offset
@@ -386,7 +387,7 @@ fun RowScope.SuggestionItem(words: SuggestedWords, idx: Int, isPrimary: Boolean,
     val textStyle = when(isAutocorrect) {
         true -> suggestionStylePrimary
         false -> suggestionStyleAlternative
-    }.copy(color = color).withCustomFont(potentiallyCompatEmojiFont)
+    }.copy(color = color, fontWeight = if(isKeyStyledTheme() && isAutocorrect) FontWeight.Bold else if(isKeyStyledTheme()) FontWeight.Normal else if(isAutocorrect) FontWeight.Medium else FontWeight.Normal).withCustomFont(potentiallyCompatEmojiFont)
 
     Box(
         modifier = textButtonModifier
@@ -395,15 +396,7 @@ fun RowScope.SuggestionItem(words: SuggestedWords, idx: Int, isPrimary: Boolean,
             .then(if(isKeyStyledTheme() && word != null) {
                 // WrenBoard 1.5: draw the chip background only for a slot that has a word;
                 // empty slots stay plain (no "empty suggestion boxes").
-                Modifier
-                    // SwiftKey strip (review item 3): 39dp chip inside the 41dp bar
-                    .padding(vertical = 1.dp)
-                    .clip(WrenSuggestionShape)
-                    .background(
-                        Brush.verticalGradient(listOf(Color(0xFF3E3E3E), Color(0xFF060606))),
-                        WrenSuggestionShape
-                    )
-                    .border(1.dp, Color(0xFF0E0E0E), WrenSuggestionShape)
+                suggestionKeyBackground()
             } else Modifier)
             .combinedClickable(
                 enabled = word != null,
@@ -418,7 +411,7 @@ fun RowScope.SuggestionItem(words: SuggestedWords, idx: Int, isPrimary: Boolean,
             if (word != null) {
                 val modifier = Modifier
                     .align(Center)
-                    .padding(horizontal = 8.dp, vertical = 2.dp)
+                    .padding(horizontal = 7.dp, vertical = 6.5.dp)
                     .testTag("SuggestionItemText")
                 if(isVerbatim && !isKeyStyledTheme()) {
                     AutoFitText('"' + word + '"', style = textStyle.copy(fontStyle = FontStyle.Italic), modifier = modifier)
@@ -434,12 +427,22 @@ fun RowScope.SuggestionItem(words: SuggestedWords, idx: Int, isPrimary: Boolean,
 fun isKeyStyledTheme(): Boolean =
     LocalKeyboardScheme.current.extended.advancedThemeOptions.keyBackgrounds != null
 
-private val WrenSuggestionShape = RoundedCornerShape(7.dp)
+private val WrenSuggestionShape = RoundedCornerShape(5.dp)
+
+@Composable
+private fun suggestionKeyBackground(): Modifier {
+    val context = LocalContext.current
+    val drawable = remember(context) { org.futo.inputmethod.latin.uix.theme.presets.letterKey(context) }
+    return Modifier.drawBehind {
+        drawable.setBounds(0, 0, size.width.toInt(), size.height.toInt())
+        drawable.draw(drawContext.canvas.nativeCanvas)
+    }
+}
 
 @Composable fun RowScope.SuggestionSeparator() {
     if(isKeyStyledTheme()) {
         // SwiftKey strip (review item 3): 6px gap between chips at 420dpi
-        Spacer(Modifier.width(2.3.dp))
+        Spacer(Modifier.width(0.dp))
         return
     }
     Box(
@@ -563,9 +566,9 @@ fun RowScope.SuggestionItems(words: SuggestedWords, onClick: (i: Int) -> Unit, o
     // with 40dp left and 40dp right margins plus two 2.3dp gaps land 255.97/344.00/257.9px at
     // 1080px/420dpi. Baseline (S11, owner-approved 2026-11-01): uniform side weights 0.98/1.32/0.99
     // with a 42dp left margin, giving 253.97/342.09/256.57px.
-    val leftWeight = 0.9770f
-    val centreWeight = 1.3128f
-    val rightWeight = 0.9842f
+    val leftWeight = 257f
+    val centreWeight = 345f
+    val rightWeight = 258f
     var slotIndex = 0
     val renderItem: @Composable (SuggestedWordInfo?, Float?) -> Unit = { suggestion, overrideWeight ->
         val w = overrideWeight ?: when (slotIndex++ % 3) { 0 -> leftWeight; 1 -> centreWeight; else -> rightWeight }
@@ -586,13 +589,7 @@ fun RowScope.SuggestionItems(words: SuggestedWords, onClick: (i: Int) -> Unit, o
             Box(Modifier
                 .weight(w)
                 .fillMaxHeight()
-                .padding(vertical = 1.dp)
-                .clip(WrenSuggestionShape)
-                .background(
-                    Brush.verticalGradient(listOf(Color(0xFF3E3E3E), Color(0xFF060606))),
-                    WrenSuggestionShape
-                )
-                .border(1.dp, Color(0xFF0E0E0E), WrenSuggestionShape))
+                .then(suggestionKeyBackground()))
         } else {
             Spacer(Modifier.weight(w))
         }
