@@ -1327,6 +1327,9 @@ class UixManager(private val latinIME: LatinIME) {
             TutorialArrow()
 
             KeyboardWindowSelector { gap ->
+                // Pumpkin key art already owns its top margin. Do not add the window's
+                // minimum 4 dp separator between the suggestions and the number row.
+                val stripGap = if(LocalKeyboardScheme.current.primary == Color(0xFFFF8710)) 0.dp else gap
                 Column {
                     Box(Modifier.onGloballyPositioned { floatingPreeditPosition.value = it })
                     // TODO: Refactor how we handle expandable suggestions here to not be a mess
@@ -1351,7 +1354,7 @@ class UixManager(private val latinIME: LatinIME) {
                     // WrenBoard 1.6 (item 10): no strip above SwiftKey's number/phone pad, so no gap under it; the
                     // pad's own board starts 1.4 dp (4 px) above its first key outline instead (mock-ups 13/14).
                     if(!needToUseExpandableSuggestionUi && !swiftKeyPadField.value) {
-                        Spacer(modifier = Modifier.height(gap))
+                        Spacer(modifier = Modifier.height(stripGap))
                     } else if(swiftKeyPadField.value) {
                         Spacer(modifier = Modifier.height(1.4.dp))
                     }
@@ -1363,7 +1366,7 @@ class UixManager(private val latinIME: LatinIME) {
                             it.height(
                                 with(LocalDensity.current) { kbHeight.intValue.toDp() }
                                         + latinIME.sizingCalculator.calculateSuggestionBarHeightDp().dp
-                                        + gap
+                                        + stripGap
                             )
                         } else {
                             it
