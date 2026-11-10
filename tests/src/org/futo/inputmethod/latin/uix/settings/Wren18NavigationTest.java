@@ -147,7 +147,11 @@ public class Wren18NavigationTest {
         openHidden(activity,device);
         SystemClock.sleep(600);
         assertTrue(device.takeScreenshot(new File(out, "hidden.png")));
-        device.dumpWindowHierarchy(new File(out, "hidden.xml"));
+        try {
+            device.dumpWindowHierarchy(new File(out, "hidden.xml"));
+        } catch (NullPointerException transientNode) {
+            android.util.Log.w("WB18_NAV", "Hidden hierarchy dump failed; pixel and Back assertions still run", transientNode);
+        }
         android.graphics.Bitmap before = android.graphics.BitmapFactory.decodeFile(new File(out,"before_hidden.png").getPath());
         android.graphics.Bitmap hiddenShot = android.graphics.BitmapFactory.decodeFile(new File(out,"hidden.png").getPath());
         assertTrue("Hidden screen must visibly differ from actions", changedPixels(before,hiddenShot) > 1000);
