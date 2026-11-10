@@ -98,6 +98,10 @@ sleep 1
 adb exec-out screencap -p > "$OUT/emoji_nextpage.png"
 adb shell input keyevent KEYCODE_BACK
 sleep 1
+# A real synthetic word exercises populated suggestions, not just empty chips.
+adb shell input text hel
+sleep 3
+adb exec-out screencap -p > "$OUT/suggestions_approved.png"
 # Independent density samples expose the real sizing formula. They do not calibrate the owner's phone.
 for DPI in 450 480; do
  adb shell wm density "$DPI"

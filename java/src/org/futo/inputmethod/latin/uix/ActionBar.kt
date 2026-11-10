@@ -411,7 +411,7 @@ fun RowScope.SuggestionItem(words: SuggestedWords, idx: Int, isPrimary: Boolean,
             if (word != null) {
                 val modifier = Modifier
                     .align(Center)
-                    .padding(horizontal = 7.dp, vertical = 6.5.dp)
+                    .padding(horizontal = 7.dp, vertical = 2.dp)
                     .testTag("SuggestionItemText")
                 if(isVerbatim && !isKeyStyledTheme()) {
                     AutoFitText('"' + word + '"', style = textStyle.copy(fontStyle = FontStyle.Italic), modifier = modifier)
@@ -431,6 +431,11 @@ private val WrenSuggestionShape = RoundedCornerShape(5.dp)
 
 @Composable
 private fun suggestionKeyBackground(): Modifier {
+    if(LocalKeyboardScheme.current.primary != Color(0xFFFF8710)) {
+        return Modifier.padding(vertical = 1.dp).clip(WrenSuggestionShape)
+            .background(Brush.verticalGradient(listOf(Color(0xFF3E3E3E), Color(0xFF060606))), WrenSuggestionShape)
+            .border(1.dp, Color(0xFF0E0E0E), WrenSuggestionShape)
+    }
     val context = LocalContext.current
     val drawable = remember(context) { org.futo.inputmethod.latin.uix.theme.presets.letterKey(context) }
     return Modifier.drawBehind {
