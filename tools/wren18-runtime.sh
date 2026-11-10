@@ -89,6 +89,15 @@ sleep 1
 adb exec-out screencap -p > "$OUT/clipboard_strip_open.png"
 adb shell input keyevent KEYCODE_BACK
 sleep 1
+adb shell am broadcast -a "$PKG.WBDBG" -p "$PKG" --es cmd open:emoji >/dev/null
+sleep 3
+adb exec-out screencap -p > "$OUT/emoji_approved.png"
+# Swipe the category pager: search row must remain on the next page.
+adb shell input swipe 950 1700 150 1700 450
+sleep 1
+adb exec-out screencap -p > "$OUT/emoji_nextpage.png"
+adb shell input keyevent KEYCODE_BACK
+sleep 1
 # Independent density samples expose the real sizing formula. They do not calibrate the owner's phone.
 for DPI in 450 480; do
  adb shell wm density "$DPI"

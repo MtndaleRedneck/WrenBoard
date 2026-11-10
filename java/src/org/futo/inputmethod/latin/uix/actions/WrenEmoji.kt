@@ -123,10 +123,10 @@ fun String.toLockedList(): List<String> = split(SEP).filter { it.isNotEmpty() }
 private object EmojiColors {
     val Orange = Color(0xFFFF8710)
     val OrangeMuted = Color(0xFFB16922)
-    val OrangeText = Color(0xFFB16922)
+    val OrangeText = Color(0xFFC06C19)
     val Bar = Color(0xFF3C3C3C)
     val GridTop = Color(0xFF4C4A47)
-    val GridBottom = Color(0xFF373533)
+    val GridBottom = Color(0xFF393735)
     val GifTop = Color(0xFF464442)
     val GifBottom = Color(0xFF3A3836)
     val Field = Color(0xFF303030)
@@ -276,8 +276,11 @@ private fun EmojiGlyph(text: String, sizeDp: Float, modifier: Modifier = Modifie
 private fun WrenTopTab(active: Boolean, label: String, modifier: Modifier, onClick: () -> Unit, icon: @Composable (Boolean) -> Unit) {
     Box(modifier.width(60.dp).fillMaxHeight().semantics { contentDescription = label }.clickable(onClick = onClick),
         contentAlignment = Alignment.Center) {
-        icon(active)
-        if (active) Box(Modifier.align(Alignment.BottomCenter).padding(bottom = 6.dp).width(32.dp).height(1.8.dp).background(EmojiColors.Orange))
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            icon(active)
+            if(active) Text(label, color = EmojiColors.Orange, fontSize = 14.sp, maxLines = 1)
+        }
+        if (active) Box(Modifier.align(Alignment.BottomCenter).padding(bottom = 6.dp).fillMaxWidth().height(1.67.dp).background(EmojiColors.Orange))
     }
 }
 
@@ -342,7 +345,16 @@ fun WrenEmojiPanel(w: WrenEmojiWindow) {
     val bsDesc = stringResource(R.string.wren_cd_backspace)
     Column(Modifier.fillMaxSize()) {
         // Tab row 129 px (46 dp) + search row 118 px (42 dp), as in mock-ups 09/10: back, Emoji tab, GIF tab.
-        Row(Modifier.fillMaxWidth().height(46.dp).background(EmojiColors.Bar), verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.fillMaxWidth().height(46.dp).background(EmojiColors.Bar)) {
+        Row(Modifier.align(Alignment.Center), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+            WrenTopTab(w.tab.value == 0, stringResource(R.string.wren_emoji_tab), Modifier.wbPos("EMOJITAB"),
+                onClick = { w.tab.value = 0; w.manager.forceActionWindowAboveKeyboard(false) }) { active ->
+                Ic(if(active) R.drawable.wren_ic_sentiment_satisfied_fill else R.drawable.wren_ic_line_smiley, if(active) EmojiColors.Orange else EmojiColors.OrangeMuted, 20.dp)
+            }
+            WrenTopTab(w.tab.value == 1, stringResource(R.string.wren_gif_tab), Modifier.wbPos("EMOJIGIFTAB"),
+                onClick = { w.tab.value = 1; w.gifSearching.value = false; w.manager.forceActionWindowAboveKeyboard(false) }) { active -> GifTabGlyph(active) }
+        }
+        Row(Modifier.fillMaxHeight(), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.width(40.dp).fillMaxHeight().semantics { contentDescription = backDesc }.clickable {
                 w.manager.closeActionWindow()
                 w.manager.performHapticAndAudioFeedback(Constants.CODE_SWITCH_ALPHA_SYMBOL, view)
@@ -350,22 +362,14 @@ fun WrenEmojiPanel(w: WrenEmojiWindow) {
                 Icon(painterResource(R.drawable.wren_ic_line_chevron_back), contentDescription = null, tint = EmojiColors.Orange,
                     modifier = Modifier.padding(start = 17.dp).size(width = 9.2.dp, height = 15.6.dp))
             }
-            WrenTopTab(w.tab.value == 0, stringResource(R.string.wren_emoji_tab), Modifier.wbPos("EMOJITAB"),
-                onClick = { w.tab.value = 0; w.manager.forceActionWindowAboveKeyboard(false) }) { active ->
-                if (active) Ic(R.drawable.wren_ic_sentiment_satisfied_fill, EmojiColors.Orange, 24.dp)
-                else Ic(R.drawable.wren_ic_line_smiley, EmojiColors.OrangeMuted, 21.3.dp)
-            }
-            WrenTopTab(w.tab.value == 1, stringResource(R.string.wren_gif_tab), Modifier.wbPos("EMOJIGIFTAB"),
-                onClick = { w.tab.value = 1; w.gifSearching.value = false; w.manager.forceActionWindowAboveKeyboard(false) }) { active ->
-                GifTabGlyph(active)
-            }
+        }
         }
 
         // Search row: field 944 x 98 px (rounded 6 dp), round arrow 98 px.
-        Row(Modifier.fillMaxWidth().height(42.dp).background(EmojiColors.Bar).padding(horizontal = 4.3.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.fillMaxWidth().height(42.dp).background(EmojiColors.Bar).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             Row(
                 Modifier.weight(1f).height(34.8.dp).clip(RoundedCornerShape(6.dp))
-                    .background(EmojiColors.Field).border(0.5.dp, EmojiColors.FieldBorder, RoundedCornerShape(6.dp))
+                    .background(EmojiColors.Field).border(0.33.dp, EmojiColors.FieldBorder, RoundedCornerShape(6.dp))
                     .clickable {
                         if (w.tab.value == 0) w.searching.value = true
                         else { w.gifSearching.value = true; w.manager.forceActionWindowAboveKeyboard(true) }
@@ -373,7 +377,7 @@ fun WrenEmojiPanel(w: WrenEmojiWindow) {
                     .padding(start = 8.9.dp, end = 7.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Ic(R.drawable.wren_ic_line_search, EmojiColors.OrangeMuted, 19.5.dp)
+                Ic(R.drawable.wren_ic_line_search, EmojiColors.OrangeText, 19.5.dp)
                 Spacer(Modifier.width(4.3.dp))
                 if (w.tab.value == 0) {
                     Text(stringResource(R.string.wren_search_emojis), color = EmojiColors.OrangeText, fontSize = 15.6.sp, maxLines = 1)
@@ -391,6 +395,7 @@ fun WrenEmojiPanel(w: WrenEmojiWindow) {
                     }
                 }
             }
+            if(w.tab.value == 1) {
             Spacer(Modifier.width(4.6.dp))
             // B2: this button used to send a raw ENTER to the host app - in any messaging
             // field with enter=send that sent the user's drafted message. It now only drives
@@ -402,6 +407,8 @@ fun WrenEmojiPanel(w: WrenEmojiWindow) {
             }, contentAlignment = Alignment.Center) { Ic(R.drawable.wren_ic_arrow_forward, EmojiColors.ArrowGlyph, 19.dp, desc = stringResource(if (w.tab.value == 0) R.string.wren_search_emojis else R.string.wren_cd_back)) }
         }
 
+        }
+
         // Typing reference: tab/search rows directly above suggestions + full keyboard.
         // Results/status/categories only belong to the post-search panel, not this state.
         if (w.tab.value == 1 && w.gifSearching.value) return@Column
@@ -411,7 +418,7 @@ fun WrenEmojiPanel(w: WrenEmojiWindow) {
             return@Column
         }
 
-        val pagerState = rememberPagerState(initialPage = QUICK_PAGE) { emojiPages.size }
+        val pagerState = rememberPagerState(initialPage = 1) { emojiPages.size }
         val scope = rememberCoroutineScope()
         LaunchedEffect(pagerState.currentPage) { WbDebug.logWindow("EMOJI page=${emojiPages[pagerState.currentPage].key}") }
         HorizontalPager(state = pagerState, modifier = Modifier.weight(1f).fillMaxWidth().wbPos("EMOJIGRID").background(
@@ -425,16 +432,11 @@ fun WrenEmojiPanel(w: WrenEmojiWindow) {
         }
 
         // Bottom row 124 px (44 dp): abc, search (= Quick emoji), recents + categories (scroll), backspace.
-        Row(Modifier.fillMaxWidth().height(44.dp).background(EmojiColors.Bar), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.width(54.8.dp).fillMaxHeight().clickable {
+        Row(Modifier.fillMaxWidth().height(37.67.dp).background(EmojiColors.Bar), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.width(47.dp).fillMaxHeight().clickable {
                 w.manager.closeActionWindow()
                 w.manager.performHapticAndAudioFeedback(Constants.CODE_SWITCH_ALPHA_SYMBOL, view)
-            }, contentAlignment = Alignment.Center) { Text("abc", color = EmojiColors.Orange, fontSize = 15.6.sp) }
-            // The search icon is the Quick emoji tab; tapped again while Quick emoji shows, it opens emoji search.
-            val quickActive = pagerState.currentPage == QUICK_PAGE
-            CategoryIcon(emojiPages[QUICK_PAGE].icon, quickActive, stringResource(R.string.wren_search_emojis), Modifier.wbPos("EMOJISEARCH")) {
-                if (quickActive) w.searching.value = true else scope.launch { pagerState.scrollToPage(QUICK_PAGE) }
-            }
+            }, contentAlignment = Alignment.Center) { Text("ABC", color = EmojiColors.Orange, fontSize = 15.6.sp) }
             LazyRow(Modifier.weight(1f).fillMaxHeight()) {
                 items(emojiPages.size - 1) { k ->
                     val i = k + 1
@@ -443,7 +445,7 @@ fun WrenEmojiPanel(w: WrenEmojiWindow) {
                     }
                 }
             }
-            Box(Modifier.width(40.5.dp).fillMaxHeight().semantics { contentDescription = bsDesc }.repeatablyClickableAction { repeated ->
+            Box(Modifier.width(37.67.dp).fillMaxHeight().semantics { contentDescription = bsDesc }.repeatablyClickableAction { repeated ->
                 w.manager.backspace(1)
                 if (!repeated) w.manager.performHapticAndAudioFeedback(Constants.CODE_DELETE, view)
             }, contentAlignment = Alignment.Center) { PanelBackspaceGlyph() }
@@ -454,10 +456,8 @@ fun WrenEmojiPanel(w: WrenEmojiWindow) {
 /** Bottom-bar category slot, 102 px apart: outline icon, brighter with a 72 x 5 px orange underline when selected. */
 @Composable
 private fun CategoryIcon(icon: Int, active: Boolean, desc: String, modifier: Modifier, onClick: () -> Unit) {
-    Box(modifier.width(36.3.dp).fillMaxHeight().clickable(onClick = onClick), contentAlignment = Alignment.Center) {
-        Box(Modifier.size(30.dp).clip(CircleShape).background(if (active) EmojiColors.Orange else Color.Transparent), contentAlignment = Alignment.Center) {
-            Ic(icon, if (active) EmojiColors.Bar else EmojiColors.OrangeMuted, 21.dp, desc = desc)
-        }
+    Box(modifier.width(34.dp).fillMaxHeight().clickable(onClick = onClick), contentAlignment = Alignment.Center) {
+        Ic(icon, if (active) EmojiColors.Orange else EmojiColors.OrangeMuted, 21.dp, desc = desc)
     }
 }
 
@@ -488,7 +488,7 @@ private fun EmojiCell(
     val base = item.untoned
     val isLocked = lockedSet.contains(item.emoji) || lockedSet.contains(base)
     Box(
-        Modifier.fillMaxWidth().height(46.6.dp)
+        Modifier.fillMaxWidth().height(44.dp)
             .semantics { if (item.description.isNotBlank()) contentDescription = item.description }
             .then(if (popup.value) Modifier.padding(horizontal = 4.dp, vertical = 2.dp).clip(RoundedCornerShape(7.6.dp)).background(Color(0x29FFFFFF)) else Modifier)
             // Passive gesture observer (DEBUG only, wb12 e02 investigation): logs what the cell
@@ -517,7 +517,7 @@ private fun EmojiCell(
             ),
         contentAlignment = Alignment.TopCenter
     ) {
-        EmojiGlyph(item.emoji, if (item.category == "ASCII") 16f else 26f, Modifier.padding(top = if (item.category == "ASCII") 15.dp else 10.3.dp))
+        EmojiGlyph(item.emoji, if (item.category == "ASCII") 16f else 27.33f, Modifier.padding(top = if (item.category == "ASCII") 15.dp else 8.3.dp))
         val hasTones = emojiMap[base]?.skinTones == true || item.skinTones
         if (hasTones) {
             Canvas(Modifier.align(Alignment.TopEnd).padding(top = 36.3.dp, end = 7.dp).size(4.3.dp)) {
