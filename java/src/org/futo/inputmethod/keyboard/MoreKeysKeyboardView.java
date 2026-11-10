@@ -109,7 +109,7 @@ public class MoreKeysKeyboardView extends KeyboardView implements MoreKeysPanel 
         paint.setColor(0xFF333333);
         canvas.drawRoundRect(0, 0, getWidth(), getHeight(), 5*dp, 5*dp, paint);
         paint.setStyle(Paint.Style.STROKE);
-        paint.setStrokeWidth(getWidth() * (3f / 405f));
+        paint.setStrokeWidth(dp);
         paint.setColor(0xFFBBBBBB);
         canvas.drawRoundRect(dp/2, dp/2, getWidth()-dp/2, getHeight()-dp/2, 5*dp, 5*dp, paint);
         paint.setStyle(Paint.Style.FILL);
@@ -119,7 +119,7 @@ public class MoreKeysKeyboardView extends KeyboardView implements MoreKeysPanel 
             final float right = left+key.getWidth();
             if (key == mCurrentKey) {
                 paint.setShader(new android.graphics.LinearGradient(0, top, 0, bottom,
-                        0xFF5D5D5D, 0xFF373737, android.graphics.Shader.TileMode.CLAMP));
+                        0xF5646464, 0xF5373737, android.graphics.Shader.TileMode.CLAMP));
                 float inset = (right-left)*0.05f;
                 canvas.drawRoundRect(left+inset, top, right-inset, bottom, 5*dp, 5*dp, paint);
                 paint.setShader(null);
@@ -132,7 +132,11 @@ public class MoreKeysKeyboardView extends KeyboardView implements MoreKeysPanel 
             paint.setColor(0xFFFF8710);
             paint.setTypeface(android.graphics.Typeface.DEFAULT);
             // The approved reference specifies visible glyph height, not a font-scale guess.
-            paint.setTextSize((getHeight()/299f) * 96f);
+            paint.setTextSize(31f * dp);
+            // Size the visible cap ink, independent of system font metrics.
+            final Rect capInk = new Rect();
+            paint.getTextBounds("!", 0, 1, capInk);
+            if(capInk.height() > 0) paint.setTextSize(paint.getTextSize() * (22.5f * dp) / capInk.height());
             paint.setTextAlign(Paint.Align.CENTER);
             final String label = key.getLabel();
             if (label != null) {
