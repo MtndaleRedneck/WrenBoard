@@ -102,14 +102,14 @@ object WrenPanelColors {
     val OrangeMuted = Color(0xFFB16922)
     val Handle = Color(0xFFFF8710)
     val Bar = Color(0xFF3C3C3C)
-    val BodyTop = Color(0xFF41403C)
-    val BodyBottom = Color(0xFF383634)
+    val BodyTop = Color(0xFF4C4A47)
+    val BodyBottom = Color(0xFF373533)
     val Card = Color(0xFF3C3C3C)
     val CardBorder = Color(0xFF79542F)
     val Menu = Color(0xFF2B2A29)
     val MenuBorder = Color(0xFF5C5650)
-    val Field = Color(0xFF2F2F2F)
-    val FieldBorder = Color(0xFF474747)
+    val Field = Color(0xFF303030)
+    val FieldBorder = Color(0xFF4C4C4C)
     val UndoBar = Color(0xFF2B2A29)
 }
 

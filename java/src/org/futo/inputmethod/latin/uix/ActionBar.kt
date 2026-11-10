@@ -71,6 +71,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.border
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.rotate
@@ -337,6 +338,8 @@ fun TextStyle.withCustomFont(orDefault: FontFamily? = null): TextStyle {
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun RowScope.SuggestionItem(words: SuggestedWords, idx: Int, isPrimary: Boolean, onClick: () -> Unit, onLongClick: () -> Unit, forcePrimary: Boolean, isEmoji: Boolean, slotWeight: Float = 1.0f) {
+    val suggestionInteraction = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+    val suggestionPressed by suggestionInteraction.collectIsPressedAsState()
     val wordInfo = words.getInfoOrNull(idx)
     val isVerbatim = wordInfo?.kind == KIND_TYPED
     val word = wordInfo?.mWord
@@ -387,7 +390,7 @@ fun RowScope.SuggestionItem(words: SuggestedWords, idx: Int, isPrimary: Boolean,
     val textStyle = when(isAutocorrect) {
         true -> suggestionStylePrimary
         false -> suggestionStyleAlternative
-    }.copy(color = color, fontWeight = if(isKeyStyledTheme() && isAutocorrect) FontWeight.Bold else if(isKeyStyledTheme()) FontWeight.Normal else if(isAutocorrect) FontWeight.Medium else FontWeight.Normal).withCustomFont(potentiallyCompatEmojiFont)
+    }.copy(color = color, letterSpacing = if(isKeyStyledTheme()) 0.sp else 0.5.sp, fontWeight = if(isKeyStyledTheme() && isAutocorrect) FontWeight.Bold else if(isKeyStyledTheme()) FontWeight.Normal else if(isAutocorrect) FontWeight.Medium else FontWeight.Normal).withCustomFont(potentiallyCompatEmojiFont)
 
     Box(
         modifier = textButtonModifier
@@ -396,11 +399,11 @@ fun RowScope.SuggestionItem(words: SuggestedWords, idx: Int, isPrimary: Boolean,
             .then(if(isKeyStyledTheme() && word != null) {
                 // WrenBoard 1.5: draw the chip background only for a slot that has a word;
                 // empty slots stay plain (no "empty suggestion boxes").
-                suggestionKeyBackground()
+                suggestionKeyBackground(suggestionPressed)
             } else Modifier)
             .combinedClickable(
                 enabled = word != null,
-                interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                interactionSource = suggestionInteraction,
                 indication = null, // Suggestion presses must not flash the accent colour.
                 onClick = onClick,
                 onLongClick = onLongClick
@@ -430,14 +433,14 @@ fun isKeyStyledTheme(): Boolean =
 private val WrenSuggestionShape = RoundedCornerShape(5.dp)
 
 @Composable
-private fun suggestionKeyBackground(): Modifier {
+private fun suggestionKeyBackground(pressed: Boolean = false): Modifier {
     if(LocalKeyboardScheme.current.primary != Color(0xFFFF8710)) {
         return Modifier.padding(vertical = 1.dp).clip(WrenSuggestionShape)
             .background(Brush.verticalGradient(listOf(Color(0xFF3E3E3E), Color(0xFF060606))), WrenSuggestionShape)
             .border(1.dp, Color(0xFF0E0E0E), WrenSuggestionShape)
     }
     val context = LocalContext.current
-    val drawable = remember(context) { org.futo.inputmethod.latin.uix.theme.presets.letterKey(context) }
+    val drawable = remember(context, pressed) { if(pressed) org.futo.inputmethod.latin.uix.theme.presets.pressedKey(context) else org.futo.inputmethod.latin.uix.theme.presets.letterKey(context) }
     return Modifier.drawBehind {
         drawable.setBounds(0, 0, size.width.toInt(), size.height.toInt())
         drawable.draw(drawContext.canvas.nativeCanvas)
