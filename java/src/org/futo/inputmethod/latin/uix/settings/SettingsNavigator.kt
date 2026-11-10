@@ -1,5 +1,7 @@
 package org.futo.inputmethod.latin.uix.settings
 
+import androidx.activity.compose.BackHandler
+import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.foundation.background
@@ -154,6 +156,10 @@ fun SettingsNavigator(
     navController: NavHostController = rememberNavController()
 ) {
     val nav = navController
+    val entry = navController.currentBackStackEntryAsState().value
+    BackHandler(enabled = entry != null && navController.previousBackStackEntry != null) {
+        navController.popBackStack()
+    }
     CompositionLocalProvider(LocalNavController provides navController) {
         NavHost(
             navController = navController,

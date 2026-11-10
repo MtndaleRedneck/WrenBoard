@@ -1,9 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- WrenBoard 1.2: Material Symbols Rounded "mic.fill" (Apache License 2.0) -->
+<!-- Small mic hint above the comma, v3. Capsule with a groove, U holder, stem and foot; sizes measured from SwiftKey Pumpkin (run6 k01) at 4x; original drawing. White. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="24dp"
-    android:height="24dp"
-    android:viewportWidth="960"
-    android:viewportHeight="960">
-  <path android:fillColor="#FFFFFFFF" android:pathData="M360 440V200Q360 150 395.0 115.0Q430 80 480.0 80.0Q530 80 565.0 115.0Q600 150 600 200V440Q600 490 565.0 525.0Q530 560 480.0 560.0Q430 560 395.0 525.0Q360 490 360 440ZM440 800V717Q348 704 282.5 639.0Q217 574 203 481Q201 464 212.0 452.0Q223 440 240 440Q257 440 268.5 451.5Q280 463 284 480Q298 550 353.5 595.0Q409 640 480 640Q552 640 607.0 594.5Q662 549 676 480Q680 463 691.5 451.5Q703 440 720 440Q737 440 748.0 452.0Q759 464 757 481Q743 572 678.0 638.0Q613 704 520 717V800Q520 817 508.5 828.5Q497 840 480.0 840.0Q463 840 451.5 828.5Q440 817 440 800Z"/>
+    android:width="6dp" android:height="12dp"
+    android:viewportWidth="18" android:viewportHeight="36">
+    <path android:fillColor="#FFFFFF" android:fillType="evenOdd" android:pathData="M9,0.65H9A3.62,3.62 0 0 1 12.62,4.27V20.02A3.62,3.62 0 0 1 9,23.65H9A3.62,3.62 0 0 1 5.38,20.02V4.27A3.62,3.62 0 0 1 9,0.65ZM4.38,12.28h9.25v0.85h-9.25Z"/>
+    <path android:strokeColor="#FFFFFF" android:strokeWidth="2.6" android:strokeLineCap="round"
+        android:pathData="M2.5,13.9V20A6.5,6.5 0 0 0 15.5,20V13.9"/>
+    <path android:fillColor="#FFFFFF" android:pathData="M7.68,26h2.65V32.65h-2.65ZM2.65,32.65H15.35A1.27,1.27 0 0 1 16.62,33.92V33.92A1.27,1.27 0 0 1 15.35,35.2H2.65A1.27,1.27 0 0 1 1.38,33.92V33.92A1.27,1.27 0 0 1 2.65,32.65Z"/>
 </vector>

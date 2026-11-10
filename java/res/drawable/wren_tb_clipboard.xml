@@ -1,11 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- WrenBoard 1.6 toolbar icon (item 51): thin outline, drawn by Tab for WrenBoard from the approved mock-up 01. -->
+<!-- Clipboard v4 (toolbar, strip slot, and 123 key tinted white). Sizes measured from SwiftKey's real clipboard icon (run3 b02_more_options, 3 px/dp): 16x20dp, 1.5dp outline, clip tab on top with a slot, three left-aligned text lines of different lengths. Original drawing; no SwiftKey artwork. Viewport units = px at 3 px/dp. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="21.3dp"
-    android:height="21.3dp"
-    android:viewportWidth="60"
-    android:viewportHeight="60">
-  <path android:fillColor="#00000000" android:strokeColor="#FFFFFFFF" android:strokeWidth="3.6" android:pathData="M15,9h30a5,5 0,0 1,5 5v37a5,5 0,0 1,-5 5h-30a5,5 0,0 1,-5 -5v-37a5,5 0,0 1,5 -5z"/>
-  <path android:fillColor="#00000000" android:strokeColor="#FFFFFFFF" android:strokeWidth="3.6" android:pathData="M23,3h14a3,3 0,0 1,3 3v5a3,3 0,0 1,-3 3h-14a3,3 0,0 1,-3 -3v-5a3,3 0,0 1,3 -3z"/>
-  <path android:fillColor="#00000000" android:strokeColor="#FFFFFFFF" android:strokeWidth="3.4" android:strokeLineCap="round" android:pathData="M20,26L36,26M20,35L40,35M20,44L31,44"/>
+    android:width="16dp" android:height="20dp"
+    android:viewportWidth="48" android:viewportHeight="60">
+    <path android:fillColor="#FF8710" android:fillType="evenOdd"
+        android:pathData="M6.5,6H41.5A6.5,6.5 0 0 1 48,12.5V53.5A6.5,6.5 0 0 1 41.5,60H6.5A6.5,6.5 0 0 1 0,53.5V12.5A6.5,6.5 0 0 1 6.5,6ZM6.7,10.5A2.2,2.2 0 0 0 4.5,12.7V53.3A2.2,2.2 0 0 0 6.7,55.5H41.3A2.2,2.2 0 0 0 43.5,53.3V12.7A2.2,2.2 0 0 0 41.3,10.5Z"/>
+    <path android:fillColor="#FF8710" android:fillType="evenOdd"
+        android:pathData="M18,0H30A5,5 0 0 1 35,5V8.5A5,5 0 0 1 30,13.5H18A5,5 0 0 1 13,8.5V5A5,5 0 0 1 18,0ZM19.25,4.5A2.25,2.25 0 0 0 17,6.75A2.25,2.25 0 0 0 19.25,9H28.75A2.25,2.25 0 0 0 31,6.75A2.25,2.25 0 0 0 28.75,4.5Z"/>
+    <path android:fillColor="#FF8710"
+        android:pathData="M11.75,21H36.25A2.25,2.25 0 0 1 36.25,25.5H11.75A2.25,2.25 0 0 1 11.75,21Z M11.75,33H24.25A2.25,2.25 0 0 1 24.25,37.5H11.75A2.25,2.25 0 0 1 11.75,33Z M11.75,45H30.25A2.25,2.25 0 0 1 30.25,49.5H11.75A2.25,2.25 0 0 1 11.75,45Z"/>
 </vector>

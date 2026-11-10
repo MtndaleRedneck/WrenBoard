@@ -393,3 +393,5 @@ val SHOW_EMOJI_SUGGESTIONS = SettingsKey(
     key = booleanPreferencesKey("suggestEmojis"),
     default = true
 )
+// Optional right-hand strip slot. Off until selected by the user.
+val WrenClipboardStripSetting = SettingsKey(androidx.datastore.preferences.core.booleanPreferencesKey("wren_clipboard_strip"), false)

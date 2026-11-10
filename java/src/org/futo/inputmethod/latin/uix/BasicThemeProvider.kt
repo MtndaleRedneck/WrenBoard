@@ -397,17 +397,17 @@ class BasicThemeProvider(val context: Context, val colorScheme: KeyboardColorSch
         addIcon(KeyboardIconsSet.NAME_NUMPAD, R.drawable.numpad, onKeyColor)
         addIcon(KeyboardIconsSet.NAME_JAPANESE_KEY, R.drawable.japanesekey, onKeyColor)
 
-        addIcon(KeyboardIconsSet.NAME_EMOJI_ACTION_KEY, R.drawable.smile, onPrimary)
-        addIcon(KeyboardIconsSet.NAME_EMOJI_NORMAL_KEY, R.drawable.smile, onKeyColor)
+        addIcon(KeyboardIconsSet.NAME_EMOJI_ACTION_KEY, R.drawable.wren18_emoji_key, onPrimary)
+        addIcon(KeyboardIconsSet.NAME_EMOJI_NORMAL_KEY, R.drawable.wren18_emoji_key, onKeyColor)
 
         // Add by name (action_emoji)
         AllActionsMap.forEach { (i, it) ->
-            addIcon("action_${i}", it.icon, onKeyColor)
+            addIcon("action_${i}", if(it == org.futo.inputmethod.latin.uix.actions.EmojiAction) R.drawable.wren18_emoji_key else it.icon, onKeyColor)
         }
 
         // Add by id (action_0)
         AllActions.forEachIndexed { i, it ->
-            addIcon("action_${i}", it.icon, onKeyColor)
+            addIcon("action_${i}", if(it == org.futo.inputmethod.latin.uix.actions.EmojiAction) R.drawable.wren18_emoji_key else it.icon, onKeyColor)
         }
 
         if(!showKeyHints) {

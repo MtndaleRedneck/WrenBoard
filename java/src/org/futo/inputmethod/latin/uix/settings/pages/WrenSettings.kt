@@ -112,7 +112,10 @@ val WrenRichInputMenu = UserSettingsMenu(
 val WrenToolbarMenu = UserSettingsMenu(
     title = R.string.wren_home_toolbar,
     navPath = "wren_toolbar", registerNavPath = true,
-    settings = toolbarButtons
+    settings = toolbarButtons + listOf(
+        userSettingToggleDataStore(R.string.wren18_clipboard_on_123, org.futo.inputmethod.latin.settings.ClipboardOn123Setting),
+        userSettingToggleDataStore(R.string.wren18_clipboard_strip, org.futo.inputmethod.latin.uix.WrenClipboardStripSetting)
+    )
 )
 
 // Layout & keys

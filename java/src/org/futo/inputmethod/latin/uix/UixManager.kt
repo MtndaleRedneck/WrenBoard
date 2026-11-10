@@ -663,6 +663,7 @@ class UixManager(private val latinIME: LatinIME) {
     internal val resizers = KeyboardResizers(latinIME)
 
     private var isShowingActionEditor = mutableStateOf(false)
+    private var actionEditorNestedBack: (() -> Boolean)? = null
     fun showActionEditor() {
         isShowingActionEditor.value = true
     }
@@ -1010,7 +1011,7 @@ class UixManager(private val latinIME: LatinIME) {
                 enter = slideInVertically { it },
                 exit = slideOutVertically { it },
                 content = {
-                    ActionEditor()
+                    ActionEditor { actionEditorNestedBack = it }
                 },
             )
         }
@@ -1507,10 +1508,12 @@ class UixManager(private val latinIME: LatinIME) {
 
     fun navigateActionBack(): Boolean {
         if (isShowingActionEditor.value) {
+            if(actionEditorNestedBack?.invoke() == true) return true
             isShowingActionEditor.value = false
             return true
         }
         if (hasOpenActionWindow()) {
+            if(currWindowActionWindow.value?.navigateBack() == true) return true
             val previous = actionBackStack.lastOrNull()
             closeActionWindow(true)
             if (!hasOpenActionWindow() && previous != null) enterActionWindowView(previous)

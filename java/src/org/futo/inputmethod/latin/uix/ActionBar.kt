@@ -737,14 +737,7 @@ fun LazyItemScope.ActionItem(idx: Int, action: Action, onSelect: (Action) -> Uni
         if (swiftKeyIcons && action == MoreActionsAction) {
             val manager = LocalManager.current
             val active = !LocalInspectionMode.current && manager.getLatinIMEForDebug().uixManager.currWindowAction.value == MoreActionsAction
-            if (active) Box(Modifier.size(32.dp).background(Color(0xFF5C5C5C), CircleShape))
-            // SwiftKey parity (item 45): "..." at the right end, 12.4 x 2.8 dp, no circle
-            Icon(
-                painter = painterResource(id = R.drawable.wren_more_dots),
-                contentDescription = stringResource(action.name),
-                tint = contentCol,
-                modifier = Modifier.size(12.4.dp, 2.8.dp),
-            )
+            WrenMoreIcon(active, Modifier.size(24.dp))
         } else {
             Icon(
                 // WrenBoard 1.6 (item 51): thin-outline toolbar artwork on key-styled themes (approved mock-up 01)
@@ -1142,7 +1135,11 @@ fun ActionBar(
                         }
 
                         if(inlineSuggestions.isEmpty()) {
-                            // Pinned action feature removed in 1.7; all actions share one order.
+                            if (org.futo.inputmethod.latin.uix.settings.useDataStoreValue(WrenClipboardStripSetting)) {
+                                androidx.compose.material3.IconButton(onClick = { onActionActivated(ClipboardHistoryAction) }, modifier = Modifier.width(42.dp).fillMaxHeight()) {
+                                    Icon(painterResource(R.drawable.wren_tb_clipboard), contentDescription = stringResource(R.string.wren_home_clipboard), tint = LocalKeyboardScheme.current.onKeyboardContainer, modifier = Modifier.size(21.3.dp))
+                                }
+                            }
                         }
                     }
                 }
