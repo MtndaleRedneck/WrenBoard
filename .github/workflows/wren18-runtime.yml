@@ -51,7 +51,7 @@ jobs:
           sudo apt-get install -y -q ffmpeg
       - name: Build debug fixture APK
         run: |
-          ./gradlew --no-daemon --max-workers=2 -Dorg.gradle.jvmargs='-Xmx5g -Dfile.encoding=UTF-8' -Pkotlin.compiler.execution.strategy=in-process assembleStableDebug assembleStableDebugAndroidTest -Pandroid.injected.build.abi=x86_64 -Pandroid.injected.testOnly=false
+          ./gradlew --no-daemon --max-workers=2 -Dorg.gradle.jvmargs='-Xmx5g -Dfile.encoding=UTF-8' -Pkotlin.compiler.execution.strategy=in-process testStableDebugUnitTest :voiceinput-shared:testDebugUnitTest assembleStableDebug assembleStableDebugAndroidTest -Pandroid.injected.build.abi=x86_64 -Pandroid.injected.testOnly=false
           bash tools/ime-target/build.sh
           python3 - <<'PYAPK'
           from pathlib import Path
@@ -88,7 +88,7 @@ jobs:
           profile: Nexus 6
           ram-size: 4096M
           disable-animations: false
-          script: bash tools/wren18-runtime.sh w17-debug.apk
+          script: bash tools/wren18-runtime.sh w17-debug.apk w17-tests.apk
 
       - name: Preserve synthetic runtime evidence
         if: always()

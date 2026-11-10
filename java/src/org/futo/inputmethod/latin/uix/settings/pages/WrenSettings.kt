@@ -214,7 +214,7 @@ val WrenMenuSections: Map<String, List<Pair<Int, List<UserSetting>>>> by lazy {
             R.string.wren_s_voice_engine to voiceEngine,
             0 to voiceRest,
         ),
-        "wren_toolbar" to listOf(R.string.wren_s_toolbar_buttons to toolbarButtons),
+        "wren_toolbar" to listOf(R.string.wren_s_toolbar_buttons to WrenToolbarMenu.settings),
         "wren_layout" to listOf(
             R.string.wren_s_size to layoutSize,
             R.string.wren_s_rows to layoutRows,
