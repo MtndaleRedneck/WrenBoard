@@ -92,7 +92,7 @@ import sh.calvin.reorderable.rememberReorderableLazyGridState
 
 
 @Composable
-fun ActionItem(action: Action, modifier: Modifier = Modifier, dragIcon: Boolean = false, dragIconModifier: Modifier = Modifier, position: Int? = null) {
+fun ActionItem(action: Action, modifier: Modifier = Modifier, dragIcon: Boolean = false, dragIconModifier: Modifier = Modifier, position: Int? = null, dimmed: Boolean = false) {
     val darkTiles = LocalKeyboardScheme.current.keyboardSurface.luminance() < 0.5f
     val tileLabel = if(darkTiles) Color(0xFFE6E6E6) else Color(0xFF262626)
     val tileFill = LocalKeyboardScheme.current.keyboardContainer
@@ -102,7 +102,7 @@ fun ActionItem(action: Action, modifier: Modifier = Modifier, dragIcon: Boolean 
             .height(64.dp),
         shape = RoundedCornerShape(12.dp)
     ) {
-        CompositionLocalProvider(LocalContentColor provides LocalKeyboardScheme.current.onKeyboardContainer) {
+        CompositionLocalProvider(LocalContentColor provides LocalKeyboardScheme.current.onKeyboardContainer.copy(alpha = if(dimmed) 0.6f else 1f)) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -140,7 +140,7 @@ fun ActionItem(action: Action, modifier: Modifier = Modifier, dragIcon: Boolean 
                     org.futo.inputmethod.latin.uix.AutoFitText(
                         if (action == org.futo.inputmethod.latin.uix.actions.clipboard.ClipboardHistoryAction) stringResource(R.string.wren_home_clipboard) else stringResource(id = action.name),
                         modifier = Modifier.fillMaxWidth().height(20.dp),
-                        style = Typography.Small.copy(lineHeight = 12.sp, color = tileLabel)
+                        style = Typography.Small.copy(lineHeight = 12.sp, color = tileLabel.copy(alpha = if(dimmed) 0.6f else 1f))
                     )
                 }
             }
@@ -292,7 +292,6 @@ fun MoreActionsView(setNestedBack: ((() -> Boolean)?) -> Unit = {}) {
                 org.futo.inputmethod.latin.uix.WrenMoreIcon(active = true, modifier = Modifier.size(24.dp))
             }
         }
-        if(hiddenOpen) Text(stringResource(R.string.wren18_hidden), modifier = Modifier.padding(8.dp))
         LazyVerticalGrid(state = gridState, userScrollEnabled = dragging == null, columns = GridCells.FixedSize(80.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp),
             modifier = Modifier.fillMaxWidth().heightIn(max = 304.dp).padding(8.dp).onGloballyPositioned { gridBounds = it.boundsInRoot() }) {
             items(boxIds, key = { it }) { id ->
@@ -300,11 +299,13 @@ fun MoreActionsView(setNestedBack: ((() -> Boolean)?) -> Unit = {}) {
                 Box {
                     ActionItem(action, tileModifier(id, false).animateItem().clickable {
                         if(hiddenOpen) persist(draft.show(id, draft.visible.size)) else manager?.activateAction(action)
-                    }, dragIcon = false)
+                    }, dragIcon = false, dimmed = hiddenOpen)
                     if(hiddenOpen) androidx.compose.material3.IconButton(
                         onClick = { persist(draft.show(id, draft.visible.size)) },
                         modifier = Modifier.align(Alignment.TopEnd).size(32.dp)
-                    ) { Text("+", color = LocalKeyboardScheme.current.onKeyboardContainer, fontSize = 22.sp) }
+                    ) { Box(Modifier.size(22.dp).drawBehind { drawCircle(Color(0xFFFF8710)) }, contentAlignment = Alignment.Center) {
+                        Text("+", color = Color(0xFF303030), fontSize = 20.sp)
+                    } }
                 }
             }
             if(!hiddenOpen) item(key = "hidden-destination") {
