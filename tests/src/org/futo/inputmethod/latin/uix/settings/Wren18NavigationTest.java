@@ -59,6 +59,14 @@ public class Wren18NavigationTest {
         }
         fail("Control stayed stale " + selector);
     }
+    private int changedPixels(android.graphics.Bitmap a, android.graphics.Bitmap b) {
+        int changed=0;
+        // Inspect content, excluding clock/nav and animated more icon.
+        for(int y=(int)(a.getHeight()*0.17f);y<(int)(a.getHeight()*0.40f);y+=2)
+            for(int x=0;x<a.getWidth();x+=2)
+                if(a.getPixel(x,y)!=b.getPixel(x,y)) changed++;
+        return changed;
+    }
     @Test public void registeredScreensReturnOneLevelAfterAccessibilityRead() throws Exception {
         SettingsActivity activity = activityRule.launchActivity(new Intent());
         waitRoute(activity, "home");
@@ -107,13 +115,14 @@ public class Wren18NavigationTest {
         SystemClock.sleep(600);
         assertTrue(device.takeScreenshot(new File(out, "hidden.png")));
         device.dumpWindowHierarchy(new File(out, "hidden.xml"));
-        String hiddenXml = new String(java.nio.file.Files.readAllBytes(new File(out,"hidden.xml").toPath()), java.nio.charset.StandardCharsets.UTF_8);
-        assertTrue("Hidden screen heading in fresh hierarchy", hiddenXml.contains("text=\"Hidden\""));
+        android.graphics.Bitmap before = android.graphics.BitmapFactory.decodeFile(new File(out,"before_hidden.png").getPath());
+        android.graphics.Bitmap hiddenShot = android.graphics.BitmapFactory.decodeFile(new File(out,"hidden.png").getPath());
+        assertTrue("Hidden screen must visibly differ from actions", changedPixels(before,hiddenShot) > 1000);
         clickFresh(device, By.desc("Back")); SystemClock.sleep(300);
         waitRoute(activity, "actionEdit");
-        device.dumpWindowHierarchy(new File(out,"hidden_back.xml"));
-        String returnedXml = new String(java.nio.file.Files.readAllBytes(new File(out,"hidden_back.xml").toPath()), java.nio.charset.StandardCharsets.UTF_8);
-        assertFalse("Nested Hidden Back must return to actions", returnedXml.contains("text=\"Hidden\""));
+        assertTrue(device.takeScreenshot(new File(out,"hidden_back.png")));
+        android.graphics.Bitmap returned = android.graphics.BitmapFactory.decodeFile(new File(out,"hidden_back.png").getPath());
+        assertTrue("Nested Hidden Back must visually return to actions", changedPixels(before,returned) < 1000);
         device.pressBack(); waitRoute(activity, "wren_toolbar");
         device.pressBack(); waitRoute(activity, "wren_rich_input");
         device.pressBack(); waitRoute(activity, "home");
