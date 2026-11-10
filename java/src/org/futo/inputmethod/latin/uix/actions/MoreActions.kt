@@ -183,7 +183,7 @@ fun MoreActionsView(setNestedBack: ((() -> Boolean)?) -> Unit = {}) {
     }
     val allVisible = draft.visible.filter { AllActionsMap[it]?.shownInEditor == true }
     val toolbarIds = allVisible.take(6)
-    val boxIds = if(hiddenOpen) draft.hidden.filter { AllActionsMap[it]?.shownInEditor == true } else allVisible.drop(6)
+    val boxIds = if(hiddenOpen) draft.hidden.filter { AllActionsMap[it]?.shownInEditor == true } else allVisible
     val gridState = rememberLazyGridState()
     val density = androidx.compose.ui.platform.LocalDensity.current
     val edgeZone = with(density) { 48.dp.toPx() }
@@ -300,7 +300,7 @@ fun MoreActionsView(setNestedBack: ((() -> Boolean)?) -> Unit = {}) {
                 Box {
                     ActionItem(action, tileModifier(id, false).animateItem().clickable {
                         if(hiddenOpen) persist(draft.show(id, draft.visible.size)) else manager?.activateAction(action)
-                    }, dragIcon = !hiddenOpen)
+                    }, dragIcon = false)
                     if(hiddenOpen) androidx.compose.material3.IconButton(
                         onClick = { persist(draft.show(id, draft.visible.size)) },
                         modifier = Modifier.align(Alignment.TopEnd).size(32.dp)
@@ -328,7 +328,7 @@ fun MoreActionsView(setNestedBack: ((() -> Boolean)?) -> Unit = {}) {
         AllActionsMap[id]?.let { action ->
             Box(Modifier.offset { IntOffset((pointer.x - rootOrigin.x - grabOffset.x).roundToInt(), (pointer.y - rootOrigin.y - grabOffset.y).roundToInt()) }
                 .width(grabbedWidth).height(grabbedHeight).zIndex(10f)) {
-                ActionItem(action, dragIcon = true)
+                ActionItem(action, dragIcon = false)
             }
         }
     }
