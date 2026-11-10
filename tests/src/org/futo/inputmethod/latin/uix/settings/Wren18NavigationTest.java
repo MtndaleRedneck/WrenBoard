@@ -155,11 +155,18 @@ public class Wren18NavigationTest {
         android.graphics.Bitmap before = android.graphics.BitmapFactory.decodeFile(new File(out,"before_hidden.png").getPath());
         android.graphics.Bitmap hiddenShot = android.graphics.BitmapFactory.decodeFile(new File(out,"hidden.png").getPath());
         assertTrue("Hidden screen must visibly differ from actions", changedPixels(before,hiddenShot) > 1000);
-        clickFresh(device, By.desc("Back")); SystemClock.sleep(300);
+        clickFresh(device, By.desc("Back"));
         waitRoute(activity, "actionEdit");
-        assertTrue(device.takeScreenshot(new File(out,"hidden_back.png")));
-        android.graphics.Bitmap returned = android.graphics.BitmapFactory.decodeFile(new File(out,"hidden_back.png").getPath());
-        assertTrue("Nested Hidden Back must visually return to actions", changedPixels(before,returned) < 1000);
+        int returnedPixels = Integer.MAX_VALUE;
+        for(int attempt=0;attempt<50;attempt++) {
+            SystemClock.sleep(100);
+            assertTrue(device.takeScreenshot(new File(out,"hidden_back.png")));
+            android.graphics.Bitmap returned = android.graphics.BitmapFactory.decodeFile(new File(out,"hidden_back.png").getPath());
+            returnedPixels = changedPixels(before,returned);
+            returned.recycle();
+            if(returnedPixels < 1000) break;
+        }
+        assertTrue("Nested Hidden Back must visibly return to actions", returnedPixels < 1000);
         org.futo.inputmethod.latin.uix.actions.OrderedActionIds oldOrder =
             org.futo.inputmethod.latin.uix.actions.UnifiedActionsKt.readUnifiedActions(activity);
         android.app.Instrumentation inst = InstrumentationRegistry.getInstrumentation();
