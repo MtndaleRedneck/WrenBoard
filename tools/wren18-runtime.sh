@@ -31,10 +31,6 @@ adb shell ime set "$IME"
 adb shell settings put secure show_ime_with_hard_keyboard 1
 adb shell pm grant "$PKG" android.permission.RECORD_AUDIO
 sleep 3
-TESTPKG=$(adb shell pm list instrumentation | tr -d '\r' | grep "target=$PKG" | sed -E 's/^instrumentation:([^ ]+).*/\1/' | head -1)
-test -n "$TESTPKG"
-adb shell am instrument -w -r -e class org.futo.inputmethod.latin.uix.settings.Wren18NavigationTest "$TESTPKG" | tee "$OUT/navigation.txt"
-grep -q 'OK (1 test)' "$OUT/navigation.txt"
 adb shell am start -W -n com.wrenboard.imetarget/.TestInput >/dev/null
 sleep 2
 adb shell input tap 400 500
@@ -63,3 +59,11 @@ for DPI in 450 480; do
  adb shell am broadcast -a "$PKG.WBDBG" -p "$PKG" --es cmd geom >/dev/null
  adb exec-out screencap -p > "$OUT/keyboard_${DPI}dpi.png"
 done
+
+TESTPKG=$(adb shell pm list instrumentation | tr -d '\r' | grep "target=$PKG" | sed -E 's/^instrumentation:([^ ]+).*/\1/' | head -1)
+test -n "$TESTPKG"
+timeout 480 adb shell am instrument -w -r -e class org.futo.inputmethod.latin.uix.settings.Wren18NavigationTest "$TESTPKG" | tee "$OUT/navigation.txt" || true
+NAV_STATUS=0
+grep -q 'OK (1 test)' "$OUT/navigation.txt" || NAV_STATUS=1
+
+exit "$NAV_STATUS"

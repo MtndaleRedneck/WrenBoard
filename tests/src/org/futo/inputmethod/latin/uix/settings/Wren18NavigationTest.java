@@ -40,6 +40,20 @@ public class Wren18NavigationTest {
         waitRoute(activity, destination);
         SystemClock.sleep(300);
     }
+    private void clickFresh(UiDevice device, androidx.test.uiautomator.BySelector selector) {
+        for(int attempt=0;attempt<5;attempt++) {
+            try {
+                UiObject2 object=device.findObject(selector);
+                assertNotNull("Expected control " + selector,object);
+                android.graphics.Point point=object.getVisibleCenter();
+                device.click(point.x,point.y);
+                return;
+            } catch(androidx.test.uiautomator.StaleObjectException stale) {
+                SystemClock.sleep(200);
+            }
+        }
+        fail("Control stayed stale " + selector);
+    }
     @Test public void registeredScreensReturnOneLevelAfterAccessibilityRead() throws Exception {
         SettingsActivity activity = activityRule.launchActivity(new Intent());
         waitRoute(activity, "home");
@@ -61,7 +75,7 @@ public class Wren18NavigationTest {
             navigate(activity, path);
             UiObject2 arrow = device.findObject(By.desc("Back"));
             if(arrow != null) {
-                arrow.click();
+                clickFresh(device, By.desc("Back"));
                 waitRoute(activity, "home");
             } else {
                 device.pressBack();
@@ -75,13 +89,13 @@ public class Wren18NavigationTest {
         navigate(activity, "actionEdit");
         UiObject2 hidden = device.findObject(By.textStartsWith("Hidden ("));
         assertNotNull("Separate Hidden destination must be reachable", hidden);
-        hidden.click(); SystemClock.sleep(300);
+        clickFresh(device, By.textStartsWith("Hidden (")); SystemClock.sleep(300);
         assertTrue(device.takeScreenshot(new File(out, "hidden.png")));
         device.dumpWindowHierarchy(new File(out, "hidden.xml"));
         assertNotNull(device.findObject(By.text("Hidden")));
         UiObject2 hiddenBack = device.findObject(By.desc("Back"));
         assertNotNull("Hidden in-app back arrow", hiddenBack);
-        hiddenBack.click(); SystemClock.sleep(300);
+        clickFresh(device, By.desc("Back")); SystemClock.sleep(300);
         waitRoute(activity, "actionEdit");
         assertNull("Nested Hidden Back must return to actions", device.findObject(By.text("Hidden")));
         device.pressBack(); waitRoute(activity, "wren_toolbar");
