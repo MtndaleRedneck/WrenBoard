@@ -258,10 +258,9 @@ private fun wrenKeyBackgrounds(context: android.content.Context) = KeyedBitmaps(
             bitmap = KeyBackground(
                 foregroundColor = AccentOrange.toArgb(),
                 hintColor = HintGrey,
-                outlineColor = 0xFFD0D0D0.toInt(),
-                outlineWidth = 1.dp,
-                // Visual inset belongs to the drawable; KeyBackground.padding only affects hints.
-                background = popupSelection(context)
+                outlineColor = null,
+                // Every selected accent uses the same pressed face as a held key.
+                background = pressedKey(context, halo = false)
             )
         ),
         KeyedBitmap(

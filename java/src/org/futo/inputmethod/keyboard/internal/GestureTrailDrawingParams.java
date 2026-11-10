@@ -39,6 +39,7 @@ final class GestureTrailDrawingParams {
     private static final int FADEOUT_DURATION_FOR_DEBUG = 200; // millisecond
 
     public final int mTrailColor;
+    public final Integer mTrailEndColor;
     public final float mTrailStartWidth;
     public final float mTrailEndWidth;
     public final float mTrailBodyRatio;
@@ -55,6 +56,7 @@ final class GestureTrailDrawingParams {
                 R.styleable.MainKeyboardView_gestureTrailColor, 0,
                 mainKeyboardViewAttr, provider
         );
+        mTrailEndColor = provider == null ? null : provider.getGestureTrailEndColor();
         mTrailStartWidth = mainKeyboardViewAttr.getDimension(
                 R.styleable.MainKeyboardView_gestureTrailStartWidth, 0.0f);
         mTrailEndWidth = mainKeyboardViewAttr.getDimension(

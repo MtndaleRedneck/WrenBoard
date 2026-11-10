@@ -186,6 +186,7 @@ final class GestureTrailDrawingPoints {
         mTrailStartIndex = startIndex;
 
         if (startIndex < trailSize) {
+            paint.setShader(null);
             paint.setColor(params.mTrailColor);
             paint.setStyle(Paint.Style.FILL);
             final RoundedLine roundedLine = mRoundedLine;
@@ -214,6 +215,15 @@ final class GestureTrailDrawingPoints {
                         // Take union for the bounds.
                         outBoundsRect.union(mRoundedLineBounds);
                         final int alpha = getAlpha(elapsedTime, params);
+                        if (params.mTrailEndColor != null) {
+                            final float t = (float)(i - startIndex) / Math.max(1, trailSize - startIndex - 1);
+                            final int a = params.mTrailColor;
+                            final int b = params.mTrailEndColor;
+                            paint.setColor(Color.rgb(
+                                Math.round(Color.red(a) + t * (Color.red(b) - Color.red(a))),
+                                Math.round(Color.green(a) + t * (Color.green(b) - Color.green(a))),
+                                Math.round(Color.blue(a) + t * (Color.blue(b) - Color.blue(a)))));
+                        }
                         paint.setAlpha(alpha);
                         canvas.drawPath(path, paint);
                     }

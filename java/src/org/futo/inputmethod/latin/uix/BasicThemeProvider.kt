@@ -185,6 +185,9 @@ class BasicThemeProvider(val context: Context, val colorScheme: KeyboardColorSch
         if(it.foregroundColor == null) it.copy(foregroundColor = keyFeedback.foregroundColor) else it
     } ?: keyFeedback
 
+    override val gestureTrailEndColor: Int?
+        get() = if(colorScheme.primary == Color(0xFFFF8710)) 0xFFF9ED32.toInt() else null
+
     private val colors: HashMap<Int, Int> = HashMap()
     override fun getColor(i: Int): Int? {
         return colors[i]
@@ -370,7 +373,7 @@ class BasicThemeProvider(val context: Context, val colorScheme: KeyboardColorSch
         colors[R.styleable.Keyboard_Key_keyShiftedLetterHintInactivatedColor] = onKeyColorHalf
         colors[R.styleable.Keyboard_Key_keyShiftedLetterHintActivatedColor] = onKeyColorHalf
         colors[R.styleable.MainKeyboardView_languageOnSpacebarTextColor] = onKeyColorHalf
-        colors[R.styleable.MainKeyboardView_gestureTrailColor] = primary
+        colors[R.styleable.MainKeyboardView_gestureTrailColor] = if(gestureTrailEndColor != null) 0xFFF65600.toInt() else primary
         colors[R.styleable.MainKeyboardView_slidingKeyInputPreviewColor] = primary
 
         addIcon(KeyboardIconsSet.NAME_SHIFT_KEY, R.drawable.shift, onKeyColor)

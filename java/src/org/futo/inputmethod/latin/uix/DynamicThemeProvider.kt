@@ -55,6 +55,9 @@ interface DynamicThemeProvider {
     /** Theme key-glyph size multiplier (1.0 when the theme does not scale key text). */
     val keyTextSizeMultiplier: Float get() = 1.0f
 
+    /** Optional color at the newest end of the gesture trail. */
+    val gestureTrailEndColor: Int? get() = null
+
     @ColorInt
     fun getColor(i: Int): Int?
 

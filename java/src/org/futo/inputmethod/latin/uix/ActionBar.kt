@@ -71,6 +71,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.border
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.draw.drawBehind
@@ -1311,18 +1312,24 @@ class ExampleListener : SuggestionStripViewListener {
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun CandidateItem(modifier: Modifier, it: SuggestedWordInfo, listener: SuggestionStripViewListener, width: Dp, last: Boolean = false) {
+private fun CandidateItem(modifier: Modifier, it: SuggestedWordInfo, listener: SuggestionStripViewListener, width: Dp, last: Boolean = false, expanded: Boolean = false) {
+    val pumpkin = LocalKeyboardScheme.current.primary == Color(0xFFFF8710)
+    val interaction = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
     val word = it.mWord
     val description = it.mCandidateDescription
     val color = LocalKeyboardScheme.current.onSurface
     val textStyle =
-        suggestionStylePrimary.copy(color = color).withCustomFont()
+        suggestionStylePrimary.copy(color = color, letterSpacing = if(pumpkin) 0.sp else 0.5.sp).withCustomFont()
     val descTextStyle =
         suggestionStyleCandidateDescription.copy(color = color.copy(alpha = 0.5f)).withCustomFont() // TODO: High contrast for high contrast theme
     Row(
         modifier
             .width(width)
+            .then(if(pumpkin && expanded) Modifier.padding(1.dp).background(if(pressed) Color(0xFF4C4C4C) else Color.Black).padding(5.dp) else Modifier)
             .combinedClickable(
+                interactionSource = interaction,
+                indication = if(pumpkin && expanded) null else LocalIndication.current,
                 enabled = word != null,
                 onClick = {
                     listener.pickSuggestionManually(
@@ -1628,7 +1635,7 @@ fun BoxScope.ActionBarWithExpandableCandidates(
                 listToRender ?: emptyList(),
                 itemMeasurer = { measureWord(density, widths, it) }
             ) { allocatedWidth, item, isLast ->
-                CandidateItem(Modifier.height(ActionBarHeight), item, listener = suggestionStripListener, width=with(density) { allocatedWidth.toDp()  }, last=isLast)
+                CandidateItem(Modifier.height(ActionBarHeight), item, listener = suggestionStripListener, width=with(density) { allocatedWidth.toDp()  }, last=isLast, expanded=true)
             }
         }
     }
