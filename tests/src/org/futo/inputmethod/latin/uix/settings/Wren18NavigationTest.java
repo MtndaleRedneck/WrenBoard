@@ -73,6 +73,15 @@ public class Wren18NavigationTest {
         navigate(activity, "wren_rich_input");
         navigate(activity, "wren_toolbar");
         navigate(activity, "actionEdit");
+        UiObject2 hidden = device.findObject(By.textStartsWith("Hidden ("));
+        assertNotNull("Separate Hidden destination must be reachable", hidden);
+        hidden.click(); SystemClock.sleep(300);
+        assertTrue(device.takeScreenshot(new File(out, "hidden.png")));
+        device.dumpWindowHierarchy(new File(out, "hidden.xml"));
+        assertNotNull(device.findObject(By.text("Hidden")));
+        device.pressBack(); SystemClock.sleep(300);
+        waitRoute(activity, "actionEdit");
+        assertNull("Nested Hidden Back must return to actions", device.findObject(By.text("Hidden")));
         device.pressBack(); waitRoute(activity, "wren_toolbar");
         device.pressBack(); waitRoute(activity, "wren_rich_input");
         device.pressBack(); waitRoute(activity, "home");

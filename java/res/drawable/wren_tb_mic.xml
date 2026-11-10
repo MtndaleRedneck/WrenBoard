@@ -1,10 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Small mic hint above the comma, v3. Capsule with a groove, U holder, stem and foot; sizes measured from SwiftKey Pumpkin (run6 k01) at 4x; original drawing. White. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="6dp" android:height="12dp"
-    android:viewportWidth="18" android:viewportHeight="36">
+    android:width="24dp" android:height="24dp"
+    android:viewportWidth="36" android:viewportHeight="36">
+    <group android:translateX="9">
     <path android:fillColor="#FFFFFF" android:fillType="evenOdd" android:pathData="M9,0.65H9A3.62,3.62 0 0 1 12.62,4.27V20.02A3.62,3.62 0 0 1 9,23.65H9A3.62,3.62 0 0 1 5.38,20.02V4.27A3.62,3.62 0 0 1 9,0.65ZM4.38,12.28h9.25v0.85h-9.25Z"/>
     <path android:strokeColor="#FFFFFF" android:strokeWidth="2.6" android:strokeLineCap="round"
         android:pathData="M2.5,13.9V20A6.5,6.5 0 0 0 15.5,20V13.9"/>
     <path android:fillColor="#FFFFFF" android:pathData="M7.68,26h2.65V32.65h-2.65ZM2.65,32.65H15.35A1.27,1.27 0 0 1 16.62,33.92V33.92A1.27,1.27 0 0 1 15.35,35.2H2.65A1.27,1.27 0 0 1 1.38,33.92V33.92A1.27,1.27 0 0 1 2.65,32.65Z"/>
+    </group>
 </vector>

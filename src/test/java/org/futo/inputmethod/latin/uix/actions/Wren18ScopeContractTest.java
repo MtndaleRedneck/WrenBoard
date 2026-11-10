@@ -8,7 +8,12 @@ public class Wren18ScopeContractTest {
  @Test public void oneApprovedMicrophoneDrawingEverywhere() throws Exception {
   String root="java/res/drawable/";
   String source=read(root+"wren_mic_hint.xml");
-  for(String name:new String[]{"mic.xml","mic_fill.xml","wren_tb_mic.xml","wren_ic_mic_fill.xml","wren_set_ic_voice.xml"}) assertEquals(name,source,read(root+name));
+  String geometry=source.substring(source.indexOf("    <path"),source.lastIndexOf("</vector>")).trim();
+  for(String name:new String[]{"mic.xml","mic_fill.xml","wren_tb_mic.xml","wren_ic_mic_fill.xml","wren_set_ic_voice.xml"}) {
+   String icon=read(root+name);
+   assertTrue(name, icon.contains(geometry));
+   assertTrue(name, icon.contains("android:translateX=\"9\""));
+  }
  }
  @Test public void oneApprovedClipboardDrawingEverywhere() throws Exception {
   String root="java/res/drawable/";

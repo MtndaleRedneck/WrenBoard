@@ -34,12 +34,18 @@ adb shell input tap 400 500
 sleep 3
 adb exec-out screencap -p > "$OUT/keyboard.png"
 adb shell am broadcast -a "$PKG.WBDBG" -p "$PKG" --es cmd geom >/dev/null
+adb shell screenrecord --time-limit 5 /sdcard/wren18-more.mp4 > "$OUT/screenrecord.txt" 2>&1 &
+RECORDER=$!
+sleep 1
 adb shell am broadcast -a "$PKG.WBDBG" -p "$PKG" --es cmd open:more >/dev/null
 sleep 1
 adb exec-out screencap -p > "$OUT/actions.png"
 adb shell input keyevent KEYCODE_BACK
 sleep 1
 adb exec-out screencap -p > "$OUT/back_keyboard.png"
+wait "$RECORDER"
+adb pull /sdcard/wren18-more.mp4 "$OUT/more-open-close.mp4"
+ffmpeg -hide_banner -loglevel error -i "$OUT/more-open-close.mp4" -vf fps=20 "$OUT/more_%03d.png"
 # Independent density samples expose the real sizing formula. They do not calibrate the owner's phone.
 for DPI in 450 480; do
  adb shell wm density "$DPI"
