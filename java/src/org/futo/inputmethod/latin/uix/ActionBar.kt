@@ -188,6 +188,8 @@ import kotlin.math.roundToInt
  */
 
 val ActionBarHeight = 41.dp
+@Composable
+fun suggestionBarHeight(): Dp = if(LocalKeyboardScheme.current.primary == Color(0xFFFF8710)) 37.7.dp else ActionBarHeight
 /** SwiftKey parity (pixel spec v1.1 item 44): the toolbar row above the strip is 44.1 dp on key-styled themes. */
 val ToolbarRowHeight = 44.1.dp
 
@@ -1054,11 +1056,11 @@ fun ActionBar(
     val useDoubleHeight = isActionsExpanded && oldActionBar.value == false
 
     val styledToolbar = isKeyStyledTheme()
-    val toolbarRowHeight = if (styledToolbar) ToolbarRowHeight else ActionBarHeight
+    val toolbarRowHeight = if (styledToolbar) ToolbarRowHeight else suggestionBarHeight()
     Column(Modifier
         .height(
             (if (useDoubleHeight) toolbarRowHeight else 0.dp) +
-                    (if (needToUseExpandableSuggestionUi) 0.dp else ActionBarHeight)
+                    (if (needToUseExpandableSuggestionUi) 0.dp else suggestionBarHeight())
         )
         .semantics {
             testTag = "ActionBar"
@@ -1071,7 +1073,7 @@ fun ActionBar(
             Surface(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .weight(1.0f),
+                    .height(toolbarRowHeight),
                 color = LocalKeyboardScheme.current.keyboardSurfaceDim//actionBarColor()
             ) {
                 ActionItems(onActionActivated, onActionAltActivated)
@@ -1085,7 +1087,7 @@ fun ActionBar(
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
-                .weight(1.0f), color = actionBarColor()
+                .height(suggestionBarHeight()), color = actionBarColor()
         ) {
             Row(Modifier.safeKeyboardPadding()) {
                 ExpandActionsButton(isActionsExpanded) {
@@ -1170,7 +1172,7 @@ fun ActionWindowBar(
     onBack: () -> Unit,
     onExpand: () -> Unit
 ) {
-    Column(Modifier.height(ActionBarHeight)) {
+    Column(Modifier.height(suggestionBarHeight())) {
         // WrenBoard 1.5 item 5d (Tab's cosmetic value, candidate): no 1dp divider between the
         // toolbar and the suggestion strip on the Wren skin - the toolbar colour runs straight in.
         if(!LocalThemeProvider.current.keyBorders) ActionSep()
@@ -1235,7 +1237,7 @@ fun CollapsibleSuggestionsBar(
     words: SuggestedWords?,
     suggestionStripListener: SuggestionStripViewListener,
 ) {
-    Column(Modifier.height(ActionBarHeight)) {
+    Column(Modifier.height(suggestionBarHeight())) {
         // WrenBoard 1.5 item 5d (Tab's cosmetic value, candidate): no 1dp divider between the
         // toolbar and the suggestion strip on the Wren skin - the toolbar colour runs straight in.
         if(!LocalThemeProvider.current.keyBorders) ActionSep()
@@ -1512,7 +1514,7 @@ private fun RowScope.InlineCandidates(
                 }
             }
             itemsIndexed(wordList) { i, it ->
-                CandidateItem(Modifier.height(ActionBarHeight), it,
+                CandidateItem(Modifier.height(suggestionBarHeight()), it,
                     listener = suggestionStripListener,
                     last = i == wordList.size-1,
                     width = with(LocalDensity.current) {
@@ -1633,7 +1635,7 @@ fun BoxScope.ActionBarWithExpandableCandidates(
 
     if(canShowSuggest) {
         Surface(
-            Modifier.fillMaxWidth().padding(0.dp, ActionBarHeight, 0.dp, 0.dp)
+            Modifier.fillMaxWidth().padding(0.dp, suggestionBarHeight(), 0.dp, 0.dp)
                 .heightIn(max = with(density) { keyboardOffset?.intValue?.toDp() ?: 0.dp })
                 .safeKeyboardPadding()
         ) {
@@ -1641,7 +1643,7 @@ fun BoxScope.ActionBarWithExpandableCandidates(
                 listToRender ?: emptyList(),
                 itemMeasurer = { measureWord(density, widths, it) }
             ) { allocatedWidth, item, isLast ->
-                CandidateItem(Modifier.height(ActionBarHeight), item, listener = suggestionStripListener, width=with(density) { allocatedWidth.toDp()  }, last=isLast, expanded=true)
+                CandidateItem(Modifier.height(suggestionBarHeight()), item, listener = suggestionStripListener, width=with(density) { allocatedWidth.toDp()  }, last=isLast, expanded=true)
             }
         }
     }
@@ -1651,7 +1653,7 @@ fun BoxScope.ActionBarWithExpandableCandidates(
                 testTag = "ActionBar"
                 testTagsAsResourceId = true
             }
-            .height(ActionBarHeight)
+            .height(suggestionBarHeight())
             .align(Alignment.TopCenter)
     ) {
         ActionSep()
