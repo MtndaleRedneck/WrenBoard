@@ -113,14 +113,14 @@ public class MoreKeysKeyboardView extends KeyboardView implements MoreKeysPanel 
         paint.setColor(0xFFBBBBBB);
         canvas.drawRoundRect(dp/2, dp/2, getWidth()-dp/2, getHeight()-dp/2, 5*dp, 5*dp, paint);
         paint.setStyle(Paint.Style.FILL);
-        final float top = getHeight()*(12f/299f), bottom = getHeight()*(287f/299f);
+        final float top = 4f * dp, bottom = getHeight() - 4f * dp;
         for (final Key key : keyboard.getSortedKeys()) {
             final float left = getPaddingLeft()+key.getX();
             final float right = left+key.getWidth();
             if (key == mCurrentKey) {
                 paint.setShader(new android.graphics.LinearGradient(0, top, 0, bottom,
                         0xF5646464, 0xF5373737, android.graphics.Shader.TileMode.CLAMP));
-                float inset = (right-left)*0.05f;
+                float inset = dp * 0.5f;
                 canvas.drawRoundRect(left+inset, top, right-inset, bottom, 5*dp, 5*dp, paint);
                 paint.setShader(null);
                 paint.setColor(0xFF181818);
@@ -136,13 +136,13 @@ public class MoreKeysKeyboardView extends KeyboardView implements MoreKeysPanel 
             // Size the visible cap ink, independent of system font metrics.
             final Rect capInk = new Rect();
             paint.getTextBounds("!", 0, 1, capInk);
-            if(capInk.height() > 0) paint.setTextSize(paint.getTextSize() * (22.5f * dp) / capInk.height());
+            if(capInk.height() > 0) paint.setTextSize(paint.getTextSize() * (0.24f * getHeight()) / capInk.height());
             paint.setTextAlign(Paint.Align.CENTER);
             final String label = key.getLabel();
             if (label != null) {
                 final Rect ink = new Rect();
                 paint.getTextBounds(label, 0, label.length(), ink);
-                canvas.drawText(label, (left+right)/2, getHeight() * (135f / 299f), paint);
+                canvas.drawText(label, (left+right)/2, getHeight() * 0.455f, paint);
             }
         }
     }
@@ -178,7 +178,7 @@ public class MoreKeysKeyboardView extends KeyboardView implements MoreKeysPanel 
     public void setKeyboard(final Keyboard keyboard) {
         super.setKeyboard(keyboard);
         if (keyboard instanceof MoreKeysKeyboard && ((MoreKeysKeyboard)keyboard).mApprovedPeriodPopup) {
-            int inset = Math.round(3f * getResources().getDisplayMetrics().density);
+            int inset = Math.round(4f * getResources().getDisplayMetrics().density);
             setPadding(inset, 0, inset, 0);
         } else {
             setPadding(originalPaddingLeft, originalPaddingTop, originalPaddingRight, originalPaddingBottom);

@@ -317,12 +317,12 @@ public final class MoreKeysKeyboard extends Keyboard {
                     && provider.getMoreKeysTextColor() == 0xFFFF8710;
             final int keyWidth, rowHeight;
             if (mParams.mApprovedPeriodPopup) {
-                // Final teardown section 16: 139.7 x 94.7 dp including 3 dp padding.
-                // Owner's screenshot independently measures 405 x 299 px, not a row-height rule.
-                keyWidth = Math.round((139.7f - 6f) * density / 4f);
-                rowHeight = Math.round((94.7f - 6f) * density);
+                // Phone-reference measurement: four 0.914-pitch cells, exactly two key rows tall.
+                // Border plus content padding is 4 dp per edge; the period cell anchors on its key.
+                keyWidth = Math.round(key.getWidth() * 0.914f);
+                rowHeight = key.getHeight() * 2 - Math.round(8f * density);
                 mParams.mVerticalGap = 0;
-                mParams.mTopPadding = mParams.mBottomPadding = Math.round(3f * density);
+                mParams.mTopPadding = mParams.mBottomPadding = Math.round(4f * density);
             } else if (isSingleMoreKeyWithPreview) {
                 // Use pre-computed width and height if this more keys keyboard has only one key to
                 // mitigate visual flicker between key preview and more keys keyboard.

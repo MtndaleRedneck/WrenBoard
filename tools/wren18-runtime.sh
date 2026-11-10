@@ -56,7 +56,12 @@ read -r PX PY < "$OUT/period-coordinates"
 adb shell input motionevent DOWN "$PX" "$PY"
 sleep 1
 adb exec-out screencap -p > "$OUT/period_hold.png"
-adb shell input motionevent UP "$PX" "$PY"
+# Same comma-selected state as the owner's reference, without changing the default.
+CELL=$(python3 -c 'print(round(1080 / 10 * 0.914))')
+adb shell input motionevent MOVE "$((PX-CELL))" "$PY"
+sleep 1
+adb exec-out screencap -p > "$OUT/period_comma.png"
+adb shell input motionevent UP "$((PX-CELL))" "$PY"
 sleep 1
 adb shell am broadcast -a "$PKG.WBDBG" -p "$PKG" --es cmd geom >/dev/null
 adb shell screenrecord --time-limit 12 /sdcard/wren18-more.mp4 > "$OUT/screenrecord.txt" 2>&1 &
