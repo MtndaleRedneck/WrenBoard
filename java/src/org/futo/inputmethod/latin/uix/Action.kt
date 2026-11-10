@@ -120,6 +120,9 @@ enum class CloseResult {
 }
 
 abstract class ActionWindow {
+    /** Consume only a nested back step. Root back stays with the host. */
+    open fun navigateBack(): Boolean = false
+
     open val onlyShowAboveKeyboard: Boolean
         get() = false
 

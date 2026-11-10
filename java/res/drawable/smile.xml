@@ -1,34 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Toolbar smiley, v4: same design as ic_emoji_key, drawn at 20dp. Ring and eyes kept from v3. Smile v4: traced from SwiftKey Pumpkin's emoji key (run6 k01, 3 px/dp): ends at 14.1/39.9, bottom of curve at 39.7, tapered stroke 3.2 units at the middle to 1.1 at the ends, flat ends. Original drawing; no SwiftKey artwork. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="24dp"
-    android:height="24dp"
-    android:viewportWidth="24"
-    android:viewportHeight="24">
-  <path
-      android:pathData="M12,12m-10,0a10,10 0,1 1,20 0a10,10 0,1 1,-20 0"
-      android:strokeLineJoin="round"
-      android:strokeWidth="1.35"
-      android:fillColor="#00000000"
-      android:strokeColor="#FFFFFF"
-      android:strokeLineCap="round"/>
-  <path
-      android:pathData="M8,14s1.5,2 4,2 4,-2 4,-2"
-      android:strokeLineJoin="round"
-      android:strokeWidth="1.35"
-      android:fillColor="#00000000"
-      android:strokeColor="#FFFFFF"
-      android:strokeLineCap="round"/>
-  <path
-      android:pathData="M9,8.5L9.01,8.5"
-      android:strokeLineJoin="round"
-      android:strokeWidth="1.35"
-      android:fillColor="#00000000"
-      android:strokeColor="#FFFFFF"
-      android:strokeLineCap="round"/>
-  <path
-      android:pathData="M15,8.5L15.01,8.5"
-      android:strokeLineJoin="round"
-      android:strokeWidth="1.35"
-      android:fillColor="#00000000"
-      android:strokeColor="#FFFFFF"
-      android:strokeLineCap="round"/>
+    android:width="20dp" android:height="20dp"
+    android:viewportWidth="54" android:viewportHeight="54">
+    <path android:fillColor="#FF8710" android:fillType="evenOdd"
+        android:pathData="M2,27A25,25 0 1 1 52,27A25,25 0 1 1 2,27ZM5.82,27A21.18,21.18 0 1 0 48.18,27A21.18,21.18 0 1 0 5.82,27Z"/>
+    <path android:fillColor="#FF8710" android:pathData="M18.19,22.38A2.56,4.38 0 1 1 23.31,22.38A2.56,4.38 0 1 1 18.19,22.38ZM30.69,22.38A2.56,4.38 0 1 1 35.81,22.38A2.56,4.38 0 1 1 30.69,22.38Z"/>
+    <path android:fillColor="#FF8710" android:pathData="M14.14,27.66C15.34,33.80 20.44,39.66 27.04,39.68C33.63,39.66 38.74,33.80 39.93,27.66L38.88,27.33C37.14,32.29 32.55,36.67 27.04,36.48C21.53,36.67 16.93,32.29 15.19,27.33Z"/>
 </vector>

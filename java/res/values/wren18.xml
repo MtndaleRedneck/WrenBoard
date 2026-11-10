@@ -1,0 +1,6 @@
+<resources>
+    <string name="wren18_clipboard_on_123">Clipboard on 123 key</string>
+    <string name="wren18_clipboard_strip">Clipboard at end of suggestion strip</string>
+    <string name="wren18_hidden">Hidden</string>
+    <string name="wren18_restore">Restore %1$s</string>
+</resources>

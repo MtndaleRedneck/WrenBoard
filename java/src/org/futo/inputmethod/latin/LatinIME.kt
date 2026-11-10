@@ -478,6 +478,13 @@ class LatinIME : InputMethodServiceCompose(), LatinIMELegacy.SuggestionStripCont
             }
         }
 
+        // Regenerate keyboard ids when the optional 123 long-press is changed.
+        launchJob {
+            getSettingFlow(org.futo.inputmethod.latin.settings.ClipboardOn123Setting).collect {
+                recreateKeyboard()
+            }
+        }
+
         // Listen to size changes
         launchJob {
             val prev: MutableMap<KeyboardSizeSettingKind, String?> =

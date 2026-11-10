@@ -485,6 +485,9 @@ class KeyboardSizingCalculator(val context: Context, val uixManager: UixManager)
         // is a 52.6 dp key plus the 2.5 dp outline-to-outline gap; number row and arrow row are fractions of it
         // (NumberRowHeight, ArrowRowHeight). The user's height setting still scales everything.
         val isPortraitPhone = sizeStateProvider.currentSizeState == KeyboardSizeSettingKind.Portrait
+        if(org.futo.inputmethod.latin.BuildConfig.DEBUG && isPortraitPhone) {
+            android.util.Log.i("WBDBG", "ROW_SIZING density=${displayMetrics.density} dpi=${displayMetrics.densityDpi} baseDp=$LetterRowPitchDp additionPx=$heightAddition multiplier=${savedSettings.heightMultiplier}")
+        }
         val singularRowHeight = if(isPortraitPhone) {
             (displayMetrics.density * LetterRowPitchDp + heightAddition / 4.0) *
                     savedSettings.heightMultiplier.guardNaN(1.0f)

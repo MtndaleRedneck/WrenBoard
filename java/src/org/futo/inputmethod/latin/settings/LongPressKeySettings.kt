@@ -59,13 +59,16 @@ fun List<LongPressKey>.toEncodedString(): String {
     }
 }
 
-data class LongPressKeySettings(val currentOrder: List<LongPressKey>, val showHints: Boolean) {
+val ClipboardOn123Setting = SettingsKey(androidx.datastore.preferences.core.booleanPreferencesKey("wren_clipboard_on_123"), true)
+
+data class LongPressKeySettings(val currentOrder: List<LongPressKey>, val showHints: Boolean, val clipboardOn123: Boolean = true) {
     companion object {
         @JvmStatic
         fun load(context: Context): LongPressKeySettings =
             LongPressKeySettings(
                 context.getSettingBlocking(LongPressKeyLayoutSetting).toLongPressKeyLayoutItems(),
-                context.getSettingBlocking(KeyHintsSetting)
+                context.getSettingBlocking(KeyHintsSetting),
+                context.getSettingBlocking(ClipboardOn123Setting)
             )
 
         @JvmStatic

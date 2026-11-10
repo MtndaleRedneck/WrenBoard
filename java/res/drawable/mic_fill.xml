@@ -1,39 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Small mic hint above the comma, v3. Capsule with a groove, U holder, stem and foot; sizes measured from SwiftKey Pumpkin (run6 k01) at 4x; original drawing. White. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="19.5dp"
-    android:height="19.5dp"
-    android:viewportWidth="19.5"
-    android:viewportHeight="19.5">
-  <path
-      android:pathData="M9.75,1.5C8.507,1.5 7.5,2.507 7.5,3.75L7.5,9.75C7.5,10.993 8.507,12 9.75,12C10.993,12 12,10.993 12,9.75L12,3.75C12,2.507 10.993,1.5 9.75,1.5ZZ"
-      android:strokeLineJoin="round"
-      android:fillColor="#FFFFFF"
-      android:strokeLineCap="round"/>
-  <path
-      android:pathData="M9.75,1.5C8.507,1.5 7.5,2.507 7.5,3.75L7.5,9.75C7.5,10.993 8.507,12 9.75,12C10.993,12 12,10.993 12,9.75L12,3.75C12,2.507 10.993,1.5 9.75,1.5ZZ"
-      android:strokeLineJoin="round"
-      android:strokeWidth="1.4"
-      android:fillColor="#00000000"
-      android:strokeColor="#FFFFFF"
-      android:strokeLineCap="round"/>
-  <path
-      android:pathData="M15,8.25L15,9.75C15,12.649 12.649,15 9.75,15C6.851,15 4.5,12.649 4.5,9.75L4.5,8.25"
-      android:strokeLineJoin="round"
-      android:strokeWidth="1.4"
-      android:fillColor="#00000000"
-      android:strokeColor="#FFFFFF"
-      android:strokeLineCap="round"/>
-  <path
-      android:pathData="M9.75,15L9.75,18"
-      android:strokeLineJoin="round"
-      android:strokeWidth="1.4"
-      android:fillColor="#00000000"
-      android:strokeColor="#FFFFFF"
-      android:strokeLineCap="round"/>
-  <path
-      android:pathData="M6.75,18L12.75,18"
-      android:strokeLineJoin="round"
-      android:strokeWidth="1.4"
-      android:fillColor="#00000000"
-      android:strokeColor="#FFFFFF"
-      android:strokeLineCap="round"/>
+    android:width="6dp" android:height="12dp"
+    android:viewportWidth="18" android:viewportHeight="36">
+    <path android:fillColor="#FFFFFF" android:fillType="evenOdd" android:pathData="M9,0.65H9A3.62,3.62 0 0 1 12.62,4.27V20.02A3.62,3.62 0 0 1 9,23.65H9A3.62,3.62 0 0 1 5.38,20.02V4.27A3.62,3.62 0 0 1 9,0.65ZM4.38,12.28h9.25v0.85h-9.25Z"/>
+    <path android:strokeColor="#FFFFFF" android:strokeWidth="2.6" android:strokeLineCap="round"
+        android:pathData="M2.5,13.9V20A6.5,6.5 0 0 0 15.5,20V13.9"/>
+    <path android:fillColor="#FFFFFF" android:pathData="M7.68,26h2.65V32.65h-2.65ZM2.65,32.65H15.35A1.27,1.27 0 0 1 16.62,33.92V33.92A1.27,1.27 0 0 1 15.35,35.2H2.65A1.27,1.27 0 0 1 1.38,33.92V33.92A1.27,1.27 0 0 1 2.65,32.65Z"/>
 </vector>

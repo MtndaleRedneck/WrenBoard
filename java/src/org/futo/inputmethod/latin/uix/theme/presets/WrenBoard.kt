@@ -164,21 +164,21 @@ private fun dpPx(context: android.content.Context, v: Float) =
     TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, v, context.resources.displayMetrics)
 
 // Key outline radius: SwiftKey 4.6-4.8 dp measured on the visible arc; 5.3 dp on our outline path renders it.
-private const val KeyRadiusDp = 5.3f
+private const val KeyRadiusDp = 5.0f
 
 /** Letter and functional keys (items 25-29): fill #3F3F3F -> #020202, outline black 95%, highlight #6D6D6D. */
 private fun letterKey(context: android.content.Context) = WrenKeyDrawable(
-    0xFF4B4B4B.toInt(), 0xFF161616.toInt(), 0xF2000000.toInt(), 0xFF777777.toInt(), true,
+    0xF23D3D3D.toInt(), 0xF2020202.toInt(), 0xF2000000.toInt(), 0xFF777777.toInt(), true,
     dpPx(context, KeyRadiusDp), context.resources.displayMetrics)
 
 /** Number-row keys (items 30-33): fill #595959 -> #212121, outline #212121 at 95%, highlight #7E7E7E. */
 private fun numberKey(context: android.content.Context) = WrenKeyDrawable(
-    0xFF595959.toInt(), 0xFF212121.toInt(), 0xF2212121.toInt(), 0xFF7E7E7E.toInt(), true,
+    0xF2555555.toInt(), 0xF2212121.toInt(), 0xF2212121.toInt(), 0xF6888888.toInt(), true,
     dpPx(context, KeyRadiusDp), context.resources.displayMetrics)
 
 /** Pressed, all keys (item 34): fill #656565 -> #373737, highlight #858585, outline black ~80%. */
 private fun pressedKey(context: android.content.Context, halo: Boolean = true) = WrenKeyDrawable(
-    0xFF656565.toInt(), 0xFF373737.toInt(), 0xCC000000.toInt(), 0xFF858585.toInt(), halo,
+    0xF5646464.toInt(), 0xF5373737.toInt(), 0xCC000000.toInt(), 0xFF858585.toInt(), halo,
     dpPx(context, KeyRadiusDp), context.resources.displayMetrics)
 
 private fun popupBox(context: android.content.Context): GradientDrawable {

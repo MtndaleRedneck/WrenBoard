@@ -1,21 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Clipboard hint glyph on the letters-page 123 key. SwiftKey parity (pixel spec v1.1 item 68), original
-     drawing: body 7.8 x 9.6 dp outline with 1.2 dp stroke and 1.1 dp corners, a solid 3.9 x 2.1 dp clip tab
-     on top, and two 3.6 x 1.1 dp lines inside. Viewport units are 0.1 dp. Tinted at draw time. -->
+<!-- Clipboard v4 (toolbar, strip slot, and 123 key tinted white). Sizes measured from SwiftKey's real clipboard icon (run3 b02_more_options, 3 px/dp): 16x20dp, 1.5dp outline, clip tab on top with a slot, three left-aligned text lines of different lengths. Original drawing; no SwiftKey artwork. Viewport units = px at 3 px/dp. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="7.8dp"
-    android:height="10.8dp"
-    android:viewportWidth="78"
-    android:viewportHeight="108">
-  <path
-      android:strokeColor="#FFFFFFFF"
-      android:strokeWidth="12"
-      android:fillColor="#00000000"
-      android:pathData="M17,18 L61,18 Q72,18 72,29 L72,91 Q72,102 61,102 L17,102 Q6,102 6,91 L6,29 Q6,18 17,18 Z"/>
-  <path
-      android:fillColor="#FFFFFFFF"
-      android:pathData="M23.5,4 Q23.5,0 27.5,0 L50.5,0 Q54.5,0 54.5,4 L54.5,21 L23.5,21 Z"/>
-  <path
-      android:fillColor="#FFFFFFFF"
-      android:pathData="M21,48 L57,48 L57,59 L21,59 Z M21,73 L57,73 L57,84 L21,84 Z"/>
+    android:width="16dp" android:height="20dp"
+    android:viewportWidth="48" android:viewportHeight="60">
+    <path android:fillColor="#FF8710" android:fillType="evenOdd"
+        android:pathData="M6.5,6H41.5A6.5,6.5 0 0 1 48,12.5V53.5A6.5,6.5 0 0 1 41.5,60H6.5A6.5,6.5 0 0 1 0,53.5V12.5A6.5,6.5 0 0 1 6.5,6ZM6.7,10.5A2.2,2.2 0 0 0 4.5,12.7V53.3A2.2,2.2 0 0 0 6.7,55.5H41.3A2.2,2.2 0 0 0 43.5,53.3V12.7A2.2,2.2 0 0 0 41.3,10.5Z"/>
+    <path android:fillColor="#FF8710" android:fillType="evenOdd"
+        android:pathData="M18,0H30A5,5 0 0 1 35,5V8.5A5,5 0 0 1 30,13.5H18A5,5 0 0 1 13,8.5V5A5,5 0 0 1 18,0ZM19.25,4.5A2.25,2.25 0 0 0 17,6.75A2.25,2.25 0 0 0 19.25,9H28.75A2.25,2.25 0 0 0 31,6.75A2.25,2.25 0 0 0 28.75,4.5Z"/>
+    <path android:fillColor="#FF8710"
+        android:pathData="M11.75,21H36.25A2.25,2.25 0 0 1 36.25,25.5H11.75A2.25,2.25 0 0 1 11.75,21Z M11.75,33H24.25A2.25,2.25 0 0 1 24.25,37.5H11.75A2.25,2.25 0 0 1 11.75,33Z M11.75,45H30.25A2.25,2.25 0 0 1 30.25,49.5H11.75A2.25,2.25 0 0 1 11.75,45Z"/>
 </vector>

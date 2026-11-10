@@ -399,7 +399,7 @@ data class BaseKey(
 
         // 1. Add layout-defined moreKeys
         moreKeysBuilder =
-            moreKeysBuilder.insertMoreKeys(LongPressKeySettings.joinMoreKeys(moreKeys))
+            moreKeysBuilder.insertMoreKeys(LongPressKeySettings.joinMoreKeys(if (!params.mId.mLongPressKeySettings.clipboardOn123 && moreKeys == SymbolsMoreKeys) emptyList() else moreKeys))
 
         // 2. Add moreKeys from keyspec
         if (moreKeyMode.autoFromKeyspec) {

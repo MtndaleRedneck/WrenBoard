@@ -1,6 +1,11 @@
 package org.futo.inputmethod.latin.uix.actions
 
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.layout.offset
+import androidx.compose.ui.zIndex
+import androidx.compose.ui.unit.IntOffset
+import kotlin.math.roundToInt
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
@@ -146,14 +151,23 @@ fun ActionItem(action: Action, modifier: Modifier = Modifier, dragIcon: Boolean 
 
 @Composable
 @Preview(showBackground = true)
-fun MoreActionsView() {
-    val manager = if(LocalInspectionMode.current) null else LocalManager.current
+fun MoreActionsView(setNestedBack: ((() -> Boolean)?) -> Unit = {}) {
+    val manager = if(LocalInspectionMode.current || org.futo.inputmethod.latin.uix.LocalNavController.current != null) null else LocalManager.current
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val rootView = LocalView.current
     val persisted = useUnifiedActions()
     var draft by remember { mutableStateOf(persisted) }
     var hiddenOpen by remember { mutableStateOf(false) }
+    val hiddenState by rememberUpdatedState(hiddenOpen)
+    DisposableEffect(Unit) {
+        setNestedBack { if(hiddenState) { hiddenOpen = false; true } else false }
+        onDispose { setNestedBack(null) }
+    }
+    BackHandler(enabled = hiddenOpen) { hiddenOpen = false }
+    var grabOffset by remember { mutableStateOf(Offset.Zero) }
+    var grabbedWidth by remember { mutableStateOf(80.dp) }
+    var grabbedHeight by remember { mutableStateOf(64.dp) }
     var dragging by remember { mutableStateOf<String?>(null) }
     var transaction by remember { mutableStateOf<ActionDragDraft?>(null) }
     var pointer by remember { mutableStateOf(Offset.Zero) }
@@ -188,6 +202,12 @@ fun MoreActionsView() {
                 if(id != null) {
                     transaction = ActionDragDraft(latestDraft)
                     dragging = id
+                    bounds[id]?.let { rect ->
+                        grabOffset = pointer - rect.topLeft
+                        grabbedWidth = with(density) { rect.width.toDp() }
+                        grabbedHeight = with(density) { rect.height.toDp() }
+                    }
+                    rootView.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
                     overHidden = false
                 }
             },
@@ -211,6 +231,7 @@ fun MoreActionsView() {
             onDragEnd = {
                 dragging?.let { if(overHidden) transaction?.hide(it) }
                 val completed = transaction?.drop()
+                if(dragging != null) rootView.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
                 dragging = null; transaction = null; overHidden = false
                 if(completed != null) persist(completed)
             },
@@ -238,7 +259,7 @@ fun MoreActionsView() {
     }
     val tileModifier: @Composable (String, Boolean) -> Modifier = { id, inBar ->
         DisposableEffect(id, hiddenOpen) { onDispose { bounds.remove(id) } }
-        Modifier.alpha(if(dragging == id) 0.55f else 1f)
+        Modifier.alpha(if(dragging == id) 0f else 1f)
             .onGloballyPositioned {
                 val rect = it.boundsInRoot()
                 bounds[id] = if(inBar) rect else gridBounds?.intersect(rect) ?: Rect.Zero
@@ -250,7 +271,8 @@ fun MoreActionsView() {
                 }
             }
     }
-    Column(Modifier.onGloballyPositioned { rootOrigin = it.boundsInRoot().topLeft }.then(dragModifier)) {
+    Box(Modifier.onGloballyPositioned { rootOrigin = it.boundsInRoot().topLeft }.then(dragModifier)) {
+    Column {
         Row(Modifier.fillMaxWidth().height(org.futo.inputmethod.latin.uix.ToolbarRowHeight), verticalAlignment = Alignment.CenterVertically) {
             toolbarIds.forEach { id ->
                 androidx.compose.runtime.key(id) {
@@ -261,17 +283,23 @@ fun MoreActionsView() {
                 }
             }
             Box(Modifier.weight(1f).fillMaxHeight().clickable { manager?.activateAction(MoreActionsAction) }, contentAlignment = Alignment.Center) {
-                Icon(painterResource(R.drawable.more_horizontal), contentDescription = "More", tint = LocalKeyboardScheme.current.onKeyboardContainer)
+                org.futo.inputmethod.latin.uix.WrenMoreIcon(active = true, modifier = Modifier.size(24.dp))
             }
         }
-        if(hiddenOpen) TextButton(onClick = { hiddenOpen = false }) { Text("Back") }
-        LazyVerticalGrid(state = gridState, userScrollEnabled = dragging == null, columns = GridCells.Fixed(4), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp),
+        if(hiddenOpen) Text(stringResource(R.string.wren18_hidden), modifier = Modifier.padding(8.dp))
+        LazyVerticalGrid(state = gridState, userScrollEnabled = dragging == null, columns = GridCells.FixedSize(80.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp),
             modifier = Modifier.fillMaxWidth().heightIn(max = 304.dp).padding(8.dp).onGloballyPositioned { gridBounds = it.boundsInRoot() }) {
             items(boxIds, key = { it }) { id ->
                 val action = AllActionsMap[id]!!
-                ActionItem(action, tileModifier(id, false).clickable {
-                    if(hiddenOpen) persist(draft.show(id, draft.visible.size)) else manager?.activateAction(action)
-                }, dragIcon = !hiddenOpen)
+                Box {
+                    ActionItem(action, tileModifier(id, false).clickable {
+                        if(hiddenOpen) persist(draft.show(id, draft.visible.size)) else manager?.activateAction(action)
+                    }, dragIcon = !hiddenOpen)
+                    if(hiddenOpen) androidx.compose.material3.IconButton(
+                        onClick = { persist(draft.show(id, draft.visible.size)) },
+                        modifier = Modifier.align(Alignment.TopEnd).size(32.dp)
+                    ) { Text("+", color = LocalKeyboardScheme.current.onKeyboardContainer, fontSize = 22.sp) }
+                }
             }
             if(!hiddenOpen) item(key = "hidden-destination") {
                 DisposableEffect(Unit) { onDispose { bounds.remove("hidden-destination") } }
@@ -290,17 +318,26 @@ fun MoreActionsView() {
             }
         }
     }
+    dragging?.let { id ->
+        AllActionsMap[id]?.let { action ->
+            Box(Modifier.offset { IntOffset((pointer.x - rootOrigin.x - grabOffset.x).roundToInt(), (pointer.y - rootOrigin.y - grabOffset.y).roundToInt()) }
+                .width(grabbedWidth).height(grabbedHeight).zIndex(10f)) {
+                ActionItem(action, dragIcon = true)
+            }
+        }
+    }
+    }
 }
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun ActionsEditor(header: @Composable () -> Unit) {
-    MoreActionsView()
+fun ActionsEditor(setNestedBack: ((() -> Boolean)?) -> Unit = {}, header: @Composable () -> Unit) {
+    MoreActionsView(setNestedBack)
 }
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun ActionEditor() {
+fun ActionEditor(setNestedBack: ((() -> Boolean)?) -> Unit = {}) {
     Surface(
         modifier = Modifier
             .fillMaxWidth()
@@ -309,7 +346,7 @@ fun ActionEditor() {
         contentColor = LocalKeyboardScheme.current.onSurface,
         shape = RoundedCornerShape(32.dp, 32.dp, 0.dp, 0.dp)
     ) {
-        ActionsEditor {
+        ActionsEditor(setNestedBack) {
             ScreenTitle(title = stringResource(R.string.action_editor_edit_actions))
         }
     }
@@ -323,6 +360,8 @@ val MoreActionsAction = Action(
     shownInEditor = false,
     windowImpl = { manager, _ ->
         object : ActionWindow() {
+            private var nestedBack: (() -> Boolean)? = null
+            override fun navigateBack(): Boolean = nestedBack?.invoke() ?: false
             override val showTitleBar = false
             @Composable
             override fun windowName(): String = stringResource(id = R.string.action_more_actions_title)
@@ -330,7 +369,7 @@ val MoreActionsAction = Action(
             @Composable
             override fun WindowContents(keyboardShown: Boolean) {
                 Column {
-                    MoreActionsView()
+                    MoreActionsView { nestedBack = it }
                 }
             }
 
