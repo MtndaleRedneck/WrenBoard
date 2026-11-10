@@ -4,6 +4,8 @@ import android.content.Context
 import android.graphics.Rect
 import android.util.Log
 import androidx.compose.ui.unit.Dp
+import org.futo.inputmethod.latin.uix.theme.getThemeOption
+import org.futo.inputmethod.latin.uix.theme.orDefault
 import org.futo.inputmethod.keyboard.KeyConsts
 import org.futo.inputmethod.keyboard.internal.KeyboardLayoutElement
 import org.futo.inputmethod.keyboard.internal.KeyboardLayoutKind
@@ -153,7 +155,7 @@ data class LayoutEngine(
             keyboard.rowHeightMode == RowHeightMode.FillHeight
 
     // Pumpkin draws its own outer margins; preserve other themes' layout gap.
-    private val pumpkinTheme = context.getSettingBlocking(org.futo.inputmethod.latin.uix.THEME_KEY).let { it.isEmpty() || it == "WrenBoard" }
+    private val pumpkinTheme = getThemeOption(context, context.getSettingBlocking(org.futo.inputmethod.latin.uix.THEME_KEY)).orDefault(context).key == "WrenBoard"
     private val horizontalGapPx = if(pumpkinTheme) 0f else horizontalGap.value * density
     private val verticalGapPx = if(pumpkinTheme) 0f else verticalGap.value * density
     private val rowHeightPx = computeRowHeight()

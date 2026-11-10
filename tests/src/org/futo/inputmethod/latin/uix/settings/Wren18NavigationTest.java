@@ -66,6 +66,25 @@ public class Wren18NavigationTest {
         float y=0.21f+(count/4)*0.094f;
         device.click(Math.round(device.getDisplayWidth()*x),Math.round(device.getDisplayHeight()*y));
     }
+    private android.graphics.Point copyCenter(UiDevice device, String label, boolean toolbar) {
+        java.util.List<UiObject2> copies = device.findObjects(By.desc(label));
+        assertTrue("Expected toolbar and grid copies of " + label, copies.size() >= 2);
+        copies.sort((a,b) -> Integer.compare(a.getVisibleCenter().y,b.getVisibleCenter().y));
+        return copies.get(toolbar ? 0 : 1).getVisibleCenter();
+    }
+    private void drag(UiDevice device, android.graphics.Point start, android.graphics.Point end, File screenshot) {
+        android.app.Instrumentation inst = InstrumentationRegistry.getInstrumentation();
+        long down = SystemClock.uptimeMillis();
+        inst.sendPointerSync(android.view.MotionEvent.obtain(down,down,android.view.MotionEvent.ACTION_DOWN,start.x,start.y,0));
+        SystemClock.sleep(750);
+        for(int i=1;i<=20;i++) {
+            inst.sendPointerSync(android.view.MotionEvent.obtain(down,SystemClock.uptimeMillis(),android.view.MotionEvent.ACTION_MOVE,start.x+(end.x-start.x)*i/20f,start.y+(end.y-start.y)*i/20f,0));
+            SystemClock.sleep(35);
+            if(i==15) assertTrue(device.takeScreenshot(screenshot));
+        }
+        inst.sendPointerSync(android.view.MotionEvent.obtain(down,SystemClock.uptimeMillis(),android.view.MotionEvent.ACTION_UP,end.x,end.y,0));
+        SystemClock.sleep(700);
+    }
     private int changedPixels(android.graphics.Bitmap a, android.graphics.Bitmap b) {
         int changed=0;
         // Inspect content, excluding clock/nav and animated more icon.
@@ -156,6 +175,16 @@ public class Wren18NavigationTest {
             org.futo.inputmethod.latin.uix.actions.UnifiedActionsKt.readUnifiedActions(activity);
         assertFalse("Completed finger drag must persist a new order",oldOrder.visible.equals(reordered.visible));
         assertTrue(device.takeScreenshot(new File(out,"drag_end.png")));
+        // Both copies of the first six actions must retain independent hit regions.
+        java.util.List<String> beforeBar = new java.util.ArrayList<>(reordered.visible);
+        drag(device, copyCenter(device,"Emojis",true), copyCenter(device,"Clipboard",true), new File(out,"drag_bar_start.png"));
+        org.futo.inputmethod.latin.uix.actions.OrderedActionIds afterBar = org.futo.inputmethod.latin.uix.actions.UnifiedActionsKt.readUnifiedActions(activity);
+        assertFalse("Drag starting on toolbar must reorder persistently",beforeBar.equals(afterBar.visible));
+        java.util.List<String> beforeDrop = new java.util.ArrayList<>(afterBar.visible);
+        drag(device, copyCenter(device,"Emojis",false), copyCenter(device,"Clipboard",true), new File(out,"drag_bar_drop.png"));
+        reordered = org.futo.inputmethod.latin.uix.actions.UnifiedActionsKt.readUnifiedActions(activity);
+        assertFalse("Grid drag dropping on toolbar must reorder persistently",beforeDrop.equals(reordered.visible));
+        assertTrue(device.takeScreenshot(new File(out,"drag_bar_end.png")));
         // The Hidden destination stays last and its + restores one action persistently.
         openHidden(activity,device);
         SystemClock.sleep(500);

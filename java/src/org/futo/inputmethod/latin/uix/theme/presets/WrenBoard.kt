@@ -163,10 +163,10 @@ private class WrenKeyDrawable(
 
     override fun setAlpha(alpha: Int) {
         fillPaint.alpha = alpha; haloPaint.alpha = alpha * 0x40 / 255
-        outlinePaint.alpha = alpha; highlightPaint.alpha = alpha
+        outlinePaint.alpha = alpha; highlightPaint.alpha = alpha; sidePaint.alpha = alpha
     }
     override fun setColorFilter(colorFilter: android.graphics.ColorFilter?) {
-        fillPaint.colorFilter = colorFilter; outlinePaint.colorFilter = colorFilter; highlightPaint.colorFilter = colorFilter
+        fillPaint.colorFilter = colorFilter; outlinePaint.colorFilter = colorFilter; highlightPaint.colorFilter = colorFilter; sidePaint.colorFilter = colorFilter
     }
     @Deprecated("Deprecated in Java")
     override fun getOpacity(): Int = android.graphics.PixelFormat.TRANSLUCENT
