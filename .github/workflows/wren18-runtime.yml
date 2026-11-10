@@ -1,5 +1,8 @@
 name: wren18-runtime
 on:
+  push:
+    branches: [wrenboard-1.8-partial]
+    paths: [.github/workflows/wren18-runtime.yml]
   workflow_dispatch:
 permissions:
   contents: read
