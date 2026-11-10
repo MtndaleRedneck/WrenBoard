@@ -53,10 +53,30 @@ ffmpeg -hide_banner -loglevel error -i "$OUT/more-open-close.mp4" -vf fps=20 "$O
 adb shell am broadcast -a "$PKG.WBDBG" -p "$PKG" --es cmd dsbool:wren_clipboard_on_123=false >/dev/null
 sleep 2
 adb exec-out screencap -p > "$OUT/clipboard123_off.png"
+# 420dpi geom from the actual candidate: 123 center=(54,2000), 108x145.
+adb shell input swipe 54 2000 54 2000 900
+sleep 1
+adb exec-out screencap -p > "$OUT/clipboard123_off_longpress.png"
+# A normal tap must still switch to symbols while clipboard is disabled.
+adb shell input tap 54 2000
+sleep 1
+adb exec-out screencap -p > "$OUT/clipboard123_off_symbols.png"
+adb shell input tap 54 2000
+sleep 1
 adb shell am broadcast -a "$PKG.WBDBG" -p "$PKG" --es cmd dsbool:wren_clipboard_on_123=true >/dev/null
 adb shell am broadcast -a "$PKG.WBDBG" -p "$PKG" --es cmd dsbool:wren_clipboard_strip=true >/dev/null
 sleep 2
 adb exec-out screencap -p > "$OUT/clipboard_strip_on.png"
+adb shell input swipe 54 2000 54 2000 900
+sleep 1
+adb exec-out screencap -p > "$OUT/clipboard123_on_longpress.png"
+adb shell input keyevent KEYCODE_BACK
+sleep 1
+adb shell input tap 1030 1300
+sleep 1
+adb exec-out screencap -p > "$OUT/clipboard_strip_open.png"
+adb shell input keyevent KEYCODE_BACK
+sleep 1
 # Independent density samples expose the real sizing formula. They do not calibrate the owner's phone.
 for DPI in 450 480; do
  adb shell wm density "$DPI"
