@@ -84,7 +84,7 @@ jobs:
       - name: Verify signed candidate and encrypt review copy
         env:
           REVIEWER_RECIPIENT: age14glqdym3cnvmqzdzmdd02gkppqwg0epmug0040d99juja2ct856s3mcxqa
-          AGE_RECIPIENT: age10y8z2hrk99pat4as2c0fffp6svqsjql98x0qcun02dsljvs3uvvs8cvnx6
+          AGE_RECIPIENT: age14cscd703nawga7nrf93pgxjrs338avtjh75zx0dma6yddetvkucqx70gjy
           EXPECTED_CERT_SHA256: ad41ab713027aca87389019721d102d67cacaae349cc625aa14f76240801f7fc
         run: |
           set -euo pipefail
