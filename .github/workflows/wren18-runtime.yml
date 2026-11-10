@@ -72,6 +72,15 @@ jobs:
           shutil.copyfile(next(iter(tests.values())), 'w17-tests.apk')
           print('Resolved full app and test APKs',list(app.values()),list(tests.values()))
           PYAPK
+      - name: Preserve fixture APKs and tests
+        uses: actions/upload-artifact@v4
+        with:
+          name: wren18-debug-fixture
+          path: |
+            w17-debug.apk
+            w17-tests.apk
+            build/test-results/
+          retention-days: 3
       - name: Install screenshot text locator
         run: sudo apt-get update -q && sudo apt-get install -y -q tesseract-ocr
       - name: Enable KVM
