@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Toolbar smiley, v4: same design as ic_emoji_key, drawn at 20dp. Ring and eyes kept from v3. Smile v4: traced from SwiftKey Pumpkin's emoji key (run6 k01, 3 px/dp): ends at 14.1/39.9, bottom of curve at 39.7, tapered stroke 3.2 units at the middle to 1.1 at the ends, flat ends. Original drawing; no SwiftKey artwork. -->
+<!-- Toolbar smiley, v4: same design as ic_emoji_key, drawn at 20dp. Ring and eyes kept from v3. Smile v4: proportions measured; original drawing (run6 k01, 3 px/dp): ends at 14.1/39.9, bottom of curve at 39.7, tapered stroke 3.2 units at the middle to 1.1 at the ends, flat ends. Original drawing; no SwiftKey artwork. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="20dp" android:height="20dp"
     android:viewportWidth="54" android:viewportHeight="54">

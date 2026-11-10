@@ -3,6 +3,8 @@ package org.futo.inputmethod.latin.uix.actions
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.offset
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.zIndex
 import androidx.compose.ui.unit.IntOffset
 import kotlin.math.roundToInt
@@ -204,13 +206,14 @@ fun MoreActionsView(setNestedBack: ((() -> Boolean)?) -> Unit = {}) {
         detectDragGesturesAfterLongPress(
             onDragStart = { offset ->
                 pointer = latestRoot + offset
-                val id = if(latestHidden) null else bounds.entries.firstOrNull {
-                    it.key in currentVisible && it.value.contains(pointer)
-                }?.key
+                val hit = if(latestHidden) null else bounds.entries.firstOrNull {
+                    it.key.substringAfter(':', "") in currentVisible && it.value.contains(pointer)
+                }
+                val id = hit?.key?.substringAfter(':')
                 if(id != null) {
                     transaction = ActionDragDraft(latestDraft)
                     dragging = id
-                    bounds[id]?.let { rect ->
+                    hit?.value?.let { rect ->
                         grabOffset = pointer - rect.topLeft
                         grabbedWidth = with(density) { rect.width.toDp() }
                         grabbedHeight = with(density) { rect.height.toDp() }
@@ -226,8 +229,8 @@ fun MoreActionsView(setNestedBack: ((() -> Boolean)?) -> Unit = {}) {
                     overHidden = bounds["hidden-destination"]?.contains(pointer) == true
                     if(!overHidden) {
                         val target = bounds.entries.firstOrNull {
-                            it.key in currentVisible && it.key != dragging && it.value.contains(pointer)
-                        }?.key
+                            it.key.substringAfter(':', "") in currentVisible && it.key.substringAfter(':') != dragging && it.value.contains(pointer)
+                        }?.key?.substringAfter(':')
                         val index = latestDraft.visible.indexOf(target)
                         if(index >= 0) {
                             transaction?.move(dragging!!, index)
@@ -251,13 +254,14 @@ fun MoreActionsView(setNestedBack: ((() -> Boolean)?) -> Unit = {}) {
         )
     }
     // Hidden stays the last item. Edge scrolling brings it into reach during long drags.
-    LaunchedEffect(dragging, pointer) {
+    val latestPointer by rememberUpdatedState(pointer)
+    LaunchedEffect(dragging) {
         while(dragging != null) {
             val rect = gridBounds
-            if(rect != null && rect.contains(pointer) && !overHidden) {
+            if(rect != null && rect.contains(latestPointer) && !overHidden) {
                 val amount = when {
-                    pointer.y > rect.bottom - edgeZone -> scrollStep
-                    pointer.y < rect.top + edgeZone -> -scrollStep
+                    latestPointer.y > rect.bottom - edgeZone -> scrollStep
+                    latestPointer.y < rect.top + edgeZone -> -scrollStep
                     else -> 0f
                 }
                 if(amount != 0f) gridState.scroll { scrollBy(amount) }
@@ -266,11 +270,12 @@ fun MoreActionsView(setNestedBack: ((() -> Boolean)?) -> Unit = {}) {
         }
     }
     val tileModifier: @Composable (String, Boolean) -> Modifier = { id, inBar ->
-        DisposableEffect(id, hiddenOpen) { onDispose { bounds.remove(id) } }
+        val slotKey = (if(inBar) "bar:" else "grid:") + id
+        DisposableEffect(slotKey, hiddenOpen) { onDispose { bounds.remove(slotKey) } }
         Modifier.alpha(if(dragging == id) 0f else 1f)
             .onGloballyPositioned {
                 val rect = it.boundsInRoot()
-                bounds[id] = if(inBar) rect else gridBounds?.intersect(rect) ?: Rect.Zero
+                bounds[slotKey] = if(inBar) rect else gridBounds?.intersect(rect) ?: Rect.Zero
                 if(inBar && org.futo.inputmethod.latin.BuildConfig.DEBUG) {
                     val action = AllActionsMap[id]!!
                     val name = if(action == org.futo.inputmethod.latin.uix.actions.clipboard.ClipboardHistoryAction) context.getString(R.string.wren_home_clipboard) else context.getString(action.name)
@@ -312,7 +317,8 @@ fun MoreActionsView(setNestedBack: ((() -> Boolean)?) -> Unit = {}) {
                         onClick = { persist(draft.show(id, draft.visible.size)) },
                         modifier = Modifier.align(Alignment.TopEnd).size(32.dp)
                     ) { Box(Modifier.size(22.dp).drawBehind { drawCircle(Color(0xFFFF8710)) }, contentAlignment = Alignment.Center) {
-                        Text("+", color = Color(0xFF303030), fontSize = 20.sp)
+                        val restoreLabel = stringResource(R.string.wren18_restore, stringResource(action.name))
+                        Text("+", color = Color(0xFF303030), fontSize = 20.sp, modifier = Modifier.semantics { contentDescription = restoreLabel })
                     } }
                 }
             }
@@ -327,7 +333,7 @@ fun MoreActionsView(setNestedBack: ((() -> Boolean)?) -> Unit = {}) {
                         .clickable { hiddenOpen = true }) {
                     Column(Modifier.fillMaxSize().padding(6.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.SpaceEvenly) {
                         Icon(painterResource(R.drawable.visibility_off), contentDescription = null, tint = labelColor, modifier = Modifier.size(26.dp))
-                        Text(if(overHidden) "Drop to hide" else "Hidden (" + draft.hidden.count { AllActionsMap[it]?.shownInEditor == true } + ")", color = labelColor, fontSize = 12.sp, maxLines = 1)
+                        Text(if(overHidden) stringResource(R.string.wren18_drop_to_hide) else stringResource(R.string.wren18_hidden) + " (" + draft.hidden.count { AllActionsMap[it]?.shownInEditor == true } + ")", color = labelColor, fontSize = 12.sp, maxLines = 1)
                     }
                 }
             }

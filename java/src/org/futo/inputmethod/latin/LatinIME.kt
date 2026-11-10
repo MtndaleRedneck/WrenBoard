@@ -54,6 +54,7 @@ import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -480,7 +481,7 @@ class LatinIME : InputMethodServiceCompose(), LatinIMELegacy.SuggestionStripCont
 
         // Regenerate keyboard ids when the optional 123 long-press is changed.
         launchJob {
-            getSettingFlow(org.futo.inputmethod.latin.settings.ClipboardOn123Setting).collect {
+            getSettingFlow(org.futo.inputmethod.latin.settings.ClipboardOn123Setting).drop(1).collect {
                 latinIMELegacy.loadSettings()
                 invalidateKeyboard(true)
             }
