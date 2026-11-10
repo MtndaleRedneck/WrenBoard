@@ -38,11 +38,20 @@ sleep 2
 adb shell input tap 400 500
 sleep 3
 sleep 4
+# A slow emulator may focus the editor before the freshly installed IME is ready.
+# Retry focus only; missing keyboard geometry remains a failed runtime check.
+for attempt in $(seq 1 8); do
+ adb shell input tap 400 500
+ adb shell input keyevent KEYCODE_WAKEUP
+ sleep 3
+ adb shell am broadcast -a "$PKG.WBDBG" -p "$PKG" --es cmd geom >/dev/null
+ sleep 1
+ adb logcat -d -s WBDBG:I > "$OUT/period-geometry.txt"
+ if python3 tools/wb12_kv.py "$OUT/period-geometry.txt" xy KEY label . > "$OUT/period-coordinates"; then break; fi
+ adb shell am start -W -n com.wrenboard.imetarget/.TestInput >/dev/null
+ adb shell ime set "$IME"
+done
 adb exec-out screencap -p > "$OUT/keyboard.png"
-adb shell am broadcast -a "$PKG.WBDBG" -p "$PKG" --es cmd geom >/dev/null
-sleep 1
-adb logcat -d -s WBDBG:I > "$OUT/period-geometry.txt"
-python3 tools/wb12_kv.py "$OUT/period-geometry.txt" xy KEY label . > "$OUT/period-coordinates"
 read -r PX PY < "$OUT/period-coordinates"
 adb shell input motionevent DOWN "$PX" "$PY"
 sleep 1
