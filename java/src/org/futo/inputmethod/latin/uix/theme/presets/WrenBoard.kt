@@ -179,7 +179,7 @@ private fun dpPx(context: android.content.Context, v: Float) =
 private const val KeyRadiusDp = 5.0f
 
 /** Approved Pumpkin face: #3D3D3D to #020202 at 95%, white hints. */
-private fun letterKey(context: android.content.Context) = WrenKeyDrawable(
+fun letterKey(context: android.content.Context) = WrenKeyDrawable(
     0xF23D3D3D.toInt(), 0xF2020202.toInt(), 0xF2000000.toInt(), 0xF6777777.toInt(), true,
     dpPx(context, KeyRadiusDp), context.resources.displayMetrics)
 

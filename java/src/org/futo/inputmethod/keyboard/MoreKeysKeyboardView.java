@@ -108,24 +108,37 @@ public class MoreKeysKeyboardView extends KeyboardView implements MoreKeysPanel 
         final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
         paint.setColor(0xFF333333);
         canvas.drawRoundRect(0, 0, getWidth(), getHeight(), 5*dp, 5*dp, paint);
-        final float top = 3*dp, bottom = getHeight()-3*dp;
+        paint.setStyle(Paint.Style.STROKE);
+        paint.setStrokeWidth(getWidth() * (3f / 405f));
+        paint.setColor(0xFFBBBBBB);
+        canvas.drawRoundRect(dp/2, dp/2, getWidth()-dp/2, getHeight()-dp/2, 5*dp, 5*dp, paint);
+        paint.setStyle(Paint.Style.FILL);
+        final float top = getHeight()*(12f/299f), bottom = getHeight()*(287f/299f);
         for (final Key key : keyboard.getSortedKeys()) {
             final float left = getPaddingLeft()+key.getX();
             final float right = left+key.getWidth();
             if (key == mCurrentKey) {
-                paint.setColor(0xFF4E4E4E);
-                canvas.drawRoundRect(left, top, right, bottom, 5*dp, 5*dp, paint);
+                paint.setShader(new android.graphics.LinearGradient(0, top, 0, bottom,
+                        0xFF5D5D5D, 0xFF373737, android.graphics.Shader.TileMode.CLAMP));
+                float inset = (right-left)*0.05f;
+                canvas.drawRoundRect(left+inset, top, right-inset, bottom, 5*dp, 5*dp, paint);
+                paint.setShader(null);
+                paint.setColor(0xFF181818);
+                paint.setStyle(Paint.Style.STROKE);
+                paint.setStrokeWidth(dp*0.5f);
+                canvas.drawRoundRect(left+inset, top, right-inset, bottom, 5*dp, 5*dp, paint);
+                paint.setStyle(Paint.Style.FILL);
             }
             paint.setColor(0xFFFF8710);
             paint.setTypeface(android.graphics.Typeface.DEFAULT);
             // The approved reference specifies visible glyph height, not a font-scale guess.
-            paint.setTextSize(31*dp);
+            paint.setTextSize((getHeight()/299f) * 96f);
             paint.setTextAlign(Paint.Align.CENTER);
             final String label = key.getLabel();
             if (label != null) {
                 final Rect ink = new Rect();
                 paint.getTextBounds(label, 0, label.length(), ink);
-                canvas.drawText(label, (left+right)/2, (top+bottom-ink.top-ink.bottom)/2, paint);
+                canvas.drawText(label, (left+right)/2, getHeight() * (135f / 299f), paint);
             }
         }
     }
