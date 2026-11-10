@@ -92,9 +92,12 @@ sleep 1
 adb shell am broadcast -a "$PKG.WBDBG" -p "$PKG" --es cmd open:emoji >/dev/null
 sleep 3
 adb exec-out screencap -p > "$OUT/emoji_approved.png"
+adb shell input tap 255 2130
+sleep 3
+adb exec-out screencap -p > "$OUT/emoji_category.png"
 # Swipe the category pager: search row must remain on the next page.
 adb shell input swipe 950 1700 150 1700 450
-sleep 1
+sleep 3
 adb exec-out screencap -p > "$OUT/emoji_nextpage.png"
 adb shell input keyevent KEYCODE_BACK
 sleep 1

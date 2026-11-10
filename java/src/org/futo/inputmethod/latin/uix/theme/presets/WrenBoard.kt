@@ -189,7 +189,7 @@ private fun numberKey(context: android.content.Context) = WrenKeyDrawable(
     dpPx(context, KeyRadiusDp), context.resources.displayMetrics)
 
 /** Pressed face: #646464 to #373737 at 96%. */
-private fun pressedKey(context: android.content.Context, halo: Boolean = true) = WrenKeyDrawable(
+fun pressedKey(context: android.content.Context, halo: Boolean = true): android.graphics.drawable.Drawable = WrenKeyDrawable(
     0xF5646464.toInt(), 0xF5373737.toInt(), 0xCC000000.toInt(), 0xFF858585.toInt(), halo,
     dpPx(context, KeyRadiusDp), context.resources.displayMetrics)
 
