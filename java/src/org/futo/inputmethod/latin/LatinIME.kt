@@ -481,7 +481,8 @@ class LatinIME : InputMethodServiceCompose(), LatinIMELegacy.SuggestionStripCont
         // Regenerate keyboard ids when the optional 123 long-press is changed.
         launchJob {
             getSettingFlow(org.futo.inputmethod.latin.settings.ClipboardOn123Setting).collect {
-                recreateKeyboard()
+                latinIMELegacy.loadSettings()
+                invalidateKeyboard(true)
             }
         }
 

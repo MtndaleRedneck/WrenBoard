@@ -737,7 +737,8 @@ fun LazyItemScope.ActionItem(idx: Int, action: Action, onSelect: (Action) -> Uni
         if (swiftKeyIcons && action == MoreActionsAction) {
             val manager = LocalManager.current
             val active = !LocalInspectionMode.current && manager.getLatinIMEForDebug().uixManager.currWindowAction.value == MoreActionsAction
-            WrenMoreIcon(active, Modifier.size(24.dp))
+            val motion = manager.getLatinIMEForDebug().uixManager.moreClosePending
+            WrenMoreIcon(active, Modifier.size(24.dp), play = active || motion.value, onFinished = { if(!active) motion.value = false })
         } else {
             Icon(
                 // WrenBoard 1.6 (item 51): thin-outline toolbar artwork on key-styled themes (approved mock-up 01)
