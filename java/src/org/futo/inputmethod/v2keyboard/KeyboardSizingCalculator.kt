@@ -22,6 +22,8 @@ import kotlinx.serialization.encoding.Encoder
 import kotlinx.serialization.encoding.decodeStructure
 import kotlinx.serialization.encoding.encodeStructure
 import kotlinx.serialization.json.Json
+import org.futo.inputmethod.latin.uix.theme.getThemeOption
+import org.futo.inputmethod.latin.uix.theme.orDefault
 import org.futo.inputmethod.latin.FoldStateProvider
 import org.futo.inputmethod.latin.LatinIME
 import org.futo.inputmethod.latin.settings.SettingsValues
@@ -632,9 +634,12 @@ class KeyboardSizingCalculator(val context: Context, val uixManager: UixManager)
     }
 
     fun calculateSuggestionBarHeightDp(): Float {
-        // WrenBoard 1.3 (teardown item 8): 40dp read as too short vs SwiftKey's suggestion boxes.
-        return 46.0f
+        // Final teardown section 7, explicit owner height correction Nov 10.
+        return if(isPumpkinStrip()) 37.7f else 46.0f
     }
+
+    private fun isPumpkinStrip(): Boolean =
+        getThemeOption(context, context.getSettingBlocking(org.futo.inputmethod.latin.uix.THEME_KEY)).orDefault(context).key == "WrenBoard"
 
     fun calculateTotalActionBarHeightPx(): Int =
         when {
@@ -645,7 +650,7 @@ class KeyboardSizingCalculator(val context: Context, val uixManager: UixManager)
                     && (context.getSetting(OldStyleActionsBar) == false) ->
                 // SwiftKey parity (item 44): the toolbar row is 44.1 dp (ToolbarRowHeight) instead of a second
                 // 41 dp strip; keep the strip's 5 dp of slack on top of it.
-                dp(calculateSuggestionBarHeightDp() + 44.1f + (calculateSuggestionBarHeightDp() - 41.0f))
+                dp(calculateSuggestionBarHeightDp() + 44.1f + if(isPumpkinStrip()) 0f else (calculateSuggestionBarHeightDp() - 41.0f))
             else -> dp(calculateSuggestionBarHeightDp())
         }
 }
