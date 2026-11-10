@@ -739,8 +739,8 @@ public class KeyboardView extends View {
                     // 8.0 dp below the key top on a 52.6 dp row (pixel spec v1.1 item 68).
                     hintDrawable = getWrenClipboardHint();
                     final float rowScale = skPitch / (52.6f * skDensity);
-                    iconWidth = Math.round(hintDrawable.getIntrinsicWidth() * rowScale);
-                    iconHeight = Math.round(hintDrawable.getIntrinsicHeight() * rowScale);
+                    iconWidth = Math.round(hintDrawable.getIntrinsicWidth() * rowScale * 0.72f);
+                    iconHeight = Math.round(hintDrawable.getIntrinsicHeight() * rowScale * 0.72f);
                     hintX = (int)(centerX - iconWidth / 2.0f);
                     hintY = Math.round(skTop + (8.0f / 52.6f) * skPitch);
                 } else if ("action_voice_input".equals(key.getEffectiveHintIcon()) && getWrenMicHint() != null) {

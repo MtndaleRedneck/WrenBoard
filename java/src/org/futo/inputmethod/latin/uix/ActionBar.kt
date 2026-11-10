@@ -559,7 +559,7 @@ fun makeSuggestionLayout(words: SuggestedWords, blacklist: SuggestionBlacklist?,
 }
 
 @Composable
-fun RowScope.SuggestionItems(words: SuggestedWords, onClick: (i: Int) -> Unit, onLongClick: (i: Int) -> Unit) {
+fun RowScope.SuggestionItems(words: SuggestedWords, onClick: (i: Int) -> Unit, onLongClick: (i: Int) -> Unit, trailingSlot: (@Composable () -> Unit)? = null) {
     val layout = makeSuggestionLayout(
         words = words,
         blacklist = null,
@@ -623,7 +623,7 @@ fun RowScope.SuggestionItems(words: SuggestedWords, onClick: (i: Int) -> Unit, o
             forcePrimary = isKeyStyledTheme(), isEmoji = false, slotWeight = centreWeight)
         SuggestionSeparator()
         suggestionItem(null)
-        if (isKeyStyledTheme()) Spacer(Modifier.width(40.dp))
+        if (isKeyStyledTheme()) Box(Modifier.width(40.dp).fillMaxHeight(), contentAlignment = Alignment.Center) { trailingSlot?.invoke() }
         return
     }
 
@@ -644,7 +644,7 @@ fun RowScope.SuggestionItems(words: SuggestedWords, onClick: (i: Int) -> Unit, o
         } else {
             renderItem(candidates.firstOrNull { it.mWord != centreSuggestion?.mWord && it.mWord != left?.mWord }, rightWeight)
         }
-        Spacer(Modifier.width(40.dp))
+        Box(Modifier.width(40.dp).fillMaxHeight(), contentAlignment = Alignment.Center) { trailingSlot?.invoke() }
         return
     }
 
@@ -708,7 +708,7 @@ fun RowScope.SuggestionItems(words: SuggestedWords, onClick: (i: Int) -> Unit, o
 
     // SwiftKey strip (review item 3): 105px of empty space on the right at 1080px/420dpi
     if (isKeyStyledTheme() && !layout.isGestureBatch) {
-        Spacer(Modifier.width(40.dp))
+        Box(Modifier.width(40.dp).fillMaxHeight(), contentAlignment = Alignment.Center) { trailingSlot?.invoke() }
     }
 }
 
@@ -1121,8 +1121,14 @@ fun ActionBar(
                         } else if(quickClipState != null) {
                             QuickClipView(quickClipState, onQuickClipDismiss)
                         } else if (words != null) {
+                            val showStripClipboard = styledToolbar && org.futo.inputmethod.latin.uix.settings.useDataStoreValue(WrenClipboardStripSetting) && inlineSuggestions.isEmpty()
                             SuggestionItems(
                                 words,
+                                trailingSlot = if(showStripClipboard) ({
+                                    androidx.compose.material3.IconButton(onClick = { onActionActivated(ClipboardHistoryAction) }, modifier = Modifier.fillMaxSize()) {
+                                        Icon(painterResource(R.drawable.wren_tb_clipboard), contentDescription = stringResource(R.string.wren_home_clipboard), tint = LocalKeyboardScheme.current.onKeyboardContainer, modifier = Modifier.size(21.3.dp))
+                                    }
+                                }) else null,
                                 onClick = {
                                     suggestionStripListener.pickSuggestionManually(
                                         words.getInfo(it)
@@ -1142,7 +1148,7 @@ fun ActionBar(
                         }
 
                         if(inlineSuggestions.isEmpty()) {
-                            if (org.futo.inputmethod.latin.uix.settings.useDataStoreValue(WrenClipboardStripSetting)) {
+                            if (!styledToolbar && org.futo.inputmethod.latin.uix.settings.useDataStoreValue(WrenClipboardStripSetting)) {
                                 androidx.compose.material3.IconButton(onClick = { onActionActivated(ClipboardHistoryAction) }, modifier = Modifier.width(if(styledToolbar) 35.9.dp else 38.dp).fillMaxHeight()) {
                                     Icon(painterResource(R.drawable.wren_tb_clipboard), contentDescription = stringResource(R.string.wren_home_clipboard), tint = LocalKeyboardScheme.current.onKeyboardContainer, modifier = Modifier.size(21.3.dp))
                                 }
