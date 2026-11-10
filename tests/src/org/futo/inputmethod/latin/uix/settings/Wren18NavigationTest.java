@@ -59,6 +59,13 @@ public class Wren18NavigationTest {
         }
         fail("Control stayed stale " + selector);
     }
+    private void openHidden(SettingsActivity activity,UiDevice device) {
+        int count=org.futo.inputmethod.latin.uix.actions.UnifiedActionsKt.readUnifiedActions(activity).visible.size();
+        // Four compact columns at this 480dpi fixture, based on captured grid bounds.
+        float x=0.13f+(count%4)*0.245f;
+        float y=0.21f+(count/4)*0.094f;
+        device.click(Math.round(device.getDisplayWidth()*x),Math.round(device.getDisplayHeight()*y));
+    }
     private int changedPixels(android.graphics.Bitmap a, android.graphics.Bitmap b) {
         int changed=0;
         // Inspect content, excluding clock/nav and animated more icon.
@@ -111,7 +118,7 @@ public class Wren18NavigationTest {
         navigate(activity, "actionEdit");
         // Pixel-inspected 480dpi action editor: Hidden is fourth tile, second row.
         assertTrue(device.takeScreenshot(new File(out,"before_hidden.png")));
-        device.click(Math.round(device.getDisplayWidth()*0.865f), Math.round(device.getDisplayHeight()*0.305f));
+        openHidden(activity,device);
         SystemClock.sleep(600);
         assertTrue(device.takeScreenshot(new File(out, "hidden.png")));
         device.dumpWindowHierarchy(new File(out, "hidden.xml"));
@@ -143,7 +150,7 @@ public class Wren18NavigationTest {
         assertFalse("Completed finger drag must persist a new order",oldOrder.visible.equals(reordered.visible));
         assertTrue(device.takeScreenshot(new File(out,"drag_end.png")));
         // The Hidden destination stays last and its + restores one action persistently.
-        device.click(Math.round(device.getDisplayWidth()*0.865f),Math.round(device.getDisplayHeight()*0.305f));
+        openHidden(activity,device);
         SystemClock.sleep(500);
         device.click(Math.round(device.getDisplayWidth()*0.20f),Math.round(device.getDisplayHeight()*0.245f));
         SystemClock.sleep(600);
