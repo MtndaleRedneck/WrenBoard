@@ -16,6 +16,10 @@ import androidx.compose.runtime.LaunchedEffect
 import android.view.HapticFeedbackConstants
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.draw.shadow
 import androidx.compose.foundation.border
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.PathEffect
@@ -95,17 +99,19 @@ import sh.calvin.reorderable.rememberReorderableLazyGridState
 fun ActionItem(action: Action, modifier: Modifier = Modifier, dragIcon: Boolean = false, dragIconModifier: Modifier = Modifier, position: Int? = null, dimmed: Boolean = false) {
     val darkTiles = LocalKeyboardScheme.current.keyboardSurface.luminance() < 0.5f
     val tileLabel = if(darkTiles) Color(0xFFE6E6E6) else Color(0xFF262626)
-    val tileFill = LocalKeyboardScheme.current.keyboardContainer
+    val tileFill = if(darkTiles) Color(0xFF3B3B3B) else LocalKeyboardScheme.current.keyboardContainer
     Surface(color = tileFill,
         modifier = modifier
             .fillMaxWidth()
-            .height(64.dp),
-        shape = RoundedCornerShape(12.dp)
+            .height(64.dp)
+            .background(if(darkTiles) Brush.verticalGradient(listOf(Color(0xFF484848), Color(0xFF3B3B3B))) else Brush.verticalGradient(listOf(tileFill, tileFill)), RoundedCornerShape(8.dp)),
+        shape = RoundedCornerShape(8.dp)
     ) {
         CompositionLocalProvider(LocalContentColor provides LocalKeyboardScheme.current.onKeyboardContainer.copy(alpha = if(dimmed) 0.6f else 1f)) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
+                    .background(if(darkTiles) Brush.verticalGradient(listOf(Color(0xFF484848), Color(0xFF3B3B3B))) else Brush.verticalGradient(listOf(tileFill, tileFill)))
                     .padding(6.dp)
             ) {
 
@@ -273,9 +279,11 @@ fun MoreActionsView(setNestedBack: ((() -> Boolean)?) -> Unit = {}) {
                 }
             }
     }
-    Box(Modifier.onGloballyPositioned { rootOrigin = it.boundsInRoot().topLeft }.then(dragModifier)) {
+    val darkPanel = LocalKeyboardScheme.current.keyboardSurface.luminance() < 0.5f
+    val panelBrush = if(darkPanel) Brush.verticalGradient(listOf(Color(0xFF2E2E2E), Color(0xFF252525))) else Brush.verticalGradient(listOf(LocalKeyboardScheme.current.keyboardSurface, LocalKeyboardScheme.current.keyboardSurface))
+    Box(Modifier.background(panelBrush).onGloballyPositioned { rootOrigin = it.boundsInRoot().topLeft }.then(dragModifier)) {
     Column {
-        Row(Modifier.fillMaxWidth().height(org.futo.inputmethod.latin.uix.ToolbarRowHeight), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.fillMaxWidth().height(org.futo.inputmethod.latin.uix.ToolbarRowHeight).background(if(darkPanel) Color(0xFF3C3C3C) else LocalKeyboardScheme.current.keyboardContainer), verticalAlignment = Alignment.CenterVertically) {
             toolbarIds.forEach { id ->
                 androidx.compose.runtime.key(id) {
                     val action = AllActionsMap[id]!!
@@ -312,10 +320,10 @@ fun MoreActionsView(setNestedBack: ((() -> Boolean)?) -> Unit = {}) {
                 DisposableEffect(Unit) { onDispose { bounds.remove("hidden-destination") } }
                 val scheme = LocalKeyboardScheme.current
                 val labelColor = if(scheme.keyboardSurface.luminance() < 0.5f) Color(0xFFE0E0E0) else Color(0xFF252525)
-                Surface(color = if(overHidden) scheme.keyboardContainer else Color.Transparent, shape = RoundedCornerShape(12.dp),
+                Surface(color = if(overHidden) scheme.keyboardContainer else Color.Transparent, shape = RoundedCornerShape(8.dp),
                     modifier = Modifier.height(64.dp).fillMaxWidth()
                         .onGloballyPositioned { bounds["hidden-destination"] = it.boundsInRoot() }
-                        .drawBehind { drawRoundRect(labelColor.copy(alpha = 0.4f), cornerRadius = CornerRadius(12.dp.toPx()), style = Stroke(width = 1.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 3.dp.toPx())))) }
+                        .drawBehind { drawRoundRect(labelColor.copy(alpha = 0.4f), cornerRadius = CornerRadius(8.dp.toPx()), style = Stroke(width = 1.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 3.dp.toPx())))) }
                         .clickable { hiddenOpen = true }) {
                     Column(Modifier.fillMaxSize().padding(6.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.SpaceEvenly) {
                         Icon(painterResource(R.drawable.visibility_off), contentDescription = null, tint = labelColor, modifier = Modifier.size(26.dp))
@@ -328,7 +336,10 @@ fun MoreActionsView(setNestedBack: ((() -> Boolean)?) -> Unit = {}) {
     dragging?.let { id ->
         AllActionsMap[id]?.let { action ->
             Box(Modifier.offset { IntOffset((pointer.x - rootOrigin.x - grabOffset.x).roundToInt(), (pointer.y - rootOrigin.y - grabOffset.y).roundToInt()) }
-                .width(grabbedWidth).height(grabbedHeight).zIndex(10f)) {
+                .width(grabbedWidth).height(grabbedHeight).zIndex(10f)
+                .graphicsLayer { rotationZ = -4f }
+                .shadow(16.dp, RoundedCornerShape(8.dp))
+                .border(1.dp, Color(0xFFFF8710), RoundedCornerShape(8.dp))) {
                 ActionItem(action, dragIcon = false)
             }
         }

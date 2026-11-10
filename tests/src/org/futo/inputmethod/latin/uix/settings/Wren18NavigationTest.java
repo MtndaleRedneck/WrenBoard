@@ -38,7 +38,7 @@ public class Wren18NavigationTest {
         InstrumentationRegistry.getInstrumentation().runOnMainSync(() ->
             activity.getNavController().navigate(destination, null, null));
         waitRoute(activity, destination);
-        SystemClock.sleep(300);
+        SystemClock.sleep(1000);
     }
     private void clickFresh(UiDevice device, androidx.test.uiautomator.BySelector selector) {
         if(selector.toString().contains("Back")) {
