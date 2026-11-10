@@ -3,6 +3,9 @@ package org.futo.inputmethod.updates
 import android.content.Context
 import android.widget.Toast
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Box
+import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -208,13 +211,11 @@ fun WrenFeedbackCard(navController: NavHostController) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             // No hard line break: the text wraps on its own at any font size.
-            Text("Send feedback, report a bug, or suggest a feature", color = WrenFlat.Title, fontSize = 15.sp,
-                fontWeight = FontWeight.Bold, lineHeight = 20.sp, modifier = Modifier.weight(1f))
+            Text("Send feedback, report a bug, or suggest a feature", color = WrenFlat.Sub, fontSize = 13.sp,
+                fontWeight = FontWeight.Normal, lineHeight = 18.sp, modifier = Modifier.weight(1f))
             Spacer(Modifier.width(10.dp))
             Icon(painterResource(R.drawable.wren_set_ic_chevron), contentDescription = null, tint = WrenFlat.CardChevron, modifier = Modifier.size(22.dp))
         }
-        Spacer(Modifier.height(12.dp))
-        Text("You see exactly what is sent before you send it.", color = WrenFlat.CardSub, fontSize = 14.sp, lineHeight = 20.sp)
     }
 }
 
@@ -226,10 +227,11 @@ fun WrenUpdatesCard(navController: NavHostController) {
     val scope = rememberCoroutineScope()
     var checking by remember { mutableStateOf(false) }
     var result by rememberSaveable { mutableStateOf("") }
-    WrenBottomCard("Updates", titleGap = 22.dp) {
-        Spacer(Modifier.height(14.dp))
-        WrenOrangeButton(if (checking) "Checking\u2026" else "Check for updates", enabled = !checking) {
-            if (checking) return@WrenOrangeButton
+    WrenBottomCard("Updates", titleGap = 8.dp, titleAction = {
+        Box(Modifier.height(37.dp).clip(RoundedCornerShape(50))
+            .background(Color(0xFF4C3729)).border(1.dp, Color(0xFF7A4C22), RoundedCornerShape(50))
+            .clickable(enabled = !checking, role = Role.Button) {
+            if (checking) return@clickable
             checking = true
             result = ""
             scope.launch {
@@ -244,12 +246,14 @@ fun WrenUpdatesCard(navController: NavHostController) {
                     UpdateCheckOutcome.Unavailable -> result = "Couldn't check right now. Try again later."
                 }
             }
+        }.padding(horizontal = 19.dp), contentAlignment = Alignment.Center) {
+            Text(if(checking) "Checking..." else "Check for updates", color = WrenFlat.Orange, fontSize = 13.sp, fontWeight = FontWeight.Medium)
         }
-        Spacer(Modifier.height(10.dp))
+    }) {
         if (result.isNotEmpty()) {
-            Text(result, color = WrenFlat.CardSub, fontSize = 14.sp, lineHeight = 20.sp)
+            Text(result, color = WrenFlat.CardSub, fontSize = 13.sp, lineHeight = 18.sp)
             Spacer(Modifier.height(2.dp))
         }
-        Text("Version ${BuildConfig.VERSION_NAME}", color = WrenFlat.CardSub, fontSize = 14.sp, lineHeight = 20.sp)
+        Text("Version ${BuildConfig.VERSION_NAME}", color = WrenFlat.CardSub, fontSize = 13.sp, lineHeight = 18.sp)
     }
 }

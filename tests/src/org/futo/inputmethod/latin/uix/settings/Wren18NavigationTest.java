@@ -78,6 +78,13 @@ public class Wren18NavigationTest {
         SettingsActivity activity = activityRule.launchActivity(new Intent());
         waitRoute(activity, "home");
         UiDevice device = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation());
+        File homeOut = new File(InstrumentationRegistry.getTargetContext().getExternalFilesDir(null), "wren18-nav");
+        homeOut.mkdirs();
+        SystemClock.sleep(1000);
+        device.takeScreenshot(new File(homeOut,"home_top.png"));
+        device.swipe(device.getDisplayWidth()/2, Math.round(device.getDisplayHeight()*0.8f), device.getDisplayWidth()/2, Math.round(device.getDisplayHeight()*0.25f), 40);
+        SystemClock.sleep(1000);
+        device.takeScreenshot(new File(homeOut,"home_bottom.png"));
         Set<String> routes = new LinkedHashSet<>();
         routes.add("actionEdit");
         routes.add("wren_rich_input");
