@@ -1137,7 +1137,7 @@ fun ActionBar(
 
                         if(inlineSuggestions.isEmpty()) {
                             if (org.futo.inputmethod.latin.uix.settings.useDataStoreValue(WrenClipboardStripSetting)) {
-                                androidx.compose.material3.IconButton(onClick = { onActionActivated(ClipboardHistoryAction) }, modifier = Modifier.width(42.dp).fillMaxHeight()) {
+                                androidx.compose.material3.IconButton(onClick = { onActionActivated(ClipboardHistoryAction) }, modifier = Modifier.width(if(styledToolbar) 35.9.dp else 38.dp).fillMaxHeight()) {
                                     Icon(painterResource(R.drawable.wren_tb_clipboard), contentDescription = stringResource(R.string.wren_home_clipboard), tint = LocalKeyboardScheme.current.onKeyboardContainer, modifier = Modifier.size(21.3.dp))
                                 }
                             }

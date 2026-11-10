@@ -71,13 +71,7 @@ private val darkScheme = extendedDarkColorScheme(
     hintColor=Color(0xFFB0B0B0),
 )
 
-/**
- * WrenBoard key face, SwiftKey parity (pixel spec v1.1 items 24-34), built from dp so it renders the
- * same at every density: a 0.4 dp hairline halo of black at 25% just outside the outline, a 0.4 dp outline,
- * a vertical fill gradient, and a 0.4 dp inner highlight on a rounded rect inset 0.9 dp (radius 3.9 dp) that
- * wraps the corners and fades from full strength at the top to ~10% at the bottom. Every hairline is
- * rounded to at least one device pixel.
- */
+/** Original Pumpkin key drawing. Each cell owns its border, side rim and outer shadow. */
 private class WrenKeyDrawable(
     private val fillTop: Int,
     private val fillBottom: Int,
@@ -88,9 +82,14 @@ private class WrenKeyDrawable(
     dm: android.util.DisplayMetrics
 ) : android.graphics.drawable.Drawable() {
     private fun dp(v: Float, dm: android.util.DisplayMetrics) = v * dm.density
-    private val hair = Math.round(dp(0.4f, dm)).coerceAtLeast(1).toFloat()
-    private val highlightInset = dp(0.9f, dm)
-    private val highlightRadius = dp(3.9f, dm)
+    private val hair = dp(0.5f, dm).coerceAtLeast(1f)
+    private val marginX = dp(1.15f, dm)
+    private val marginY = dp(1.35f, dm)
+    private val highlightRadius = (radiusPx - hair).coerceAtLeast(0f)
+    private val sidePaint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+        style = android.graphics.Paint.Style.STROKE
+        strokeWidth = hair
+    }
 
     private val fillPaint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply { isDither = true }
     private val haloPaint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
@@ -111,10 +110,8 @@ private class WrenKeyDrawable(
     override fun draw(canvas: android.graphics.Canvas) {
         val b = bounds
         if (b.isEmpty) return
-        // The key body (outline's outer edge) sits one hairline inside the drawn rect so the halo fits.
-        val inset = if (halo) hair else 0f
-        val left = b.left + inset; val top = b.top + inset
-        val right = b.right - inset; val bottom = b.bottom - inset
+        val left = b.left + marginX; val top = b.top + marginY
+        val right = b.right - marginX; val bottom = b.bottom - marginY
 
         if (halo) {
             rect.set(left - hair / 2f, top - hair / 2f, right + hair / 2f, bottom + hair / 2f)
@@ -127,18 +124,33 @@ private class WrenKeyDrawable(
         rect.set(left, top, right, bottom)
         canvas.drawRoundRect(rect, radiusPx, radiusPx, fillPaint)
 
-        highlightColor?.let { c ->
-            val hl = left + highlightInset + hair / 2f
-            val ht = top + highlightInset + hair / 2f
-            val hr = right - highlightInset - hair / 2f
-            val hb = bottom - highlightInset - hair / 2f
-            if (hr > hl && hb > ht) {
-                val faded = (c and 0x00FFFFFF) or (0x1A shl 24) // ~10% at the bottom
-                highlightPaint.shader = android.graphics.LinearGradient(
-                    0f, ht, 0f, hb, c or (0xFF shl 24), faded, android.graphics.Shader.TileMode.CLAMP
-                )
+        // Draw the brighter side rim, then restore the face in the center. No bottom rim.
+        fun brighter(c: Int, gain: Float): Int = android.graphics.Color.argb(
+            android.graphics.Color.alpha(c),
+            (android.graphics.Color.red(c) * gain).toInt().coerceAtMost(255),
+            (android.graphics.Color.green(c) * gain).toInt().coerceAtMost(255),
+            (android.graphics.Color.blue(c) * gain).toInt().coerceAtMost(255))
+        val gain = if(fillTop == 0xF2555555.toInt()) 1.5f else 1.95f
+        sidePaint.shader = android.graphics.LinearGradient(0f, top, 0f, bottom,
+            brighter(fillTop, gain), fillBottom, android.graphics.Shader.TileMode.CLAMP)
+        val hl = left + hair * 1.5f
+        val ht = top + hair * 1.5f
+        val hr = right - hair * 1.5f
+        val hb = bottom - hair * 1.5f
+        if(hr > hl && hb > ht) {
+            val restore = canvas.save()
+            canvas.clipRect(left, top, right, bottom - radiusPx)
+            rect.set(hl, ht, hr, hb)
+            canvas.drawRoundRect(rect, highlightRadius, highlightRadius, sidePaint)
+            canvas.restoreToCount(restore)
+            highlightColor?.let { c ->
+                highlightPaint.color = c
+                highlightPaint.shader = null
+                val topOnly = canvas.save()
+                canvas.clipRect(left, top, right, top + radiusPx)
                 rect.set(hl, ht, hr, hb)
                 canvas.drawRoundRect(rect, highlightRadius, highlightRadius, highlightPaint)
+                canvas.restoreToCount(topOnly)
             }
         }
 
@@ -163,20 +175,20 @@ private class WrenKeyDrawable(
 private fun dpPx(context: android.content.Context, v: Float) =
     TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, v, context.resources.displayMetrics)
 
-// Key outline radius: SwiftKey 4.6-4.8 dp measured on the visible arc; 5.3 dp on our outline path renders it.
+// Approved outer key corner radius.
 private const val KeyRadiusDp = 5.0f
 
-/** Letter and functional keys (items 25-29): fill #3F3F3F -> #020202, outline black 95%, highlight #6D6D6D. */
+/** Approved Pumpkin face: #3D3D3D to #020202 at 95%, white hints. */
 private fun letterKey(context: android.content.Context) = WrenKeyDrawable(
-    0xF23D3D3D.toInt(), 0xF2020202.toInt(), 0xF2000000.toInt(), 0xFF777777.toInt(), true,
+    0xF23D3D3D.toInt(), 0xF2020202.toInt(), 0xF2000000.toInt(), 0xF6777777.toInt(), true,
     dpPx(context, KeyRadiusDp), context.resources.displayMetrics)
 
-/** Number-row keys (items 30-33): fill #595959 -> #212121, outline #212121 at 95%, highlight #7E7E7E. */
+/** Lighter number-row face, with the same original key shape. */
 private fun numberKey(context: android.content.Context) = WrenKeyDrawable(
     0xF2555555.toInt(), 0xF2212121.toInt(), 0xF2212121.toInt(), 0xF6888888.toInt(), true,
     dpPx(context, KeyRadiusDp), context.resources.displayMetrics)
 
-/** Pressed, all keys (item 34): fill #656565 -> #373737, highlight #858585, outline black ~80%. */
+/** Pressed face: #646464 to #373737 at 96%. */
 private fun pressedKey(context: android.content.Context, halo: Boolean = true) = WrenKeyDrawable(
     0xF5646464.toInt(), 0xF5373737.toInt(), 0xCC000000.toInt(), 0xFF858585.toInt(), halo,
     dpPx(context, KeyRadiusDp), context.resources.displayMetrics)

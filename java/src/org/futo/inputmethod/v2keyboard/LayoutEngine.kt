@@ -11,6 +11,7 @@ import org.futo.inputmethod.keyboard.internal.KeyboardParams
 import org.futo.inputmethod.keyboard.internal.isAlphabet
 import org.futo.inputmethod.latin.R
 import org.futo.inputmethod.latin.common.Constants
+import org.futo.inputmethod.latin.uix.getSettingBlocking
 import org.futo.inputmethod.latin.uix.DynamicThemeProvider
 import org.futo.inputmethod.latin.uix.actions.throwIfDebug
 import kotlin.math.floor
@@ -151,8 +152,10 @@ data class LayoutEngine(
             keyboard.id in setOf("symbols", "symbols_shift") &&
             keyboard.rowHeightMode == RowHeightMode.FillHeight
 
-    private val horizontalGapPx = (horizontalGap.value * density)
-    private val verticalGapPx = (verticalGap.value * density)
+    // Pumpkin draws its own outer margins; preserve other themes' layout gap.
+    private val pumpkinTheme = context.getSettingBlocking(org.futo.inputmethod.latin.uix.THEME_KEY).let { it.isEmpty() || it == "WrenBoard" }
+    private val horizontalGapPx = if(pumpkinTheme) 0f else horizontalGap.value * density
+    private val verticalGapPx = if(pumpkinTheme) 0f else verticalGap.value * density
     private val rowHeightPx = computeRowHeight()
     private val bottomRowHeightPx = when(keyboard.bottomRowHeightMode) {
         BottomRowHeightMode.Fixed -> layoutParams.standardRowHeight

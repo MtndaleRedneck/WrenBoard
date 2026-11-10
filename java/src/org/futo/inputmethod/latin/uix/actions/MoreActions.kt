@@ -152,7 +152,8 @@ fun ActionItem(action: Action, modifier: Modifier = Modifier, dragIcon: Boolean 
 @Composable
 @Preview(showBackground = true)
 fun MoreActionsView(setNestedBack: ((() -> Boolean)?) -> Unit = {}) {
-    val manager = if(LocalInspectionMode.current || org.futo.inputmethod.latin.uix.LocalNavController.current != null) null else LocalManager.current
+    val settingsNav = org.futo.inputmethod.latin.uix.LocalNavController.current
+    val manager = if(LocalInspectionMode.current || settingsNav != null) null else LocalManager.current
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val rootView = LocalView.current
@@ -164,7 +165,8 @@ fun MoreActionsView(setNestedBack: ((() -> Boolean)?) -> Unit = {}) {
         setNestedBack { if(hiddenState) { hiddenOpen = false; true } else false }
         onDispose { setNestedBack(null) }
     }
-    BackHandler(enabled = hiddenOpen) { hiddenOpen = false }
+    // The IME has no Activity back dispatcher. Its ActionWindow/host handles nested back.
+    if(settingsNav != null) BackHandler(enabled = hiddenOpen) { hiddenOpen = false }
     var grabOffset by remember { mutableStateOf(Offset.Zero) }
     var grabbedWidth by remember { mutableStateOf(80.dp) }
     var grabbedHeight by remember { mutableStateOf(64.dp) }
@@ -282,7 +284,11 @@ fun MoreActionsView(setNestedBack: ((() -> Boolean)?) -> Unit = {}) {
                     }
                 }
             }
-            Box(Modifier.weight(1f).fillMaxHeight().clickable { manager?.activateAction(MoreActionsAction) }, contentAlignment = Alignment.Center) {
+            Box(Modifier.weight(1f).fillMaxHeight().clickable {
+                if(hiddenOpen) hiddenOpen = false
+                else if(settingsNav != null) settingsNav.popBackStack()
+                else manager?.activateAction(MoreActionsAction)
+            }, contentAlignment = Alignment.Center) {
                 org.futo.inputmethod.latin.uix.WrenMoreIcon(active = true, modifier = Modifier.size(24.dp))
             }
         }
@@ -292,7 +298,7 @@ fun MoreActionsView(setNestedBack: ((() -> Boolean)?) -> Unit = {}) {
             items(boxIds, key = { it }) { id ->
                 val action = AllActionsMap[id]!!
                 Box {
-                    ActionItem(action, tileModifier(id, false).clickable {
+                    ActionItem(action, tileModifier(id, false).animateItem().clickable {
                         if(hiddenOpen) persist(draft.show(id, draft.visible.size)) else manager?.activateAction(action)
                     }, dragIcon = !hiddenOpen)
                     if(hiddenOpen) androidx.compose.material3.IconButton(
