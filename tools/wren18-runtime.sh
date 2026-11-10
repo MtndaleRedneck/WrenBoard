@@ -38,7 +38,7 @@ sleep 3
 sleep 4
 adb exec-out screencap -p > "$OUT/keyboard.png"
 adb shell am broadcast -a "$PKG.WBDBG" -p "$PKG" --es cmd geom >/dev/null
-adb shell screenrecord --time-limit 5 /sdcard/wren18-more.mp4 > "$OUT/screenrecord.txt" 2>&1 &
+adb shell screenrecord --time-limit 12 /sdcard/wren18-more.mp4 > "$OUT/screenrecord.txt" 2>&1 &
 RECORDER=$!
 sleep 1
 adb shell am broadcast -a "$PKG.WBDBG" -p "$PKG" --es cmd open:more >/dev/null

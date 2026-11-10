@@ -41,6 +41,11 @@ public class Wren18NavigationTest {
         SystemClock.sleep(300);
     }
     private void clickFresh(UiDevice device, androidx.test.uiautomator.BySelector selector) {
+        if(selector.toString().contains("Back")) {
+            // Actual captured top-bar pixels put the arrow here. Avoid cached accessibility nodes.
+            device.click(Math.round(device.getDisplayWidth()*0.065f), Math.round(device.getDisplayHeight()*0.059f));
+            return;
+        }
         for(int attempt=0;attempt<5;attempt++) {
             try {
                 UiObject2 object=device.findObject(selector);
