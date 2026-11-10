@@ -106,12 +106,15 @@ public class Wren18NavigationTest {
         clickFresh(device, By.textStartsWith("Hidden (")); SystemClock.sleep(300);
         assertTrue(device.takeScreenshot(new File(out, "hidden.png")));
         device.dumpWindowHierarchy(new File(out, "hidden.xml"));
-        assertNotNull(device.findObject(By.text("Hidden")));
+        String hiddenXml = new String(java.nio.file.Files.readAllBytes(new File(out,"hidden.xml").toPath()), java.nio.charset.StandardCharsets.UTF_8);
+        assertTrue("Hidden screen heading in fresh hierarchy", hiddenXml.contains("text=\"Hidden\""));
         UiObject2 hiddenBack = device.findObject(By.desc("Back"));
         assertNotNull("Hidden in-app back arrow", hiddenBack);
         clickFresh(device, By.desc("Back")); SystemClock.sleep(300);
         waitRoute(activity, "actionEdit");
-        assertNull("Nested Hidden Back must return to actions", device.findObject(By.text("Hidden")));
+        device.dumpWindowHierarchy(new File(out,"hidden_back.xml"));
+        String returnedXml = new String(java.nio.file.Files.readAllBytes(new File(out,"hidden_back.xml").toPath()), java.nio.charset.StandardCharsets.UTF_8);
+        assertFalse("Nested Hidden Back must return to actions", returnedXml.contains("text=\"Hidden\""));
         device.pressBack(); waitRoute(activity, "wren_toolbar");
         device.pressBack(); waitRoute(activity, "wren_rich_input");
         device.pressBack(); waitRoute(activity, "home");
