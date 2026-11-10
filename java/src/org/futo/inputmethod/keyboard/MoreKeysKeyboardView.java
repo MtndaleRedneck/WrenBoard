@@ -58,6 +58,7 @@ public class MoreKeysKeyboardView extends KeyboardView implements MoreKeysPanel 
     private int mActivePointerId;
 
     private final float sideAllowance;
+    private int originalPaddingLeft, originalPaddingTop, originalPaddingRight, originalPaddingBottom;
 
     protected MoreKeysKeyboardAccessibilityDelegate mAccessibilityDelegate;
 
@@ -80,6 +81,8 @@ public class MoreKeysKeyboardView extends KeyboardView implements MoreKeysPanel 
         sideAllowance = getResources().getDimension(
                 R.dimen.config_more_keys_keyboard_slide_allowance);
         mKeyDetector = new MoreKeysDetector(sideAllowance);
+        originalPaddingLeft = getPaddingLeft(); originalPaddingTop = getPaddingTop();
+        originalPaddingRight = getPaddingRight(); originalPaddingBottom = getPaddingBottom();
     }
 
     @Override
@@ -157,6 +160,12 @@ public class MoreKeysKeyboardView extends KeyboardView implements MoreKeysPanel 
     @Override
     public void setKeyboard(final Keyboard keyboard) {
         super.setKeyboard(keyboard);
+        if (keyboard instanceof MoreKeysKeyboard && ((MoreKeysKeyboard)keyboard).mApprovedPeriodPopup) {
+            int inset = Math.round(3f * getResources().getDisplayMetrics().density);
+            setPadding(inset, 0, inset, 0);
+        } else {
+            setPadding(originalPaddingLeft, originalPaddingTop, originalPaddingRight, originalPaddingBottom);
+        }
         if (AccessibilityUtils.getInstance().isAccessibilityEnabled()) {
             if (mAccessibilityDelegate == null) {
                 mAccessibilityDelegate = new MoreKeysKeyboardAccessibilityDelegate(
