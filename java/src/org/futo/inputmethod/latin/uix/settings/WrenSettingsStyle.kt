@@ -195,12 +195,15 @@ fun WrenHomeRow(title: String, icon: Int, iconSize: androidx.compose.ui.unit.Dp 
 
 /** The card behind Feedback & bugs and Updates: #2A2A31, 16 dp corners, 12 dp margin, 18 dp padding. */
 @Composable
-fun WrenBottomCard(title: String, titleGap: androidx.compose.ui.unit.Dp = 10.dp, content: @Composable () -> Unit) {
+fun WrenBottomCard(title: String, titleGap: androidx.compose.ui.unit.Dp = 10.dp, titleAction: (@Composable () -> Unit)? = null, content: @Composable () -> Unit) {
     Column(
         Modifier.padding(start = 12.dp, end = 12.dp, top = 12.dp).fillMaxWidth()
             .clip(RoundedCornerShape(16.dp)).background(WrenFlat.Card).padding(18.dp)
     ) {
-        Text(title, color = WrenFlat.Title, fontSize = 19.sp, fontWeight = FontWeight.Bold, lineHeight = 24.sp)
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text(title, color = WrenFlat.Title, fontSize = 19.sp, fontWeight = FontWeight.Bold, lineHeight = 24.sp, modifier = Modifier.weight(1f))
+            titleAction?.invoke()
+        }
         Spacer(Modifier.height(titleGap))
         content()
     }
