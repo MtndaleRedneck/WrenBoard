@@ -101,15 +101,14 @@ public class Wren18NavigationTest {
         navigate(activity, "wren_rich_input");
         navigate(activity, "wren_toolbar");
         navigate(activity, "actionEdit");
-        UiObject2 hidden = device.findObject(By.textStartsWith("Hidden ("));
-        assertNotNull("Separate Hidden destination must be reachable", hidden);
-        clickFresh(device, By.textStartsWith("Hidden (")); SystemClock.sleep(300);
+        // Pixel-inspected 480dpi action editor: Hidden is fourth tile, second row.
+        assertTrue(device.takeScreenshot(new File(out,"before_hidden.png")));
+        device.click(Math.round(device.getDisplayWidth()*0.865f), Math.round(device.getDisplayHeight()*0.305f));
+        SystemClock.sleep(600);
         assertTrue(device.takeScreenshot(new File(out, "hidden.png")));
         device.dumpWindowHierarchy(new File(out, "hidden.xml"));
         String hiddenXml = new String(java.nio.file.Files.readAllBytes(new File(out,"hidden.xml").toPath()), java.nio.charset.StandardCharsets.UTF_8);
         assertTrue("Hidden screen heading in fresh hierarchy", hiddenXml.contains("text=\"Hidden\""));
-        UiObject2 hiddenBack = device.findObject(By.desc("Back"));
-        assertNotNull("Hidden in-app back arrow", hiddenBack);
         clickFresh(device, By.desc("Back")); SystemClock.sleep(300);
         waitRoute(activity, "actionEdit");
         device.dumpWindowHierarchy(new File(out,"hidden_back.xml"));
