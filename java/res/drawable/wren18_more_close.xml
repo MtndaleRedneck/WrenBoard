@@ -1,7 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- WrenBoard toolbar "more" (open): X close icon. Resting open state; the animation uses ic_more_anim_base.xml.
-     Values measured from SwiftKey (run3 b01/b02 at 3 px/dp; Ezzy's phone shot): dot dia 2.6dp, dot pitch 4.5dp,
-     X arms end at +-4.5dp from center (10.5dp box incl. caps), stroke 1.5dp, round caps, #FF8710. Original drawing. -->
+<!-- Original toolbar artwork. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp" android:height="24dp"
     android:viewportWidth="24" android:viewportHeight="24">
