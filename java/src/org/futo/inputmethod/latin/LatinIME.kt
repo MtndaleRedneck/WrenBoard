@@ -254,11 +254,6 @@ class LatinIME : InputMethodServiceCompose(), LatinIMELegacy.SuggestionStripCont
             else BACK_DISPOSITION_DEFAULT
     }
 
-    override fun onBackPressed(): Boolean {
-        if(uixManager.navigateActionBack()) return true
-        return super.onBackPressed()
-    }
-
     private var isNavigationBarVisible = false
     fun updateNavigationBarVisibility(visible: Boolean? = null) {
         if(visible != null) isNavigationBarVisible = visible
