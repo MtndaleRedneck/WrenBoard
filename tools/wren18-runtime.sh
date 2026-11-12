@@ -13,6 +13,10 @@ cleanup() {
 trap cleanup EXIT
 adb shell wm size 1080x2316
 adb shell wm density 420
+# 3-button nav so the IME back disposition is visible as back-arrow vs down-chevron.
+adb shell cmd overlay enable com.android.internal.systemui.navbar.threebutton || true
+adb shell settings put secure navigation_mode 0 || true
+sleep 2
 # Keep the unrelated Pixel Launcher out of the fixture and its ANR dialogs out of screenshots.
 adb shell am force-stop com.google.android.apps.nexuslauncher || true
 adb install -r -t "$APK"
