@@ -1,0 +1,198 @@
+name: wren19-release
+on:
+  # push trigger only registers the workflow; the job guard below confines building
+  # and uploading to an explicit dispatch with publish=true.
+  push:
+    branches: [instinct1/release-1.9.0]
+    paths: [.github/workflows/wren19-release.yml]
+  workflow_dispatch:
+    inputs:
+      publish:
+        type: boolean
+        default: false
+permissions:
+  contents: read
+jobs:
+  android:
+    if: github.event_name == 'workflow_dispatch' && inputs.publish == true && github.repository == 'MtndaleRedneck/WrenBoard' && github.ref == 'refs/heads/instinct1/release-1.9.0'
+    permissions:
+      contents: write
+    timeout-minutes: 60
+    runs-on: ubuntu-latest
+    env:
+      # WrenBoard 1.6 release packaging: the in-app updater offers 1.6 only above 1.5.0/6
+      VERSION_NAME: 1.9.0
+      VERSION_CODE: "10"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Verify frozen app source
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = 6e7b37e383fc77f696c3964b2e8214069fc24cdb
+          test "$(git diff --name-only HEAD^ HEAD)" = .github/workflows/wren19-release.yml
+      - name: Init build submodules (bundled English voice model cleared, provenance in README-WRENBOARD.md)
+        run: git submodule update --init java/assets/themes java/res-large libs translations voiceinput-shared/src/main/ml
+      - name: Init swipe model submodule (FUTO Swipe weights, FUTO Model Weights License 1.0; notice in Settings > Credits)
+        run: |
+          set -e
+          git lfs install
+          GIT_LFS_SKIP_SMUDGE=1 git submodule update --init java/assets/futo-swipe
+          cd java/assets/futo-swipe
+          git lfs pull --include="honorable_sturgeon/*,hungry_jellyfish/*,magic_macaw/*"
+          # demo animation and model card are not app assets; LICENSE.md stays (shown in Credits)
+          rm -rf animations README.md .gitattributes
+          for f in honorable_sturgeon/model_fp32.pte magic_macaw/model_fp32.pte hungry_jellyfish/context_lm.pte; do
+            sz=$(stat -c%s "$f"); echo "$f $sz bytes"
+            if [ "$sz" -lt 100000 ]; then echo "swipe model $f is an LFS pointer, not the weights"; exit 1; fi
+          done
+          echo "725242bab5d14345e96ff214e8de2bfbc1f962c232d320df9c24cb82ffd1fbaf  honorable_sturgeon/model_fp32.pte" | sha256sum -c -
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Install NDK (runner-provided Android SDK)
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;28.2.13676358"
+      - uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4.4.3
+      - name: Signing setup
+        env:
+          KEYSTORE_B64: ${{ secrets.KEYSTORE_B64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+        run: |
+          echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/release.keystore"
+          printf 'storeFile=%s\nkeyAlias=wrenboard\nkeyPassword=%s\nstorePassword=%s\n' "$RUNNER_TEMP/release.keystore" "$KEYSTORE_PASSWORD" "$KEYSTORE_PASSWORD" > keystore.properties
+          # 1.6 gate: fail closed if the release key is absent (build.gradle would otherwise
+          # silently sign release with the committed debug keystore java/shared.keystore)
+          test -n "$KEYSTORE_B64" || { echo "KEYSTORE_B64 empty"; exit 1; }
+          test -n "$KEYSTORE_PASSWORD" || { echo "KEYSTORE_PASSWORD empty"; exit 1; }
+          test -s "$RUNNER_TEMP/release.keystore" || { echo "release keystore empty"; exit 1; }
+          test -s keystore.properties || { echo "keystore.properties missing"; exit 1; }
+      - name: Build stable release APK
+        env:
+          # WrenBoard 1.5 (item 1): KLIPY GIF test key, owner-authorized Nov 3; empty = placeholder state
+          KLIPY_APP_KEY: ${{ secrets.KLIPY_APP_KEY }}
+        run: ./gradlew --no-daemon assembleStableRelease
+      - name: Cleanup signing material
+        if: always()
+        run: rm -f keystore.properties "$RUNNER_TEMP/release.keystore"
+      # Independent review gets age-encrypted bytes. Raw APK goes only to the owned draft.
+      # Private age identities never enter CI. Only final manual review may publish.
+      # Signer pinned to the WrenBoard 1.5.0 certificate; any mismatch fails before upload.
+      - name: Verify signer, encrypt review copy, and upload to owned draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REVIEWER_RECIPIENT: age14glqdym3cnvmqzdzmdd02gkppqwg0epmug0040d99juja2ct856s3mcxqa
+          AGE_RECIPIENT: age10y8z2hrk99pat4as2c0fffp6svqsjql98x0qcun02dsljvs3uvvs8cvnx6
+          EXPECTED_CERT_SHA256: ad41ab713027aca87389019721d102d67cacaae349cc625aa14f76240801f7fc
+        run: |
+          set -euo pipefail
+          trap 'rc=$?; rm -f build/outputs/apk/stable/*/*.apk signer.txt badging.txt; if [ "$rc" -ne 0 ]; then rm -rf enc; fi' EXIT
+          test -n "$AGE_RECIPIENT"
+          sudo apt-get install -y -q age
+          age --version
+          shopt -s nullglob
+          apks=(build/outputs/apk/stable/release/*.apk)
+          test "${#apks[@]}" -eq 1 || { echo "expected exactly 1 release APK, got ${#apks[@]}"; exit 1; }
+          bt="$ANDROID_HOME/build-tools/$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -1)"
+          "$bt/apksigner" verify --print-certs "${apks[0]}" > signer.txt
+          python3 - "$EXPECTED_CERT_SHA256" signer.txt <<'PY_SIGNER'
+          import re
+          import sys
+          from pathlib import Path
+          
+          pin = sys.argv[1]
+          if not re.fullmatch(r"[0-9a-f]{64}", pin):
+              raise SystemExit("invalid certificate pin")
+          blocks = {}
+          for line in Path(sys.argv[2]).read_text().splitlines():
+              if "certificate DN" not in line and "certificate SHA-256 digest" not in line:
+                  continue
+              match = re.fullmatch(r"(Signer #[1-9][0-9]* |V[23] Signer: )certificate (DN|SHA-256 digest): (.+)", line)
+              if not match:
+                  raise SystemExit("unknown certificate output")
+              identity, field, value = match.groups()
+              block = blocks.setdefault(identity, {})
+              if field in block:
+                  raise SystemExit("duplicate certificate field")
+              block[field] = value
+          if not blocks:
+              raise SystemExit("missing certificate output")
+          old = [identity for identity in blocks if identity.startswith("Signer #")]
+          if old and set(blocks) != {"Signer #1 "}:
+              raise SystemExit("multiple or mixed signer identities")
+          # In the observed scheme layout each V2/V3 block describes its scheme's
+          # certificate. Equal SHA-256 values identify the same certificate across schemes.
+          for block in blocks.values():
+              if set(block) != {"DN", "SHA-256 digest"}:
+                  raise SystemExit("incomplete certificate block")
+              if not re.fullmatch(r"[0-9a-f]{64}", block["SHA-256 digest"]):
+                  raise SystemExit("invalid certificate digest")
+              if block["SHA-256 digest"] != pin:
+                  raise SystemExit("signer mismatch")
+          if len({block["DN"] for block in blocks.values()}) != 1:
+              raise SystemExit("inconsistent scheme certificate identity")
+          print("exact certificate pin verified; one certificate identity")
+          PY_SIGNER
+          "$bt/aapt2" dump badging "${apks[0]}" > badging.txt
+          grep -m1 '^package:' badging.txt
+          python3 - <<'PY_METADATA'
+          import re
+          from pathlib import Path
+          line = next(x for x in Path('badging.txt').read_text().splitlines() if x.startswith('package:'))
+          fields = dict(re.findall(r"(\w+)='([^']*)'", line))
+          assert fields.get('name') == 'com.wrenboard.keyboard', 'package mismatch'
+          assert fields.get('versionName') == '1.9.0', 'version mismatch'
+          assert fields.get('versionCode') == '10', 'version code mismatch'
+          PY_METADATA
+          mkdir -p enc
+          f="${apks[0]}"
+          sha256sum "$f" | sed 's#  .*/#  #' > enc/SHA256SUMS
+          age -r "$AGE_RECIPIENT" -r "$REVIEWER_RECIPIENT" -o "enc/$(basename "$f").age" "$f"
+          test -s "enc/$(basename "$f").age"
+          cp signer.txt enc/SIGNER.txt
+          # Do not publish, create tags, overwrite assets, or follow an arbitrary upload URL.
+          export WREN_APK="$f"
+          python3 - <<'PY_DRAFT'
+          import hashlib, json, os, urllib.request
+          from pathlib import Path
+          api = 'https://api.github.com/repos/MtndaleRedneck/WrenBoard'
+          headers = {'Authorization': 'Bearer ' + os.environ['GH_TOKEN'], 'Accept': 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28'}
+          def get(path):
+              with urllib.request.urlopen(urllib.request.Request(api + path, headers=headers)) as r:
+                  return json.load(r)
+          release = get('/releases/442996015')
+          assert release['id'] == 442996015 and release['draft'] is True, 'not owned draft'
+          assert release['tag_name'] == 'v1.9.0', 'unexpected tag'
+          assert release['target_commitish'] == 'instinct1/release-1.9.0', 'unexpected release target'
+          assert not release['assets'], 'draft not empty; no overwrite permitted'
+          apk = Path(os.environ['WREN_APK'])
+          data = apk.read_bytes()
+          digest = hashlib.sha256(data).hexdigest()
+          assert len(data) > 100000000, 'unexpected APK size'
+          url = 'https://uploads.github.com/repos/MtndaleRedneck/WrenBoard/releases/442996015/assets?name=WrenBoard-1.9.apk'
+          h = dict(headers, **{'Content-Type': 'application/vnd.android.package-archive', 'Content-Length': str(len(data))})
+          with urllib.request.urlopen(urllib.request.Request(url, data=data, headers=h, method='POST'), timeout=300) as r:
+              asset = json.load(r)
+          assert asset['name'] == 'WrenBoard-1.9.apk' and asset['state'] == 'uploaded', 'upload not complete'
+          assert asset['size'] == len(data), 'uploaded size mismatch'
+          assert asset.get('digest') == 'sha256:' + digest, 'uploaded digest mismatch'
+          after = get('/releases/442996015')
+          assert after['draft'] is True and len(after['assets']) == 1, 'draft state changed'
+          assert after['assets'][0]['id'] == asset['id'], 'unexpected asset'
+          print(json.dumps({'release_id': 442996015, 'asset_id': asset['id'], 'size': len(data), 'sha256': digest, 'draft': True}))
+          PY_DRAFT
+          rm -f build/outputs/apk/stable/*/*.apk signer.txt badging.txt
+          cat enc/SHA256SUMS enc/SIGNER.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: WrenBoard-apk-encrypted
+          path: |
+            enc/*.apk.age
+            enc/SHA256SUMS
+            enc/SIGNER.txt
+          if-no-files-found: error
+          retention-days: 3
