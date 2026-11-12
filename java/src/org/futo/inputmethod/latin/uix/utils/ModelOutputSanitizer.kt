@@ -51,7 +51,7 @@ object ModelOutputSanitizer {
     )
     private val trailingPunctuationRegex = Regex("[.!\\u2026\\s]+$")
 
-    private val edgeBracketOrNoteRegex = Regex("^[\[\(\u266a\u266b\s]+|[\]\)\u266a\u266b\s]+$")
+    private val edgeBracketOrNoteRegex = Regex("^[\\[\\(\\u266a\\u266b\\s]+|[\\]\\)\\u266a\\u266b\\s]+$")
 
     private fun isSilencePhrase(text: String): Boolean {
         val normalized = text.trim()
