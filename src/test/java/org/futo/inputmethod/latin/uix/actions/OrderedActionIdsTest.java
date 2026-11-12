@@ -6,7 +6,8 @@ public class OrderedActionIdsTest {
  static void eq(Object a,Object b) { if (!a.equals(b)) throw new AssertionError(a+" != "+b); }
  @org.junit.Test public void orderedHiddenAndMigrationInvariants() {
   OrderedActionIds migrated=OrderedActionIds.migrate(l("emoji"),l("voice"),l("clip","emoji"),l("gif","voice"),l("debug"),l("emoji","voice","clip","gif","debug"));
-  eq(migrated.visible,l("emoji","voice","clip","gif"));eq(migrated.hidden,l("debug"));
+  // WrenBoard 1.9 (item 7): favorites come first, then pinned, assigned, more.
+  eq(migrated.visible,l("clip","emoji","voice","gif"));eq(migrated.hidden,l("debug"));
   OrderedActionIds m=OrderedActionIds.normalize(l("emoji","clip","emoji","unknown","debug"),l("debug","debug"),l("clip","emoji","debug","gif"));
   eq(m.visible,l("emoji","clip")); eq(m.hidden,l("debug","gif"));
   OrderedActionIds again=OrderedActionIds.normalize(m.visible,m.hidden,l("clip","emoji","debug","gif"));eq(again.visible,m.visible);eq(again.hidden,m.hidden);

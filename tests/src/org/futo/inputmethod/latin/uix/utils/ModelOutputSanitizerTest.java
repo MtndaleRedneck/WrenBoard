@@ -68,6 +68,37 @@ public class ModelOutputSanitizerTest {
     }
 
     @Test
+    public void testSilencePhrasesDropped() {
+        // WrenBoard 1.9 (item 10): a result that is only a silence phrase is dropped entirely.
+        TextContext context = new TextContext("before", "after");
+        Assert.assertEquals("", sanitize("Thanks for watching!", context));
+        Assert.assertEquals("", sanitize("thanks for watching", context));
+        Assert.assertEquals("", sanitize("Thank you for watching.", context));
+        Assert.assertEquals("", sanitize("Thank you so much for watching!", context));
+        Assert.assertEquals("", sanitize("thanks for listening", context));
+        Assert.assertEquals("", sanitize("Please subscribe.", context));
+        Assert.assertEquals("", sanitize("Like and subscribe", context));
+        Assert.assertEquals("", sanitize("The End.", context));
+        Assert.assertEquals("", sanitize("[Music]", context));
+        Assert.assertEquals("", sanitize("\u266a Music \u266a", context));
+        // The filter also applies with no text context.
+        Assert.assertEquals("", sanitize("Thanks for watching!", null));
+        Assert.assertEquals("", sanitize("music", null));
+    }
+
+    @Test
+    public void testRealUtterancesNotDropped() {
+        // Short real utterances must survive; only full silence phrases are filtered.
+        TextContext context = new TextContext("", "");
+        Assert.assertEquals("thank you", sanitize("thank you", context));
+        Assert.assertEquals("you", sanitize("you", context));
+        Assert.assertEquals("bye", sanitize("bye", context));
+        Assert.assertEquals("I am watching", sanitize("I am watching", context));
+        Assert.assertEquals("thanks for watching the game with me", sanitize("thanks for watching the game with me", context));
+        Assert.assertEquals("play some music", sanitize("play some music", context));
+    }
+
+    @Test
     public void testHandlesBlankInput() {
         TextContext context = new TextContext("before", "after");
         Assert.assertEquals("", sanitize("", context));

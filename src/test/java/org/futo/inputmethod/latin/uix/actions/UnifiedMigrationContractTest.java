@@ -12,10 +12,14 @@ public class UnifiedMigrationContractTest {
         String source = new String(Files.readAllBytes(Paths.get("java/src/org/futo/inputmethod/latin/uix/actions/UnifiedActions.kt")), StandardCharsets.UTF_8);
         int read = source.indexOf("fun Context.readUnifiedActions()");
         int edit = source.indexOf("dataStore.edit { prefs ->", read);
-        int current = source.indexOf("prefs[UnifiedActionsKey]?.decodeUnified() ?: migrateUnifiedActionIds(", edit);
+        // WrenBoard 1.9 (item 7): v2 key applies a one-time favorites-first reorder over a
+        // saved v1 order inside the same atomic edit; v1 stays as the migration input only.
+        int current = source.indexOf("prefs[UnifiedActionsKeyV2]?.decodeUnified()", edit);
+        int reorder = source.indexOf("prefs[UnifiedActionsKey]?.decodeUnified()?.reorderFavoritesFirstV2()", edit);
+        int legacy = source.indexOf("migrateUnifiedActionIds(", edit);
         int save = source.indexOf("fun Context.saveUnifiedActions(");
-        assertTrue(edit > read && current > edit && current < save);
-        assertTrue(source.contains("dataStore.edit { it[UnifiedActionsKey] = safe.encode() }"));
+        assertTrue(edit > read && current > edit && reorder > current && legacy > reorder && legacy < save);
+        assertTrue(source.contains("dataStore.edit { it[UnifiedActionsKeyV2] = safe.encode() }"));
     }
     @Test public void composableDoesNotBlockForMigration() throws Exception {
         String source = new String(Files.readAllBytes(Paths.get("java/src/org/futo/inputmethod/latin/uix/actions/UnifiedActions.kt")), StandardCharsets.UTF_8);
