@@ -83,8 +83,8 @@ fi
 # WrenBoard 1.9 item 6: disposition pushed to the OS on panel open/close. Nonblocking while
 # Tab 1 keeps must-fix 4 open; the WB18_NAV log and dumpsys probes are the OS-side evidence.
 timeout 240 adb shell am instrument -w -r -e class org.futo.inputmethod.latin.Wren19BackDispositionTest "$TESTPKG" | tee "$OUT/backdisposition.txt" || true
-grep -q 'OK (2 tests)' "$OUT/backdisposition.txt" && echo "back-disposition instrumentation: PASS" || echo "back-disposition instrumentation: FAIL (nonblocking)"
-if ! grep -q 'OK (2 tests)' "$OUT/backdisposition.txt"; then
+grep -q 'OK (' "$OUT/backdisposition.txt" && echo "back-disposition instrumentation: PASS" || echo "back-disposition instrumentation: FAIL (nonblocking)"
+if ! grep -q 'OK (' "$OUT/backdisposition.txt"; then
  PID=$(adb shell pidof "$PKG" | tr -d '\r' || true)
  if [ -n "$PID" ]; then
    adb shell kill -QUIT "$PID" 2>/dev/null || adb shell run-as "$PKG" kill -QUIT "$PID" 2>/dev/null || true

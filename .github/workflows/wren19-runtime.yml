@@ -16,7 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
-      VERSION_NAME: 1.9.0 # retrigger r16
+      VERSION_NAME: 1.9.0 # retrigger r17
       VERSION_CODE: '10'
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -92,7 +92,7 @@ jobs:
       - name: Capture isolated runtime screens
         uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
         with:
-          api-level: 34
+          api-level: 33
           target: google_apis
           arch: x86_64
           profile: Nexus 6
