@@ -60,6 +60,7 @@ adb exec-out screencap -p > "$OUT/keyboard.png"
 for PANEL in emoji gif clipboard_history text_edit more; do
  adb logcat -c
  adb shell am broadcast -a "$PKG.WBDBG" -p "$PKG" --es cmd "open:$PANEL" >/dev/null
+ for attempt in $(seq 1 16); do adb exec-out screencap -p > "$OUT/.probe.png" && python3 tools/wren18-panel-check.py --probe "$OUT/keyboard.png" "$OUT/.probe.png" && break; sleep 0.5; done
  for attempt in $(seq 1 12); do adb logcat -d -s WB18_NAV:I | grep -q "pushed=3" && break; sleep 0.5; done
  sleep 1
  adb exec-out screencap -p > "$OUT/panel_${PANEL}_open.png"
