@@ -2003,7 +2003,7 @@ public final class InputLogic {
         final SpacingAndPunctuations spacingAndPunctuations = settingsValues.mSpacingAndPunctuations;
         int wordStart = before.length();
         while (wordStart > 0) {
-            final int codePoint = before.codePointBefore(wordStart);
+            final int codePoint = Character.codePointBefore(before, wordStart);
             if (spacingAndPunctuations.isWordSeparator(codePoint)) {
                 break;
             }
