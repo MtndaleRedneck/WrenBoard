@@ -58,12 +58,16 @@ done
 adb exec-out screencap -p > "$OUT/keyboard.png"
 # Runtime Back matrix: use normal Android Back, never the debug close shortcut.
 for PANEL in emoji gif clipboard_history text_edit more; do
+ adb logcat -c
  adb shell am broadcast -a "$PKG.WBDBG" -p "$PKG" --es cmd "open:$PANEL" >/dev/null
- sleep 2
+ for attempt in $(seq 1 12); do adb logcat -d -s WB18_NAV:I | grep -q "pushed=3" && break; sleep 0.5; done
+ sleep 1
  adb exec-out screencap -p > "$OUT/panel_${PANEL}_open.png"
  adb logcat -d -s WB18_NAV:I > "$OUT/navlog_${PANEL}_open.txt" || true
+ adb logcat -c
  adb shell input keyevent KEYCODE_BACK
- sleep 2
+ for attempt in $(seq 1 12); do adb logcat -d -s WB18_NAV:I | grep -q "pushed=0"; break; sleep 0.5; done
+ sleep 1
  adb exec-out screencap -p > "$OUT/panel_${PANEL}_back.png"
  adb logcat -d -s WB18_NAV:I > "$OUT/navlog_${PANEL}_back.txt" || true
  python3 tools/wren18-panel-check.py "$OUT/keyboard.png" "$OUT/panel_${PANEL}_open.png" "$OUT/panel_${PANEL}_back.png" "$PANEL" | tee -a "$OUT/panel-back.txt"
