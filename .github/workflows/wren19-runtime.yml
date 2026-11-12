@@ -2,7 +2,7 @@ name: wren19-runtime
 on:
   push:
     branches: [instinct1/release-1.9.0]
-    paths: [.github/workflows/wren18-runtime.yml]
+    paths: [.github/workflows/wren19-runtime.yml]
   workflow_dispatch:
 permissions:
   contents: read
