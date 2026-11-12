@@ -60,11 +60,9 @@ public class Wren18NavigationTest {
         fail("Control stayed stale " + selector);
     }
     private void openHidden(SettingsActivity activity,UiDevice device) {
-        int count=org.futo.inputmethod.latin.uix.actions.UnifiedActionsKt.readUnifiedActions(activity).visible.size();
-        // Four compact columns at this 480dpi fixture, based on captured grid bounds.
-        float x=0.13f+(count%4)*0.245f;
-        float y=0.21f+(count/4)*0.094f;
-        device.click(Math.round(device.getDisplayWidth()*x),Math.round(device.getDisplayHeight()*y));
+        // Click the Hidden tile by its label: positional math breaks whenever the visible
+        // action set or order changes (e.g. the 1.9 favorites-first toolbar order).
+        clickFresh(device, By.textStartsWith("Hidden"));
     }
     private android.graphics.Point copyCenter(UiDevice device, String label, boolean toolbar) {
         java.util.List<UiObject2> copies = device.findObjects(By.desc(label));

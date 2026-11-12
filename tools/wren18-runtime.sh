@@ -63,12 +63,22 @@ timeout 480 adb shell am instrument -w -r -e class org.futo.inputmethod.latin.ui
 NAV_STATUS=0
 grep -q 'OK (1 test)' "$OUT/navigation.txt" || NAV_STATUS=1
 # WrenBoard 1.9: recase must assert actual field text (1/2/3 shift taps, fresh field, no word).
-timeout 480 adb shell am instrument -w -r -e class org.futo.inputmethod.latin.Wren19RecaseTest "$TESTPKG" | tee "$OUT/recase.txt" || true
+timeout 240 adb shell am instrument -w -r -e class org.futo.inputmethod.latin.Wren19RecaseTest "$TESTPKG" | tee "$OUT/recase.txt" || true
 grep -q 'OK (3 tests)' "$OUT/recase.txt" || NAV_STATUS=1
+if ! grep -q 'OK (3 tests)' "$OUT/recase.txt"; then
+ PID=$(adb shell pidof "$PKG" | tr -d '\r' || true)
+ if [ -n "$PID" ]; then adb shell kill -QUIT "$PID" || true; sleep 3; fi
+ adb logcat -d > "$OUT/recase-hang-logcat.txt" || true
+fi
 # WrenBoard 1.9 item 6: disposition pushed to the OS on panel open/close. Nonblocking while
 # Tab 1 keeps must-fix 4 open; the WB18_NAV log and dumpsys probes are the OS-side evidence.
-timeout 480 adb shell am instrument -w -r -e class org.futo.inputmethod.latin.Wren19BackDispositionTest "$TESTPKG" | tee "$OUT/backdisposition.txt" || true
+timeout 240 adb shell am instrument -w -r -e class org.futo.inputmethod.latin.Wren19BackDispositionTest "$TESTPKG" | tee "$OUT/backdisposition.txt" || true
 grep -q 'OK (2 tests)' "$OUT/backdisposition.txt" && echo "back-disposition instrumentation: PASS" || echo "back-disposition instrumentation: FAIL (nonblocking)"
+if ! grep -q 'OK (2 tests)' "$OUT/backdisposition.txt"; then
+ PID=$(adb shell pidof "$PKG" | tr -d '\r' || true)
+ if [ -n "$PID" ]; then adb shell kill -QUIT "$PID" || true; sleep 3; fi
+ adb logcat -d > "$OUT/backdisposition-hang-logcat.txt" || true
+fi
 
 # Runtime Back matrix: use normal Android Back, never the debug close shortcut.
 for PANEL in emoji gif clipboard_history text_edit more; do
