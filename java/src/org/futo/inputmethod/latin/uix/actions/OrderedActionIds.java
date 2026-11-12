@@ -29,12 +29,13 @@ public final class OrderedActionIds {
         return new OrderedActionIds(new ArrayList<>(v), new ArrayList<>(h));
     }
 
-    /** Stable legacy merge order agreed for 1.7: assigned, pinned, favorites, more. */
+    /** WrenBoard 1.9 (item 2): the approved SwiftKey toolbar order is favorites-first
+     * (clipboard, emoji, GIF, mic, share, info, ...). Legacy assigned/pinned actions follow. */
     public static OrderedActionIds migrate(List<String> assigned, List<String> pinned,
             List<String> favorites, List<String> more, List<String> hidden, List<String> known) {
-        List<String> merged = new ArrayList<>(assigned);
+        List<String> merged = new ArrayList<>(favorites);
         merged.addAll(pinned);
-        merged.addAll(favorites);
+        merged.addAll(assigned);
         merged.addAll(more);
         return normalize(merged, hidden, known);
     }

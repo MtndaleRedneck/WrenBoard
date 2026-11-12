@@ -716,7 +716,7 @@ fun RowScope.SuggestionItems(words: SuggestedWords, onClick: (i: Int) -> Unit, o
 }
 
 /** WrenBoard 1.6 (item 51): the toolbar's thin outline versions of the default buttons (others keep their icon). */
-private fun wrenToolbarIcon(icon: Int): Int = when (icon) {
+fun wrenToolbarIcon(icon: Int): Int = when (icon) {
     R.drawable.clipboard_manager -> R.drawable.wren_tb_clipboard
     R.drawable.smile -> R.drawable.wren_tb_emoji
     R.drawable.mic_fill -> R.drawable.wren_tb_mic

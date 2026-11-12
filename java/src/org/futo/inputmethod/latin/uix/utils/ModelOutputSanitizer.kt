@@ -51,13 +51,23 @@ object ModelOutputSanitizer {
     )
     private val trailingPunctuationRegex = Regex("[.!\\u2026\\s]+$")
 
+    private val edgeBracketOrNoteRegex = Regex("^[\[\(\u266a\u266b\s]+|[\]\)\u266a\u266b\s]+$")
+
     private fun isSilencePhrase(text: String): Boolean {
-        val normalized = text.trim().replace(trailingPunctuationRegex, "").lowercase()
+        val normalized = text.trim()
+            .replace(trailingPunctuationRegex, "")
+            .replace(edgeBracketOrNoteRegex, "")
+            .trim()
+            .lowercase()
         return silencePhrases.contains(normalized)
     }
 
     @JvmStatic
     fun sanitize(result: String, textContext: TextContext?): String {
+        // Item 10: a result that is only a silence phrase is dropped in every context, so it
+        // never reaches the text field or the suggestion strip.
+        if (isSilencePhrase(result)) return ""
+
         if (textContext == null) {
             return result
         }
@@ -67,8 +77,6 @@ object ModelOutputSanitizer {
         var trimmed = result.trim()
         if (trimmed.isEmpty()) return ""
 
-        // Item 10: drop dictation results that are only a silence phrase.
-        if (isSilencePhrase(trimmed)) return ""
 
         val before = (textContext.beforeCursor?.toString() ?: "")
             .split("\n")

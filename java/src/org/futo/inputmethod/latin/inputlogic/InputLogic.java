@@ -2024,10 +2024,16 @@ public final class InputLogic {
         // re-cases the word just typed (they, They, THEY) and its suggestions follow
         // (WrenBoard 1.9 item 11, SwiftKey parity; supersedes the 2026-10-29 next-letter-only
         // behavior).
-        if (!mRecapitalizeStatus.mIsEnabled()) {
-            return;
-        }
         final boolean hadSelection = mConnection.hasSelection();
+        if (!mRecapitalizeStatus.mIsEnabled()) {
+            // The cursor-move gate exists to protect a STALE SELECTION after a field switch.
+            // The typing-recase path always targets the live word at the cursor, so it is safe
+            // (and required, item 11) even before the first cursor move.
+            if (hadSelection) {
+                return;
+            }
+            mRecapitalizeStatus.enable();
+        }
         final String wordJustBeforeCursor = hadSelection
                 ? null : getWordJustBeforeCursorForRecapitalize(settingsValues);
         if (!hadSelection && TextUtils.isEmpty(wordJustBeforeCursor)) {
@@ -2066,13 +2072,14 @@ public final class InputLogic {
         mRecapitalizeStatus.rotate();
         mConnection.setSelection(selectionEnd, selectionEnd);
         mConnection.deleteTextBeforeCursor(numCharsSelected);
-        mConnection.commitText(mRecapitalizeStatus.getRecapitalizedString(), 1); // This was originally 0, but we no longer support 0
-        mConnection.send();
         if (hadSelection) {
+            mConnection.commitText(mRecapitalizeStatus.getRecapitalizedString(), 1); // This was originally 0, but we no longer support 0
+            mConnection.send();
             mConnection.setSelection(mRecapitalizeStatus.getNewCursorStart(),
                     mRecapitalizeStatus.getNewCursorEnd());
         } else {
-            // Keep the re-cased word composing so its suggestions follow the new case.
+            // Keep the re-cased word composing so its suggestions follow the new case. The word
+            // goes back as composing text (never commit + recompose, which duplicates the word).
             final String word = mRecapitalizeStatus.getRecapitalizedString();
             final int[] codePoints = StringUtils.toCodePointArray(word);
             mWordComposer.setComposingWord(codePoints,

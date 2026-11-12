@@ -259,11 +259,12 @@ fun MoreActionsView(setNestedBack: ((() -> Boolean)?) -> Unit = {}) {
             onDragEnd = {
                 val dropped = dragging
                 if(dropped != null && overPinned) {
-                    // WrenBoard 1.9 (item 3): dropping on the strip pin slot toggles the pin and
-                    // never changes the visible order.
+                    // WrenBoard 1.9 (item 3): the strip pin slot holds exactly one action.
+                    // Dropping pins it (replacing any previous pin); dropping the pinned action
+                    // again unpins. The visible order never changes.
                     transaction?.cancel()
                     transaction?.preview()?.let { draft = it }
-                    persistPinned(if(dropped in latestPinnedIds) latestPinnedIds - dropped else latestPinnedIds + dropped)
+                    persistPinned(if(dropped in latestPinnedIds) emptyList() else listOf(dropped))
                 } else {
                     dragging?.let { if(overHidden) transaction?.hide(it) }
                 }
@@ -362,9 +363,9 @@ fun MoreActionsView(setNestedBack: ((() -> Boolean)?) -> Unit = {}) {
             ) {
                 pinnedIds.firstOrNull()?.let { pid ->
                     AllActionsMap[pid]?.let { paction ->
-                        Icon(painterResource(paction.icon), contentDescription = stringResource(paction.name),
+                        Icon(painterResource(org.futo.inputmethod.latin.uix.wrenToolbarIcon(paction.icon)), contentDescription = stringResource(paction.name),
                             tint = LocalKeyboardScheme.current.onKeyboardContainer,
-                            modifier = Modifier.size(23.8.dp, 29.9.dp).clickable { persistPinned(pinnedIds - pid) })
+                            modifier = Modifier.size(23.8.dp, 29.9.dp).clickable { persistPinned(emptyList()) })
                     }
                 }
             }

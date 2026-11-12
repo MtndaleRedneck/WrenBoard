@@ -62,6 +62,37 @@ public class RecapitalizeStatusTests {
     }
 
     @Test
+    public void testRotateSingleWordCycle() {
+        // WrenBoard 1.9 (item 11): tapping shift on a just-typed word cycles
+        // lowercase -> sentence case -> all caps -> lowercase.
+        final RecapitalizeStatus status = new RecapitalizeStatus();
+        status.start(10, 13, "they", Locale.ENGLISH, SPACE);
+        status.rotate();
+        assertEquals("They", status.getRecapitalizedString());
+        status.rotate();
+        assertEquals("THEY", status.getRecapitalizedString());
+        status.rotate();
+        assertEquals("they", status.getRecapitalizedString());
+
+        // The same cycle must start cleanly from any mode.
+        status.start(10, 13, "They", Locale.ENGLISH, SPACE);
+        status.rotate();
+        assertEquals("THEY", status.getRecapitalizedString());
+        status.rotate();
+        assertEquals("they", status.getRecapitalizedString());
+        status.rotate();
+        assertEquals("They", status.getRecapitalizedString());
+
+        status.start(10, 13, "THEY", Locale.ENGLISH, SPACE);
+        status.rotate();
+        assertEquals("they", status.getRecapitalizedString());
+        status.rotate();
+        assertEquals("They", status.getRecapitalizedString());
+        status.rotate();
+        assertEquals("THEY", status.getRecapitalizedString());
+    }
+
+    @Test
     public void testRotate() {
         final RecapitalizeStatus status = new RecapitalizeStatus();
         status.start(29, 40, "abcd efghij", Locale.ENGLISH, SPACE);
