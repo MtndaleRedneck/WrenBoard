@@ -212,6 +212,7 @@ public class InputTestsBase extends ServiceTestCase<LatinIME> {
         if (null == Looper.myLooper()) {
             Looper.prepare();
         }
+        android.util.Log.i("WBDBG", "TESTSTEP setUp: begin");
         setupService();
         mLatinIMELegacy = getService().getLatinIMELegacy();
         setDebugMode(true);
@@ -251,12 +252,14 @@ public class InputTestsBase extends ServiceTestCase<LatinIME> {
         getService().onCreateInputView();
         getService().onStartInputView(ei, false);
         mInputConnection = ic;
+        android.util.Log.i("WBDBG", "TESTSTEP setUp: before changeLanguage");
         changeLanguage("en_US");
         // Run messages to avoid the messages enqueued by startInputView() and its friends
         // to run on a later call and ruin things. We need to wait first because some of them
         // can be posted with a delay (notably,  MSG_RESUME_SUGGESTIONS)
         sleep(DELAY_TO_WAIT_FOR_PREDICTIONS_MILLIS);
         runMessages();
+        android.util.Log.i("WBDBG", "TESTSTEP setUp: done");
     }
 
     @Override
@@ -287,6 +290,19 @@ public class InputTestsBase extends ServiceTestCase<LatinIME> {
         // Empty class
     }
     protected void runMessages() {
+        // Bounded pump: drain this thread's message queue, then exit 300ms later via a
+        // self-posted interrupt. The historical exit condition (a queued runnable throwing
+        // InterruptRunMessagesException) no longer exists anywhere in the tree, so an
+        // unbounded Looper.loop() hangs forever here (CI run 43184631241).
+        final Looper looper = Looper.myLooper();
+        if (null == looper) {
+            return;
+        }
+        new android.os.Handler(looper).postDelayed(new Runnable() {
+            @Override public void run() {
+                throw new InterruptRunMessagesException();
+            }
+        }, 300);
         try {
             Looper.loop();
         } catch (InterruptRunMessagesException e) {
@@ -327,9 +343,11 @@ public class InputTestsBase extends ServiceTestCase<LatinIME> {
     }
 
     protected void type(final String stringToType) {
+        android.util.Log.i("WBDBG", "TESTSTEP type begin: " + stringToType);
         for (int i = 0; i < stringToType.length(); i = stringToType.offsetByCodePoints(i, 1)) {
             type(stringToType.codePointAt(i));
         }
+        android.util.Log.i("WBDBG", "TESTSTEP type end: " + stringToType);
     }
 
     protected Point getXY(final int codePoint) {

@@ -5,6 +5,10 @@ TESTS=$2
 PKG=com.wrenboard.keyboard
 OUT=runtime18
 mkdir -p "$OUT"
+# Root adbd so hang captures can SIGQUIT the app process and pull /data/anr/traces.txt
+# (google_apis emulator images are userdebug; harmless no-op where root is unavailable).
+adb root || true
+adb wait-for-device
 cleanup() {
  adb logcat -d -s AndroidRuntime:E WBDBG:I WB18_NAV:I > "$OUT/logcat.txt" || true
  adb shell dumpsys input_method > "$OUT/input-method.txt" || true
@@ -67,8 +71,14 @@ timeout 240 adb shell am instrument -w -r -e class org.futo.inputmethod.latin.Wr
 grep -q 'OK (3 tests)' "$OUT/recase.txt" || NAV_STATUS=1
 if ! grep -q 'OK (3 tests)' "$OUT/recase.txt"; then
  PID=$(adb shell pidof "$PKG" | tr -d '\r' || true)
- if [ -n "$PID" ]; then adb shell kill -QUIT "$PID" || true; sleep 3; fi
+ if [ -n "$PID" ]; then
+   adb shell kill -QUIT "$PID" 2>/dev/null || adb shell run-as "$PKG" kill -QUIT "$PID" 2>/dev/null || true
+   sleep 4
+   adb pull /data/anr/traces.txt "$OUT/recase-traces.txt" || true
+ fi
  adb logcat -d > "$OUT/recase-hang-logcat.txt" || true
+ # A hung/dead app poisons every later fixture stage; restart it cleanly.
+ adb shell am force-stop "$PKG" || true
 fi
 # WrenBoard 1.9 item 6: disposition pushed to the OS on panel open/close. Nonblocking while
 # Tab 1 keeps must-fix 4 open; the WB18_NAV log and dumpsys probes are the OS-side evidence.
@@ -76,8 +86,13 @@ timeout 240 adb shell am instrument -w -r -e class org.futo.inputmethod.latin.Wr
 grep -q 'OK (2 tests)' "$OUT/backdisposition.txt" && echo "back-disposition instrumentation: PASS" || echo "back-disposition instrumentation: FAIL (nonblocking)"
 if ! grep -q 'OK (2 tests)' "$OUT/backdisposition.txt"; then
  PID=$(adb shell pidof "$PKG" | tr -d '\r' || true)
- if [ -n "$PID" ]; then adb shell kill -QUIT "$PID" || true; sleep 3; fi
+ if [ -n "$PID" ]; then
+   adb shell kill -QUIT "$PID" 2>/dev/null || adb shell run-as "$PKG" kill -QUIT "$PID" 2>/dev/null || true
+   sleep 4
+   adb pull /data/anr/traces.txt "$OUT/backdisposition-traces.txt" || true
+ fi
  adb logcat -d > "$OUT/backdisposition-hang-logcat.txt" || true
+ adb shell am force-stop "$PKG" || true
 fi
 
 # Runtime Back matrix: use normal Android Back, never the debug close shortcut.
