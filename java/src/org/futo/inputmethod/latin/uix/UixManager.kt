@@ -1515,6 +1515,8 @@ class UixManager(private val latinIME: LatinIME) {
     private val actionBackStack = mutableListOf<Action>()
 
     fun navigateActionBack(): Boolean {
+        if (org.futo.inputmethod.latin.BuildConfig.DEBUG) android.util.Log.i("WB110_BACK",
+            "navigateActionBack editor=${isShowingActionEditor.value} window=${currWindowActionWindow.value?.javaClass?.simpleName}")
         if (isShowingActionEditor.value) {
             if(actionEditorNestedBack?.invoke() == true) return true
             isShowingActionEditor.value = false

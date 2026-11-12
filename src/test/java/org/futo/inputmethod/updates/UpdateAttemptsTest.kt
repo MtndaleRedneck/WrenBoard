@@ -125,4 +125,36 @@ class UpdateAttemptsTest {
         assertFalse(t.installerResult(-1L, UpdateAttempts.STATUS_FAILURE, null))
         assertEquals("", t.text)
     }
+
+    // WrenBoard 1.10: no second download while Android's install confirmation is still open.
+    @Test fun noSecondDownloadWhileInstallerIsWaiting() {
+        val t = tracker()
+        val a = t.start()
+        assertTrue(t.isBusy(now = 5_000L))
+        t.handOver(a, now = 5_000L)
+        t.downloadEnded(a)
+        assertTrue(t.isBusy(now = 5_000L + 1_000L))
+        // reopening the prompt keeps the attempt, so its answer still lands
+        t.openPrompt()
+        assertTrue(t.installerResult(a, UpdateAttempts.STATUS_FAILURE_ABORTED, null))
+        assertFalse(t.isBusy(now = 5_000L + 2_000L))
+    }
+
+    @Test fun lostInstallerAnswerDoesNotBlockUpdatesForever() {
+        val t = tracker()
+        val a = t.start()
+        t.handOver(a, now = 0L)
+        t.downloadEnded(a)
+        assertTrue(t.isBusy(now = UpdateAttempts.HANDOVER_MAX_MS - 1))
+        assertFalse(t.isBusy(now = UpdateAttempts.HANDOVER_MAX_MS + 1))
+    }
+
+    @Test fun failureClearsTheHandOver() {
+        val t = tracker()
+        val a = t.start()
+        t.handOver(a, now = 0L)
+        t.downloadEnded(a)
+        assertTrue(t.fail(a, "Update failed."))
+        assertFalse(t.isBusy(now = 1L))
+    }
 }

@@ -150,6 +150,7 @@ private suspend fun install(context: Context, attempt: Long, inputStream: InputS
         session.commit(statusReceiver);
         session.close();
 
+        UpdateStatus.attempts.handOver(attempt)
         UpdateStatus.attempts.post(attempt, "Installing update")
     } catch (e: Throwable) {
         Log.w("UpdateScreen", "Exception thrown while downloading and installing latest version of app.", e);
@@ -160,7 +161,9 @@ private suspend fun install(context: Context, attempt: Long, inputStream: InputS
 
 @DelicateCoroutinesApi
 private fun downloadAndInstall(context: Context, updateResult: UpdateResult) {
-    if (UpdateStatus.isDownloading.value) return
+    // WrenBoard 1.10: one download at a time, also while the finished download waits on Android's install
+    // confirmation (the button used to come back at that moment and a second tap started a second download).
+    if (UpdateStatus.isDownloading.value || UpdateStatus.attempts.isBusy()) return
     val attempt = UpdateStatus.attempts.start()
     UpdateStatus.isDownloading.value = true
     Log.i("UpdateScreen", "Update attempt $attempt started")
@@ -273,7 +276,7 @@ fun UpdateDialog(navController: NavHostController) {
             confirmButton = {
                 TextButton(onClick = {
                     downloadAndInstall(context.applicationContext, lastUpdateResult)
-                }, enabled = !isDownloading.value) {
+                }, enabled = !isDownloading.value && !(statusText.value.isNotEmpty() && UpdateStatus.attempts.isBusy())) {
                     Text(stringResource(R.string.autoupdater_perform_update))
                 }
             },

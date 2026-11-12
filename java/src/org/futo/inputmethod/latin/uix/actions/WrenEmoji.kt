@@ -211,6 +211,25 @@ class WrenEmojiWindow(val manager: KeyboardManagerForAction) : ActionWindow() {
         WrenEmojiPanel(this)
     }
 
+    /** WrenBoard 1.10 (back arrow): system Back steps out one level of this panel before it closes
+     *  the panel: emoji search, then the GIF search keyboard, then GIF search results (back to Recents).
+     *  Root back stays with the host (returns to the letters keyboard). */
+    override fun navigateBack(): Boolean {
+        if (searching.value) { endSearch(); return true }
+        if (gifSearching.value) {
+            gifSearching.value = false
+            manager.forceActionWindowAboveKeyboard(false)
+            return true
+        }
+        if (tab.value == 1 && gifMode.value == "search") {
+            gifQuery.value = ""
+            gifMode.value = "recents"
+            gifRecentsFallback.value = true
+            return true
+        }
+        return false
+    }
+
     override fun close(): CloseResult {
         searching.value = false
         searchText.value = ""
