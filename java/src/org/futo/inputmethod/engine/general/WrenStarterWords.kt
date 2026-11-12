@@ -17,3 +17,23 @@ object WrenStarterWords {
         else -> FALLBACK
     }
 }
+
+/** WrenBoard 1.10: "goingblank" -> "going blank". Pure, unit tested; the dictionary check is passed in. */
+object WrenWordSplit {
+    fun best(typed: String, isWord: (String) -> Boolean): String? {
+        if (typed.length < 4 || typed.length > 24 || !typed.all { it.isLetter() }) return null
+        val lower = typed.lowercase()
+        if (isWord(lower)) return null
+        var best: String? = null
+        var bestScore = 0
+        for (i in 1 until lower.length) {
+            val a = lower.substring(0, i); val b = lower.substring(i)
+            val okA = a.length >= 2 || a == "a" || a == "i"
+            val okB = b.length >= 2 || b == "a" || b == "i"
+            if (!okA || !okB || !isWord(a) || !isWord(b)) continue
+            val score = minOf(a.length, b.length)
+            if (score > bestScore) { bestScore = score; best = "$a $b" }
+        }
+        return best
+    }
+}
