@@ -68,8 +68,8 @@ NAV_STATUS=0
 grep -q 'OK (1 test)' "$OUT/navigation.txt" || NAV_STATUS=1
 # WrenBoard 1.9: recase must assert actual field text (1/2/3 shift taps, fresh field, no word).
 timeout 240 adb shell am instrument -w -r -e class org.futo.inputmethod.latin.Wren19RecaseTest "$TESTPKG" | tee "$OUT/recase.txt" || true
-grep -q 'OK (' "$OUT/recase.txt" || NAV_STATUS=1
-if ! grep -q 'OK (' "$OUT/recase.txt"; then
+grep -q 'OK (4 tests)' "$OUT/recase.txt" || NAV_STATUS=1
+if ! grep -q 'OK (4 tests)' "$OUT/recase.txt"; then
  PID=$(adb shell pidof "$PKG" | tr -d '\r' || true)
  if [ -n "$PID" ]; then
    adb shell kill -QUIT "$PID" 2>/dev/null || adb shell run-as "$PKG" kill -QUIT "$PID" 2>/dev/null || true
