@@ -246,12 +246,13 @@ class LatinIME : InputMethodServiceCompose(), LatinIMELegacy.SuggestionStripCont
         settingsRefreshRequired = false
     }
 
-    // WrenBoard 1.9: while an action panel is open, the system navigation bar must show the
-    // back arrow (not the keyboard down-chevron), and pressing back closes the panel. The
-    // default disposition returns as soon as the panel is closed.
-    override fun getBackDisposition(): Int {
-        return if(uixManager.hasOpenActionWindow()) BACK_DISPOSITION_WILL_NOT_DISMISS
-            else BACK_DISPOSITION_DEFAULT
+    // WrenBoard 1.9 (item 6): while an action panel is open, the system navigation bar must show the
+    // back arrow (not the keyboard down-chevron), and pressing back closes the panel through
+    // onKeyDown -> uixManager.navigateActionBack(). setBackDisposition pushes the value to the
+    // OS immediately; UixManager calls this when panels open and close.
+    fun syncBackDispositionForPanels() {
+        setBackDisposition(if(uixManager.hasOpenActionWindow()) BACK_DISPOSITION_ADJUST_NOTHING
+            else BACK_DISPOSITION_DEFAULT)
     }
 
     private var isNavigationBarVisible = false
