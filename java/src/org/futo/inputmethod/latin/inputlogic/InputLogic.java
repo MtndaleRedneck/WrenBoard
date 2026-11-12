@@ -1989,17 +1989,52 @@ public final class InputLogic {
     }
 
     /**
+     * Finds the word just before the cursor so it can be recapitalized (SwiftKey-style).
+     * The editor selection itself is never touched: the span is only used for bookkeeping.
+     * @param settingsValues The current settings values.
+     * @return the text of the word just before the cursor, or null if there is none.
+     */
+    private String getWordJustBeforeCursorForRecapitalize(final SettingsValues settingsValues) {
+        final CharSequence before = mConnection.getTextBeforeCursor(
+                Constants.MAX_CHARACTERS_FOR_RECAPITALIZATION, 0);
+        if (TextUtils.isEmpty(before)) {
+            return null;
+        }
+        final SpacingAndPunctuations spacingAndPunctuations = settingsValues.mSpacingAndPunctuations;
+        int wordStart = before.length();
+        while (wordStart > 0) {
+            final int codePoint = before.codePointBefore(wordStart);
+            if (spacingAndPunctuations.isWordSeparator(codePoint)) {
+                break;
+            }
+            wordStart -= Character.charCount(codePoint);
+        }
+        if (wordStart == before.length()) {
+            return null; // A separator is right before the cursor: no word to re-case.
+        }
+        return before.subSequence(wordStart, before.length()).toString();
+    }
+
+    /**
      * Performs a recapitalization event.
      * @param settingsValues The current settings values.
      */
     private void performRecapitalization(final SettingsValues settingsValues) {
-        // Only an explicit user selection is recapitalized, and only after a cursor move
-        // (FUTO behavior). With no selection a shift tap leaves the typed text alone and only
-        // affects the next letter, as in SwiftKey.
-        if (!mConnection.hasSelection() || !mRecapitalizeStatus.mIsEnabled()) {
+        // An explicit user selection is recapitalized as before. With no selection, a shift tap
+        // re-cases the word just typed (they, They, THEY) and its suggestions follow
+        // (WrenBoard 1.9 item 11, SwiftKey parity; supersedes the 2026-10-29 next-letter-only
+        // behavior).
+        if (!mRecapitalizeStatus.mIsEnabled()) {
             return;
         }
-        final int selectionStart = mConnection.getExpectedSelectionStart();
+        final boolean hadSelection = mConnection.hasSelection();
+        final String wordJustBeforeCursor = hadSelection
+                ? null : getWordJustBeforeCursorForRecapitalize(settingsValues);
+        if (!hadSelection && TextUtils.isEmpty(wordJustBeforeCursor)) {
+            return; // No word to re-case: shift only affects the next letter.
+        }
+        final int selectionStart = mConnection.getExpectedSelectionStart()
+                - (hadSelection ? 0 : wordJustBeforeCursor.length());
         final int selectionEnd = mConnection.getExpectedSelectionEnd();
         final int numCharsSelected = selectionEnd - selectionStart;
         if (numCharsSelected > Constants.MAX_CHARACTERS_FOR_RECAPITALIZATION) {
@@ -2010,10 +2045,18 @@ public final class InputLogic {
         // If we have a recapitalize in progress, use it; otherwise, start a new one.
         if (!mRecapitalizeStatus.isStarted()
                 || !mRecapitalizeStatus.isSetAt(selectionStart, selectionEnd)) {
-            final CharSequence selectedText =
-                    mConnection.getSelectedText(0 /* flags, 0 for no styles */);
-            if (TextUtils.isEmpty(selectedText)) return; // Race condition with the input connection
-            mRecapitalizeStatus.start(selectionStart, selectionEnd, selectedText.toString(),
+            final String selectedText;
+            if (hadSelection) {
+                final CharSequence selectedTextCharSequence =
+                        mConnection.getSelectedText(0 /* flags, 0 for no styles */);
+                if (TextUtils.isEmpty(selectedTextCharSequence)) {
+                    return; // Race condition with the input connection
+                }
+                selectedText = selectedTextCharSequence.toString();
+            } else {
+                selectedText = wordJustBeforeCursor;
+            }
+            mRecapitalizeStatus.start(selectionStart, selectionEnd, selectedText,
                     settingsValues.mLocale,
                     settingsValues.mSpacingAndPunctuations.sortedWordSeparators);
             // We trim leading and trailing whitespace.
@@ -2025,8 +2068,18 @@ public final class InputLogic {
         mConnection.deleteTextBeforeCursor(numCharsSelected);
         mConnection.commitText(mRecapitalizeStatus.getRecapitalizedString(), 1); // This was originally 0, but we no longer support 0
         mConnection.send();
-        mConnection.setSelection(mRecapitalizeStatus.getNewCursorStart(),
-                mRecapitalizeStatus.getNewCursorEnd());
+        if (hadSelection) {
+            mConnection.setSelection(mRecapitalizeStatus.getNewCursorStart(),
+                    mRecapitalizeStatus.getNewCursorEnd());
+        } else {
+            // Keep the re-cased word composing so its suggestions follow the new case.
+            final String word = mRecapitalizeStatus.getRecapitalizedString();
+            final int[] codePoints = StringUtils.toCodePointArray(word);
+            mWordComposer.setComposingWord(codePoints,
+                    mImeHelper.getCodepointCoordinates(codePoints));
+            setComposingTextInternal(word, 1);
+            postUpdateSuggestionStrip(SuggestedWords.INPUT_STYLE_TYPING);
+        }
     }
 
     private void performAdditionToUserHistoryDictionary(final SettingsValues settingsValues,

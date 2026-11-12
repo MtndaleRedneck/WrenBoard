@@ -31,6 +31,31 @@ object ModelOutputSanitizer {
     private val englishIRegex = Regex("^I\\s.*")
     private val beforeEndsPunctRegex = Regex(".*[.:?!]$")
 
+    // Whisper hallucination phrases produced on silence, background noise, or mic switching
+    // (WrenBoard 1.9 item 10; first treated as a bug in 1.5). A result that is ONLY one of
+    // these phrases is dropped entirely and never reaches the text field or the suggestion strip.
+    // Kept conservative on purpose: short real utterances like "thank you" are never filtered.
+    private val silencePhrases = setOf(
+        "thanks for watching",
+        "thank you for watching",
+        "thank you so much for watching",
+        "thank you for watching this video",
+        "thanks for listening",
+        "thank you for listening",
+        "please subscribe",
+        "like and subscribe",
+        "subscribe to my channel",
+        "subscribe to our channel",
+        "the end",
+        "music"
+    )
+    private val trailingPunctuationRegex = Regex("[.!\\u2026\\s]+$")
+
+    private fun isSilencePhrase(text: String): Boolean {
+        val normalized = text.trim().replace(trailingPunctuationRegex, "").lowercase()
+        return silencePhrases.contains(normalized)
+    }
+
     @JvmStatic
     fun sanitize(result: String, textContext: TextContext?): String {
         if (textContext == null) {
@@ -41,6 +66,9 @@ object ModelOutputSanitizer {
 
         var trimmed = result.trim()
         if (trimmed.isEmpty()) return ""
+
+        // Item 10: drop dictation results that are only a silence phrase.
+        if (isSilencePhrase(trimmed)) return ""
 
         val before = (textContext.beforeCursor?.toString() ?: "")
             .split("\n")

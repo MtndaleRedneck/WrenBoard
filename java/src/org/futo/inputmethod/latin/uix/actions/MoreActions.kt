@@ -89,6 +89,7 @@ import org.futo.inputmethod.latin.uix.ActionWindow
 import org.futo.inputmethod.latin.uix.LocalKeyboardScheme
 import org.futo.inputmethod.latin.uix.LocalManager
 import org.futo.inputmethod.latin.uix.getSettingBlocking
+import org.futo.inputmethod.latin.uix.setSetting
 import org.futo.inputmethod.latin.uix.settings.ScreenTitle
 import org.futo.inputmethod.latin.uix.settings.WarningTip
 import org.futo.inputmethod.latin.uix.settings.useDataStoreValue
@@ -182,6 +183,15 @@ fun MoreActionsView(setNestedBack: ((() -> Boolean)?) -> Unit = {}) {
     var transaction by remember { mutableStateOf<ActionDragDraft?>(null) }
     var pointer by remember { mutableStateOf(Offset.Zero) }
     var overHidden by remember { mutableStateOf(false) }
+    // WrenBoard 1.9 (item 3/4): pin-slot drop state and dashed landing-slot highlight
+    var overPinned by remember { mutableStateOf(false) }
+    var insertionTargetId by remember { mutableStateOf<String?>(null) }
+    val pinnedStored = useDataStoreValue(PinnedActions)
+    val pinnedIds = pinnedStored.toActionList().mapNotNull { ActionToId[it] }
+    val latestPinnedIds by rememberUpdatedState(pinnedIds)
+    fun persistPinned(ids: List<String>) {
+        scope.launch { context.setSetting(PinnedActions.key, ids.joinToString(",")) }
+    }
     val bounds = remember { mutableStateMapOf<String, Rect>() }
     val latestDraft by rememberUpdatedState(draft)
     LaunchedEffect(persisted.encode()) { if(dragging == null) draft = persisted }
@@ -227,29 +237,45 @@ fun MoreActionsView(setNestedBack: ((() -> Boolean)?) -> Unit = {}) {
                     change.consume()
                     pointer = latestRoot + change.position
                     overHidden = bounds["hidden-destination"]?.contains(pointer) == true
-                    if(!overHidden) {
+                    val pinTarget = !overHidden && !latestHidden && bounds["pin-destination"]?.contains(pointer) == true
+                    if(overPinned != pinTarget) overPinned = pinTarget
+                    if(!overHidden && !pinTarget) {
                         val target = bounds.entries.firstOrNull {
                             it.key.substringAfter(':', "") in currentVisible && it.key.substringAfter(':') != dragging && it.value.contains(pointer)
                         }?.key?.substringAfter(':')
                         val index = latestDraft.visible.indexOf(target)
                         if(index >= 0) {
+                            insertionTargetId = target
                             transaction?.move(dragging!!, index)
                             transaction?.preview()?.let { draft = it }
+                        } else {
+                            insertionTargetId = null
                         }
+                    } else {
+                        insertionTargetId = null
                     }
                 }
             },
             onDragEnd = {
-                dragging?.let { if(overHidden) transaction?.hide(it) }
+                val dropped = dragging
+                if(dropped != null && overPinned) {
+                    // WrenBoard 1.9 (item 3): dropping on the strip pin slot toggles the pin and
+                    // never changes the visible order.
+                    transaction?.cancel()
+                    transaction?.preview()?.let { draft = it }
+                    persistPinned(if(dropped in latestPinnedIds) latestPinnedIds - dropped else latestPinnedIds + dropped)
+                } else {
+                    dragging?.let { if(overHidden) transaction?.hide(it) }
+                }
                 val completed = transaction?.drop()
                 if(dragging != null) rootView.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
-                dragging = null; transaction = null; overHidden = false
+                dragging = null; transaction = null; overHidden = false; overPinned = false; insertionTargetId = null
                 if(completed != null) persist(completed)
             },
             onDragCancel = {
                 transaction?.cancel()
                 transaction?.preview()?.let { draft = it }
-                dragging = null; transaction = null; overHidden = false
+                dragging = null; transaction = null; overHidden = false; overPinned = false; insertionTargetId = null
             }
         )
     }
@@ -286,14 +312,59 @@ fun MoreActionsView(setNestedBack: ((() -> Boolean)?) -> Unit = {}) {
     }
     val darkPanel = LocalKeyboardScheme.current.keyboardSurface.luminance() < 0.5f
     val panelBrush = if(darkPanel) Brush.verticalGradient(listOf(Color(0xFF2E2E2E), Color(0xFF252525))) else Brush.verticalGradient(listOf(LocalKeyboardScheme.current.keyboardSurface, LocalKeyboardScheme.current.keyboardSurface))
+    val editorLabelColor = if(darkPanel) Color(0xFFE0E0E0) else Color(0xFF252525)
     Box(Modifier.background(panelBrush).onGloballyPositioned { rootOrigin = it.boundsInRoot().topLeft }.then(dragModifier)) {
     Column {
+        if(settingsNav == null) {
+            // WrenBoard 1.9 (item 4): SwiftKey-style customise header - back arrow top-left, check top-right.
+            Row(Modifier.fillMaxWidth().height(org.futo.inputmethod.latin.uix.ToolbarRowHeight), verticalAlignment = Alignment.CenterVertically) {
+                androidx.compose.material3.IconButton(onClick = {
+                    if(hiddenOpen) hiddenOpen = false
+                    else manager?.closeActionWindow()
+                }) {
+                    Icon(painterResource(R.drawable.arrow_left_26), contentDescription = stringResource(R.string.action_editor_title), tint = Color(0xFFFF8710))
+                }
+                Spacer(Modifier.weight(1f))
+                Text(stringResource(R.string.action_editor_title), color = editorLabelColor, fontSize = 14.sp)
+                Spacer(Modifier.weight(1f))
+                androidx.compose.material3.IconButton(onClick = { manager?.closeActionWindow() }) {
+                    Icon(painterResource(R.drawable.check), contentDescription = stringResource(R.string.action_editor_title), tint = Color(0xFFFF8710))
+                }
+            }
+        }
         Row(Modifier.fillMaxWidth().height(org.futo.inputmethod.latin.uix.ToolbarRowHeight).background(if(darkPanel) Color(0xFF3C3C3C) else LocalKeyboardScheme.current.keyboardContainer), verticalAlignment = Alignment.CenterVertically) {
             toolbarIds.forEach { id ->
                 androidx.compose.runtime.key(id) {
                     val action = AllActionsMap[id]!!
-                    Box(tileModifier(id, true).weight(1f).fillMaxHeight().clickable { manager?.activateAction(action) }, contentAlignment = Alignment.Center) {
+                    Box(tileModifier(id, true).weight(1f).fillMaxHeight().clickable { manager?.activateAction(action) }
+                        .drawBehind {
+                            // WrenBoard 1.9 (item 4): dashed orange landing slot while dragging
+                            if(dragging != null && id == insertionTargetId) drawRoundRect(
+                                Color(0xFFFF8710), cornerRadius = CornerRadius(8.dp.toPx()),
+                                style = Stroke(width = 1.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 3.dp.toPx()))))
+                        }, contentAlignment = Alignment.Center) {
                         Icon(painterResource(action.icon), contentDescription = if(action == org.futo.inputmethod.latin.uix.actions.clipboard.ClipboardHistoryAction) stringResource(R.string.wren_home_clipboard) else stringResource(action.name), tint = LocalKeyboardScheme.current.onKeyboardContainer)
+                    }
+                }
+            }
+            // WrenBoard 1.9 (item 3): strip pin slot at the right end. While dragging, a dashed
+            // orange slot marks the drop target; dropping pins (or unpins). Tapping the pinned
+            // icon unpins it.
+            Box(Modifier.width(40.dp).fillMaxHeight()
+                .onGloballyPositioned { bounds["pin-destination"] = it.boundsInRoot() }
+                .drawBehind {
+                    if(dragging != null && !hiddenOpen) drawRoundRect(
+                        Color(0xFFFF8710).copy(alpha = if(overPinned) 1.0f else 0.4f),
+                        cornerRadius = CornerRadius(8.dp.toPx()),
+                        style = Stroke(width = 1.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 3.dp.toPx()))))
+                },
+                contentAlignment = Alignment.Center
+            ) {
+                pinnedIds.firstOrNull()?.let { pid ->
+                    AllActionsMap[pid]?.let { paction ->
+                        Icon(painterResource(paction.icon), contentDescription = stringResource(paction.name),
+                            tint = LocalKeyboardScheme.current.onKeyboardContainer,
+                            modifier = Modifier.size(23.8.dp, 29.9.dp).clickable { persistPinned(pinnedIds - pid) })
                     }
                 }
             }
@@ -313,6 +384,11 @@ fun MoreActionsView(setNestedBack: ((() -> Boolean)?) -> Unit = {}) {
                     ActionItem(action, tileModifier(id, false).animateItem().clickable {
                         if(hiddenOpen) persist(draft.show(id, draft.visible.size)) else manager?.activateAction(action)
                     }, dragIcon = false, dimmed = hiddenOpen)
+                    if(dragging != null && !hiddenOpen && id == insertionTargetId) Box(Modifier.matchParentSize().drawBehind {
+                        // WrenBoard 1.9 (item 4): dashed orange landing slot while dragging
+                        drawRoundRect(Color(0xFFFF8710), cornerRadius = CornerRadius(8.dp.toPx()),
+                            style = Stroke(width = 1.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 3.dp.toPx()))))
+                    })
                     if(hiddenOpen) androidx.compose.material3.IconButton(
                         onClick = { persist(draft.show(id, draft.visible.size)) },
                         modifier = Modifier.align(Alignment.TopEnd).size(32.dp)
