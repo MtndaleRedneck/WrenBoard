@@ -40,6 +40,7 @@ private data class GithubRelease(
     val tag_name: String = "",
     val draft: Boolean = false,
     val prerelease: Boolean = false,
+    val body: String? = null,
     val assets: List<GithubAsset> = emptyList()
 )
 
@@ -62,6 +63,18 @@ sealed interface UpdateCheckOutcome {
     object Unavailable : UpdateCheckOutcome
 }
 
+/** WrenBoard 1.10 (same rule as BingeMote and Listen Later): bullet lines and section headings from the release
+ *  notes with simple markdown removed. A heading comes back as "## Name". Other lines are ignored. */
+fun notesBullets(body: String?): List<String> = body.orEmpty().lines().map { it.trim() }
+    .mapNotNull {
+        when {
+            it.startsWith("- ") || it.startsWith("* ") -> it.drop(2).replace("**", "").replace("`", "").trim().take(200)
+            it.startsWith("#") -> it.trimStart('#').replace("**", "").replace("`", "").trim().take(60).let { h -> if (h.isEmpty()) "" else "## $h" }
+            else -> null
+        }
+    }
+    .filter { it.isNotEmpty() }.take(16)
+
 /** The release's usable APK, or null: draft, prerelease, unparsable version, or no APK under the allowed prefix. */
 private fun GithubRelease.toUpdateResult(): UpdateResult? {
     if(draft || prerelease) return null
@@ -74,7 +87,7 @@ private fun GithubRelease.toUpdateResult(): UpdateResult? {
     val d = asset.digest.orEmpty()
     val sha = if(d.startsWith("sha256:") && Regex("[0-9a-fA-F]{64}").matches(d.removePrefix("sha256:"))) d.removePrefix("sha256:").lowercase() else null
     return UpdateResult(nextVersion = nextVersion, apkUrl = asset.browser_download_url, nextVersionString = versionString,
-        size = asset.size, sha256 = sha)
+        size = asset.size, sha256 = sha, notes = notesBullets(body))
 }
 
 /** The first usable release in GitHub's releases-list JSON (newest first). Throws on JSON that is not a list. */
