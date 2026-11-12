@@ -251,8 +251,11 @@ class LatinIME : InputMethodServiceCompose(), LatinIMELegacy.SuggestionStripCont
     // onKeyDown -> uixManager.navigateActionBack(). setBackDisposition pushes the value to the
     // OS immediately; UixManager calls this when panels open and close.
     fun syncBackDispositionForPanels() {
-        setBackDisposition(if(uixManager.hasOpenActionWindow()) BACK_DISPOSITION_ADJUST_NOTHING
-            else BACK_DISPOSITION_DEFAULT)
+        val disposition = if(uixManager.hasOpenActionWindow()) BACK_DISPOSITION_ADJUST_NOTHING
+            else BACK_DISPOSITION_DEFAULT
+        setBackDisposition(disposition)
+        if(BuildConfig.DEBUG) android.util.Log.i("WB18_NAV",
+            "syncBackDisposition pushed=$disposition now=$backDisposition open=${uixManager.hasOpenActionWindow()}")
     }
 
     private var isNavigationBarVisible = false
