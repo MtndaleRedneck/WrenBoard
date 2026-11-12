@@ -2025,14 +2025,11 @@ public final class InputLogic {
         // (WrenBoard 1.9 item 11, SwiftKey parity; supersedes the 2026-10-29 next-letter-only
         // behavior).
         final boolean hadSelection = mConnection.hasSelection();
-        if (!mRecapitalizeStatus.mIsEnabled()) {
-            // The cursor-move gate exists to protect a STALE SELECTION after a field switch.
-            // The typing-recase path always targets the live word at the cursor, so it is safe
-            // (and required, item 11) even before the first cursor move.
-            if (hadSelection) {
-                return;
-            }
-            mRecapitalizeStatus.enable();
+        // The cursor-move gate protects a STALE SELECTION after a field switch, so it still
+        // gates the explicit-selection path. The typing-recase path targets the live word at
+        // the cursor, so it bypasses the gate without enabling it for stale selections.
+        if (hadSelection && !mRecapitalizeStatus.mIsEnabled()) {
+            return;
         }
         final String wordJustBeforeCursor = hadSelection
                 ? null : getWordJustBeforeCursorForRecapitalize(settingsValues);

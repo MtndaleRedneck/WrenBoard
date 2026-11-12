@@ -798,6 +798,7 @@ class UixManager(private val latinIME: LatinIME) {
         currWindowActionWindow.value = (action.windowImpl!!)(keyboardManagerForAction, persistentStates[action])
 
         mainKeyboardHidden.value = currWindowActionWindow.value?.onlyShowAboveKeyboard == false
+        latinIME.syncBackDispositionForPanels()
 
         if(action.keepScreenAwake) {
             latinIME.window.window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
@@ -825,6 +826,7 @@ class UixManager(private val latinIME: LatinIME) {
         currWindowActionWindow.value = null
 
         mainKeyboardHidden.value = false
+        latinIME.syncBackDispositionForPanels()
 
         // Explicit return to the letters page when the model is stuck on symbols
         latinIME.onActionWindowClosedRestoreLetters()

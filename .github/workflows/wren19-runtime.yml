@@ -16,7 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
-      VERSION_NAME: 1.9.0 # retrigger r4
+      VERSION_NAME: 1.9.0 # retrigger r5
       VERSION_CODE: '10'
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
