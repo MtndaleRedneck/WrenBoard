@@ -96,6 +96,16 @@ if ! grep -q 'OK (2 tests)' "$OUT/backdisposition.txt"; then
 fi
 
 # Runtime Back matrix: use normal Android Back, never the debug close shortcut.
+# The WBDBG receiver is runtime-registered on the IME process, so if an instrument failure
+# force-stopped the app above, broadcasts would silently not deliver (run 43189173110: panel
+# never opened, probe compared keyboard.png against the bare target app). Relaunch and
+# retake the keyboard baseline unconditionally.
+adb shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1 >/dev/null || true
+sleep 2
+adb shell am start -W -n com.wrenboard.imetarget/.TestInput >/dev/null
+adb shell ime set "$IME"
+sleep 2
+adb exec-out screencap -p > "$OUT/keyboard.png"
 for PANEL in emoji gif clipboard_history text_edit more; do
  adb logcat -c
  adb shell am broadcast -a "$PKG.WBDBG" -p "$PKG" --es cmd "open:$PANEL" >/dev/null

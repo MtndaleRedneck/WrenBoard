@@ -189,13 +189,15 @@ public class Wren18NavigationTest {
             org.futo.inputmethod.latin.uix.actions.UnifiedActionsKt.readUnifiedActions(activity);
         assertFalse("Completed finger drag must persist a new order",oldOrder.visible.equals(reordered.visible));
         assertTrue(device.takeScreenshot(new File(out,"drag_end.png")));
-        // Both copies of the first six actions must retain independent hit regions.
+        // Both copies of an action must retain independent hit regions. Clipboard and GIF
+        // sit in both the favorites toolbar and the grid under the 1.9 favorites-first
+        // order; Emojis is grid-only now (run 43189173110).
         java.util.List<String> beforeBar = new java.util.ArrayList<>(reordered.visible);
-        drag(device, copyCenter(device,"Emojis",true), copyCenter(device,"Clipboard",true), new File(out,"drag_bar_start.png"));
+        drag(device, copyCenter(device,"GIF",true), copyCenter(device,"Clipboard",true), new File(out,"drag_bar_start.png"));
         org.futo.inputmethod.latin.uix.actions.OrderedActionIds afterBar = org.futo.inputmethod.latin.uix.actions.UnifiedActionsKt.readUnifiedActions(activity);
         assertFalse("Drag starting on toolbar must reorder persistently",beforeBar.equals(afterBar.visible));
         java.util.List<String> beforeDrop = new java.util.ArrayList<>(afterBar.visible);
-        drag(device, copyCenter(device,"Emojis",false), copyCenter(device,"Clipboard",true), new File(out,"drag_bar_drop.png"));
+        drag(device, copyCenter(device,"GIF",false), copyCenter(device,"Clipboard",true), new File(out,"drag_bar_drop.png"));
         reordered = org.futo.inputmethod.latin.uix.actions.UnifiedActionsKt.readUnifiedActions(activity);
         assertFalse("Grid drag dropping on toolbar must reorder persistently",beforeDrop.equals(reordered.visible));
         assertTrue(device.takeScreenshot(new File(out,"drag_bar_end.png")));
