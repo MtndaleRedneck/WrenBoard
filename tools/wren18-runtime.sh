@@ -66,7 +66,7 @@ for PANEL in emoji gif clipboard_history text_edit more; do
  adb logcat -d -s WB18_NAV:I > "$OUT/navlog_${PANEL}_open.txt" || true
  adb logcat -c
  adb shell input keyevent KEYCODE_BACK
- for attempt in $(seq 1 12); do adb logcat -d -s WB18_NAV:I | grep -q "pushed=0"; break; sleep 0.5; done
+ for attempt in $(seq 1 12); do adb logcat -d -s WB18_NAV:I | grep -q "pushed=0" && break; sleep 0.5; done
  sleep 1
  adb exec-out screencap -p > "$OUT/panel_${PANEL}_back.png"
  adb logcat -d -s WB18_NAV:I > "$OUT/navlog_${PANEL}_back.txt" || true
