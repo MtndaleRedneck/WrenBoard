@@ -105,6 +105,10 @@ sleep 2
 adb shell am start -W -n com.wrenboard.imetarget/.TestInput >/dev/null
 adb shell ime set "$IME"
 sleep 2
+# Focus the editor so the keyboard is actually shown before the baseline capture
+# (run 43192031716: no tap after relaunch, IME window hidden, opened_diff 0.0).
+adb shell input tap 400 500
+sleep 4
 adb exec-out screencap -p > "$OUT/keyboard.png"
 for PANEL in emoji gif clipboard_history text_edit more; do
  adb logcat -c
