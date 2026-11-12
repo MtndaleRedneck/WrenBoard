@@ -1,5 +1,6 @@
 package org.futo.inputmethod.engine
 
+import org.futo.inputmethod.latin.uix.getSetting
 import android.content.Context
 import android.graphics.Rect
 import android.view.inputmethod.EditorInfo
@@ -78,9 +79,33 @@ class IMEHelper(
 
     override fun getContextForSettings(): Context = context
 
+    /**
+     * WrenBoard 1.10 (Ezzy: "the top bar keeps going blank"): whenever the strip would show nothing at the start of
+     * a field or after punctuation/space, show I / The / You instead (only when starter words are on and the field
+     * takes suggestions). Never while a word is being typed.
+     */
+    private fun neverBlank(words: SuggestedWords?): SuggestedWords {
+        val empty = SuggestedWords.getEmptyInstance()
+        if (words != null && !words.isEmpty) return words
+        try {
+            if (!context.getSetting(org.futo.inputmethod.latin.uix.StarterWordsSetting)) return empty
+            val cur = Settings.getInstance().current
+            if (!cur.needsToLookupSuggestions() || !cur.isSuggestionsEnabledPerUserSettings) return empty
+            val before = latinIME.currentInputConnection?.getTextBeforeCursor(1, 0)
+            if (!before.isNullOrEmpty() && before[0].isLetterOrDigit()) return empty
+            val list = ArrayList<SuggestedWords.SuggestedWordInfo>()
+            org.futo.inputmethod.engine.general.WrenStarterWords.FALLBACK.forEach { w ->
+                list.add(SuggestedWords.SuggestedWordInfo(w, "", SuggestedWords.SuggestedWordInfo.MAX_SCORE,
+                    SuggestedWords.SuggestedWordInfo.KIND_PREDICTION, org.futo.inputmethod.latin.Dictionary.DICTIONARY_HARDCODED,
+                    SuggestedWords.SuggestedWordInfo.NOT_AN_INDEX, SuggestedWords.SuggestedWordInfo.NOT_A_CONFIDENCE))
+            }
+            return SuggestedWords(list, null, null, false, false, false, SuggestedWords.INPUT_STYLE_TYPING, -1)
+        } catch (e: Exception) { return empty }
+    }
+
     fun setNeutralSuggestionStrip(cfg: ExpandableSuggestionBarConfiguration = NonExpandableSuggestionBar) {
         latinIME.setSuggestions(
-            suggestedWords = SuggestedWords.getEmptyInstance(),
+            suggestedWords = neverBlank(null),
             rtlSubtype = Settings.getInstance().current.mIsRTL,
             cfg = cfg
         )
@@ -88,7 +113,7 @@ class IMEHelper(
 
     fun showSuggestionStrip(suggestedWords: SuggestedWords?, cfg: ExpandableSuggestionBarConfiguration = NonExpandableSuggestionBar) {
         latinIME.setSuggestions(
-            suggestedWords = suggestedWords ?: SuggestedWords.getEmptyInstance(),
+            suggestedWords = neverBlank(suggestedWords),
             rtlSubtype = Settings.getInstance().current.mIsRTL,
             cfg = cfg
         )
