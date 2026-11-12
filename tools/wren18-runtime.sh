@@ -56,18 +56,35 @@ for attempt in $(seq 1 8); do
  adb shell ime set "$IME"
 done
 adb exec-out screencap -p > "$OUT/keyboard.png"
+
+TESTPKG=$(adb shell pm list instrumentation | tr -d '\r' | grep "target=$PKG" | sed -E 's/^instrumentation:([^ ]+).*/\1/' | head -1)
+test -n "$TESTPKG"
+timeout 480 adb shell am instrument -w -r -e class org.futo.inputmethod.latin.uix.settings.Wren18NavigationTest "$TESTPKG" | tee "$OUT/navigation.txt" || true
+NAV_STATUS=0
+grep -q 'OK (1 test)' "$OUT/navigation.txt" || NAV_STATUS=1
+# WrenBoard 1.9: recase must assert actual field text (1/2/3 shift taps, fresh field, no word).
+timeout 480 adb shell am instrument -w -r -e class org.futo.inputmethod.latin.Wren19RecaseTest "$TESTPKG" | tee "$OUT/recase.txt" || true
+grep -q 'OK (3 tests)' "$OUT/recase.txt" || NAV_STATUS=1
+# WrenBoard 1.9 item 6: disposition pushed to the OS on panel open/close. Nonblocking while
+# Tab 1 keeps must-fix 4 open; the WB18_NAV log and dumpsys probes are the OS-side evidence.
+timeout 480 adb shell am instrument -w -r -e class org.futo.inputmethod.latin.Wren19BackDispositionTest "$TESTPKG" | tee "$OUT/backdisposition.txt" || true
+grep -q 'OK (2 tests)' "$OUT/backdisposition.txt" && echo "back-disposition instrumentation: PASS" || echo "back-disposition instrumentation: FAIL (nonblocking)"
+
 # Runtime Back matrix: use normal Android Back, never the debug close shortcut.
 for PANEL in emoji gif clipboard_history text_edit more; do
  adb logcat -c
  adb shell am broadcast -a "$PKG.WBDBG" -p "$PKG" --es cmd "open:$PANEL" >/dev/null
  for attempt in $(seq 1 16); do adb exec-out screencap -p > "$OUT/.probe.png" && python3 tools/wren18-panel-check.py --probe "$OUT/keyboard.png" "$OUT/.probe.png" && break; sleep 0.5; done
  for attempt in $(seq 1 12); do adb logcat -d -s WB18_NAV:I | grep -q "pushed=3" && break; sleep 0.5; done
+ adb shell dumpsys window > "$OUT/wm_${PANEL}_open.txt" || true
+ adb shell dumpsys activity service com.android.systemui/.SystemUIService > "$OUT/systemui_${PANEL}_open.txt" || true
  sleep 1
  adb exec-out screencap -p > "$OUT/panel_${PANEL}_open.png"
  adb logcat -d -s WB18_NAV:I > "$OUT/navlog_${PANEL}_open.txt" || true
  adb logcat -c
  adb shell input keyevent KEYCODE_BACK
  for attempt in $(seq 1 12); do adb logcat -d -s WB18_NAV:I | grep -q "pushed=0" && break; sleep 0.5; done
+ adb shell dumpsys window > "$OUT/wm_${PANEL}_back.txt" || true
  sleep 1
  adb exec-out screencap -p > "$OUT/panel_${PANEL}_back.png"
  adb logcat -d -s WB18_NAV:I > "$OUT/navlog_${PANEL}_back.txt" || true
@@ -150,14 +167,5 @@ for DPI in 450 480; do
  adb shell am broadcast -a "$PKG.WBDBG" -p "$PKG" --es cmd geom >/dev/null
  adb exec-out screencap -p > "$OUT/keyboard_${DPI}dpi.png"
 done
-
-TESTPKG=$(adb shell pm list instrumentation | tr -d '\r' | grep "target=$PKG" | sed -E 's/^instrumentation:([^ ]+).*/\1/' | head -1)
-test -n "$TESTPKG"
-timeout 480 adb shell am instrument -w -r -e class org.futo.inputmethod.latin.uix.settings.Wren18NavigationTest "$TESTPKG" | tee "$OUT/navigation.txt" || true
-NAV_STATUS=0
-grep -q 'OK (1 test)' "$OUT/navigation.txt" || NAV_STATUS=1
-# WrenBoard 1.9: recase must assert actual field text (1/2/3 shift taps, fresh field, no word).
-timeout 480 adb shell am instrument -w -r -e class org.futo.inputmethod.latin.Wren19RecaseTest "$TESTPKG" | tee "$OUT/recase.txt" || true
-grep -q 'OK (3 tests)' "$OUT/recase.txt" || NAV_STATUS=1
 
 exit "$NAV_STATUS"
