@@ -22,6 +22,9 @@ class UpdateAttempts(
     private val lock = Any()
     private var token: Long = firstToken
     private var running = false
+    // WrenBoard 1.10: the APK is committed to Android's installer and its answer has not come back yet.
+    private var handedOver = false
+    private var handedOverAt = 0L
     var text: String = ""
         private set
     var lastOutcome: Outcome? = null
@@ -32,7 +35,7 @@ class UpdateAttempts(
 
     /** The prompt was opened. With no attempt running, the previous attempt's words go and its token is retired. */
     fun openPrompt(): Long = synchronized(lock) {
-        if (!running) {
+        if (!running && !handedOver) {
             token++
             lastOutcome = null
             set("")
@@ -44,9 +47,24 @@ class UpdateAttempts(
     fun start(): Long = synchronized(lock) {
         token++
         running = true
+        handedOver = false
         lastOutcome = null
         set("")
         token
+    }
+
+    /**
+     * WrenBoard 1.10: true while a download is running, or the finished download is with Android's installer and
+     * no final answer has arrived (waiting for the person to confirm). Update must not start a second download then.
+     * A hand-over older than [HANDOVER_MAX_MS] no longer counts, so a lost answer cannot block updates forever.
+     */
+    fun isBusy(now: Long = System.currentTimeMillis()): Boolean = synchronized(lock) {
+        running || (handedOver && now - handedOverAt < HANDOVER_MAX_MS)
+    }
+
+    /** The finished download of [attempt] was committed to the installer, whose answer is still to come. */
+    fun handOver(attempt: Long, now: Long = System.currentTimeMillis()) = synchronized(lock) {
+        if (attempt == token) { handedOver = true; handedOverAt = now }
     }
 
     /** The download/hand-over part of [attempt] ended (the installer may still answer later). */
@@ -64,6 +82,7 @@ class UpdateAttempts(
     /** A download or hand-over failure in [attempt]. */
     fun fail(attempt: Long, words: String): Boolean = synchronized(lock) {
         if (attempt != token) return false
+        handedOver = false
         lastOutcome = Outcome.Failed
         set(words)
         true
@@ -74,6 +93,7 @@ class UpdateAttempts(
         if (attempt != token) return false
         val outcome = outcomeFor(status)
         if (outcome == Outcome.Waiting) return false
+        handedOver = false
         lastOutcome = outcome
         set(wordsFor(status, systemMessage))
         true
@@ -85,6 +105,7 @@ class UpdateAttempts(
     }
 
     companion object {
+        const val HANDOVER_MAX_MS = 10 * 60 * 1000L
         // The values of android.content.pm.PackageInstaller.STATUS_* (fixed by the Android API).
         const val STATUS_PENDING_USER_ACTION = -1
         const val STATUS_SUCCESS = 0

@@ -1,0 +1,110 @@
+name: wren110-runtime
+# build trigger for the 1.10 line: push commits touching this file
+on:
+  push:
+    branches: [instinct1/release-1.10.0]
+    paths: [.github/workflows/wren110-runtime.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: wren110-runtime
+  cancel-in-progress: false
+jobs:
+  runtime:
+    if: github.repository == 'MtndaleRedneck/WrenBoard' && github.event.repository.private == false
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      VERSION_NAME: 1.10.0 # r1
+      VERSION_CODE: '11'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Build dependencies
+        run: git submodule update --init java/assets/themes java/res-large libs translations voiceinput-shared/src/main/ml
+      - name: Reuse shipped swipe weights for regression fixture
+        run: |
+          curl --http1.1 -fL --retry 4 --retry-all-errors --retry-delay 3 --connect-timeout 30 --max-time 180 -o /tmp/wren16.apk https://github.com/MtndaleRedneck/WrenBoard/releases/download/v1.6.0/WrenBoard-1.6.apk
+          echo '89e3c3a7f756816bb36f391a4179405942738be9bd2ff12f3f9c4c87459f453f  /tmp/wren16.apk' | sha256sum -c -
+          python3 - <<'PYWEIGHTS'
+          from pathlib import Path
+          import zipfile
+          with zipfile.ZipFile('/tmp/wren16.apk') as z:
+              files=[n for n in z.namelist() if n.startswith('assets/futo-swipe/') and not n.endswith('/')]
+              assert files, 'Shipped weights absent'
+              for n in files:
+                  p=Path('java')/n
+                  p.parent.mkdir(parents=True,exist_ok=True)
+                  p.write_bytes(z.read(n))
+          PYWEIGHTS
+          rm /tmp/wren16.apk
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Install NDK and image tools
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'ndk;28.2.13676358'
+          python3 -m pip install --break-system-packages pillow
+          sudo apt-get install -y -q ffmpeg
+      - name: Build debug fixture APK
+        run: |
+          ./gradlew --no-daemon --max-workers=2 -Dorg.gradle.jvmargs='-Xmx5g -Dfile.encoding=UTF-8' -Pkotlin.compiler.execution.strategy=in-process testStableDebugUnitTest :voiceinput-shared:testDebugUnitTest assembleStableDebug assembleStableDebugAndroidTest -Pandroid.injected.build.abi=x86_64 -Pandroid.injected.testOnly=false
+          bash tools/ime-target/build.sh
+          python3 - <<'PYAPK'
+          from pathlib import Path
+          import zipfile,hashlib,shutil
+          app={}; tests={}
+          for p in Path('build').rglob('*.apk'):
+              try:
+                  with zipfile.ZipFile(p) as z:
+                      names=z.namelist()
+                      if 'classes.dex' not in names: continue
+                      isapp=any(n.startswith('lib/') and n.endswith('.so') for n in names)
+                  digest=hashlib.sha256(p.read_bytes()).hexdigest()
+                  (app if isapp else tests)[digest]=p
+              except zipfile.BadZipFile: pass
+          assert len(app)==1, ('expected one full app APK',list(app.values()))
+          assert len(tests)==1, ('expected one test APK',list(tests.values()))
+          shutil.copyfile(next(iter(app.values())), 'w17-debug.apk')
+          shutil.copyfile(next(iter(tests.values())), 'w17-tests.apk')
+          print('Resolved full app and test APKs',list(app.values()),list(tests.values()))
+          PYAPK
+      - name: Preserve fixture APKs and tests
+        uses: actions/upload-artifact@v4
+        with:
+          name: wren110-debug-fixture
+          path: |
+            w17-debug.apk
+            w17-tests.apk
+            build/test-results/
+          retention-days: 3
+      - name: Install screenshot text locator
+        run: sudo apt-get update -q && sudo apt-get install -y -q tesseract-ocr
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Capture isolated runtime screens
+        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
+        with:
+          api-level: 33
+          target: google_apis
+          arch: x86_64
+          profile: Nexus 6
+          ram-size: 4096M
+          disable-animations: false
+          script: bash tools/wren18-runtime.sh w17-debug.apk w17-tests.apk
+
+      - name: Preserve synthetic runtime evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wren110-runtime
+# build trigger for the 1.10 line: push commits touching this file-evidence
+          path: runtime18/
+          retention-days: 3

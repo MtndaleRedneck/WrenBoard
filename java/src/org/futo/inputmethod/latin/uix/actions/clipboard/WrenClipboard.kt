@@ -156,6 +156,14 @@ class WrenClipboardWindow(
         WrenClipboardPanel(this)
     }
 
+    /** WrenBoard 1.10 (back arrow): step out of one clipboard sub-state per Back press (entry menu, then
+     *  search or entry editing) before the panel itself closes. */
+    override fun navigateBack(): Boolean {
+        if (menuFor.value != null) { menuFor.value = null; return true }
+        if (searching.value || editing.value != null) { endTextMode(); return true }
+        return false
+    }
+
     override fun close(): CloseResult {
         searching.value = false
         editing.value = null
