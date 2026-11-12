@@ -117,6 +117,8 @@ for PANEL in emoji gif clipboard_history text_edit more; do
  for attempt in $(seq 1 12); do adb logcat -d -s WB18_NAV:I | grep -q "pushed=3" && break; sleep 0.5; done
  adb shell dumpsys window > "$OUT/wm_${PANEL}_open.txt" || true
  adb shell dumpsys activity service com.android.systemui/.SystemUIService > "$OUT/systemui_${PANEL}_open.txt" || true
+ # Tab 1 (must-fix 4): the input-method service's own view of the disposition mid-panel.
+ adb shell dumpsys input_method > "$OUT/im_${PANEL}_open.txt" || true
  sleep 1
  adb exec-out screencap -p > "$OUT/panel_${PANEL}_open.png"
  adb logcat -d -s WB18_NAV:I > "$OUT/navlog_${PANEL}_open.txt" || true
