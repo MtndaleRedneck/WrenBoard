@@ -255,7 +255,7 @@ class LatinIME : InputMethodServiceCompose(), LatinIMELegacy.SuggestionStripCont
             else BACK_DISPOSITION_DEFAULT
         setBackDisposition(disposition)
         if(BuildConfig.DEBUG) android.util.Log.i("WB18_NAV",
-            "syncBackDisposition pushed=$disposition now=$backDisposition open=${uixManager.hasOpenActionWindow()}")
+            "syncBackDisposition pushed=$disposition now=$backDisposition open=${uixManager.hasOpenActionWindow()} inputViewShown=$isInputViewShown")
     }
 
     private var isNavigationBarVisible = false
