@@ -1,5 +1,16 @@
 from PIL import Image, ImageChops
 import sys
+
+# --probe BASE CANDIDATE: exit 0 when CANDIDATE visibly differs from BASE in the keyboard area
+# (used by the runtime script to wait until a panel has actually rendered before screenshotting).
+if sys.argv[1] == "--probe":
+    b, c = [Image.open(p).convert("RGB") for p in sys.argv[2:4]]
+    w,h = b.size
+    box = (0,int(h*0.59),w,int(h*0.94))
+    d = ImageChops.difference(b.crop(box), c.crop(box))
+    frac = sum(max(v)>24 for v in d.getdata())/(d.width*d.height)
+    sys.exit(0 if frac > 0.03 else 1)
+
 base, opened, returned = [Image.open(p).convert("RGB") for p in sys.argv[1:4]]
 w,h=base.size
 # Exclude host editor/cursor, status clock and Android nav; compare the keyboard content.
