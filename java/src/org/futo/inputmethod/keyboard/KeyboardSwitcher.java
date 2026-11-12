@@ -228,8 +228,16 @@ public final class KeyboardSwitcher implements SwitchActions {
         setMainKeyboardFrame(currentSettingsValues, toggleState);
         // TODO: pass this object to setKeyboard instead of getting the current values.
         final MainKeyboardView keyboardView = mKeyboardView;
+        final KeyboardLayoutSetV2 layoutSet = mKeyboardLayoutSet;
+        if (keyboardView == null || layoutSet == null) {
+            // A settings/theme flow can invalidate the keyboard during LatinIME.onCreate,
+            // before the first loadKeyboard has built the layout set; the later
+            // loadKeyboard -> onLoadKeyboard pass applies the state. Skipping here also
+            // covers instrumentation, which drives onCreate directly.
+            return;
+        }
         final Keyboard oldKeyboard = keyboardView.getKeyboard();
-        final Keyboard newKeyboard = mKeyboardLayoutSet.getKeyboard(element);
+        final Keyboard newKeyboard = layoutSet.getKeyboard(element);
         keyboardView.setKeyboard(newKeyboard);
         SwipeDecoderDictionary.updateKeyboard(newKeyboard);
         keyboardView.updateStateHint(mStateHint);
