@@ -19,9 +19,12 @@ import org.futo.inputmethod.latin.uix.actions.RegistryKt;
 public class Wren19BackDispositionTest extends InputTestsBase {
 
     public void testBackDispositionAdjustNothingWhilePanelOpen() {
+        android.util.Log.i("WBDBG", "TESTSTEP backdisp1: getAllActionsMap");
         final Action emoji = RegistryKt.getAllActionsMap().get("emoji");
         assertNotNull("emoji action exists in AllActionsMap", emoji);
+        android.util.Log.i("WBDBG", "TESTSTEP backdisp1: debugOpenAction");
         getService().getUixManager().debugOpenAction(emoji);
+        android.util.Log.i("WBDBG", "TESTSTEP backdisp1: assert open");
         assertTrue("panel reports open", getService().getUixManager().hasOpenActionWindow());
         assertEquals("panel open pushes ADJUST_NOTHING to the OS",
                 InputMethodService.BACK_DISPOSITION_ADJUST_NOTHING,
@@ -29,12 +32,15 @@ public class Wren19BackDispositionTest extends InputTestsBase {
     }
 
     public void testBackDispositionRestoredToDefaultAfterPanelClose() {
+        android.util.Log.i("WBDBG", "TESTSTEP backdisp2: getAllActionsMap");
         final Action emoji = RegistryKt.getAllActionsMap().get("emoji");
         assertNotNull("emoji action exists in AllActionsMap", emoji);
+        android.util.Log.i("WBDBG", "TESTSTEP backdisp2: debugOpenAction");
         getService().getUixManager().debugOpenAction(emoji);
         assertEquals("panel open pushes ADJUST_NOTHING to the OS",
                 InputMethodService.BACK_DISPOSITION_ADJUST_NOTHING,
                 getService().getBackDisposition());
+        android.util.Log.i("WBDBG", "TESTSTEP backdisp2: closeActionWindow");
         getService().getUixManager().closeActionWindow(true);
         assertFalse("panel reports closed", getService().getUixManager().hasOpenActionWindow());
         assertEquals("panel close restores DEFAULT",

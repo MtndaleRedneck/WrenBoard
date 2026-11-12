@@ -46,18 +46,23 @@ public class Wren18NavigationTest {
             device.click(Math.round(device.getDisplayWidth()*0.065f), Math.round(device.getDisplayHeight()*0.059f));
             return;
         }
-        for(int attempt=0;attempt<5;attempt++) {
+        for(int attempt=0;attempt<8;attempt++) {
             try {
                 UiObject2 object=device.findObject(selector);
-                assertNotNull("Expected control " + selector,object);
+                if(object==null) {
+                    // The accessibility tree can lag a navigate() by a beat (run 43184631241
+                    // failed on a single null lookup with the tile visibly on screen).
+                    SystemClock.sleep(400);
+                    continue;
+                }
                 android.graphics.Point point=object.getVisibleCenter();
                 device.click(point.x,point.y);
                 return;
             } catch(androidx.test.uiautomator.StaleObjectException stale) {
-                SystemClock.sleep(200);
+                SystemClock.sleep(300);
             }
         }
-        fail("Control stayed stale " + selector);
+        fail("Control never appeared " + selector);
     }
     private void openHidden(SettingsActivity activity,UiDevice device) {
         // Click the Hidden tile by its label: positional math breaks whenever the visible
