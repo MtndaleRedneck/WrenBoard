@@ -1,4 +1,5 @@
 name: wren19-runtime
+# build trigger for the 1.9 line: push commits touching this file
 on:
   push:
     branches: [instinct1/release-1.9.0]
@@ -103,6 +104,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: wren19-runtime-evidence
+          name: wren19-runtime
+# build trigger for the 1.9 line: push commits touching this file-evidence
           path: runtime18/
           retention-days: 3
