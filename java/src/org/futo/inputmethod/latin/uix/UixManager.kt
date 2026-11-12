@@ -737,7 +737,7 @@ class UixManager(private val latinIME: LatinIME) {
         Column {
             // Don't show suggested words when it's not meant to be shown
             val suggestedWordsOrNull = if(shouldShowSuggestionStrip.value) {
-                suggestedWords.value ?: SuggestedWords.getEmptyInstance()
+                blankGuard(suggestedWords.value) ?: SuggestedWords.getEmptyInstance()
             } else {
                 null
             }
@@ -892,7 +892,7 @@ class UixManager(private val latinIME: LatinIME) {
             if((!mainKeyboardHidden.value && !latinIME.isInputConnectionOverridden)
                 || (latinIME.inputConnectionOverridenWithSuggestions)) {
                 val suggestedWordsOrNull = if (shouldShowSuggestionStrip.value) {
-                    suggestedWords.value
+                    blankGuard(suggestedWords.value)
                 } else {
                     null
                 }
@@ -1376,7 +1376,7 @@ class UixManager(private val latinIME: LatinIME) {
                     }) {
                         if(needToUseExpandableSuggestionUi) {
                             ActionBarWithExpandableCandidates(
-                                suggestedWords.value,
+                                blankGuard(suggestedWords.value),
                                 suggestionStripListener,
                                 isActionsExpanded = isActionsExpanded.value,
                                 toggleActionsExpanded = { toggleActionsExpanded() },
@@ -1544,6 +1544,29 @@ class UixManager(private val latinIME: LatinIME) {
 
     fun updateVisibility(shouldShowSuggestionsStrip: Boolean, fullscreenMode: Boolean) {
         this.shouldShowSuggestionStrip.value = shouldShowSuggestionsStrip
+    }
+
+    /**
+     * WrenBoard 1.10 ("the top bar keeps going blank"): read at draw time, so no path (panel close, startup,
+     * punctuation-only text) leaves the strip empty. I / The / You, only with starter words on and a field that
+     * takes suggestions, never while a word is being typed.
+     */
+    private fun blankGuard(words: SuggestedWords?): SuggestedWords? {
+        if (words != null && !words.isEmpty) return words
+        try {
+            if (!latinIME.getSetting(StarterWordsSetting)) return words
+            val cur = org.futo.inputmethod.latin.settings.Settings.getInstance().current
+            if (!cur.needsToLookupSuggestions() || !cur.isSuggestionsEnabledPerUserSettings) return words
+            val before = latinIME.currentInputConnection?.getTextBeforeCursor(1, 0)
+            if (!before.isNullOrEmpty() && before[0].isLetterOrDigit()) return words
+            val list = ArrayList<SuggestedWords.SuggestedWordInfo>()
+            org.futo.inputmethod.engine.general.WrenStarterWords.FALLBACK.forEach { w ->
+                list.add(SuggestedWords.SuggestedWordInfo(w, "", SuggestedWords.SuggestedWordInfo.MAX_SCORE,
+                    SuggestedWords.SuggestedWordInfo.KIND_PREDICTION, org.futo.inputmethod.latin.Dictionary.DICTIONARY_HARDCODED,
+                    SuggestedWords.SuggestedWordInfo.NOT_AN_INDEX, SuggestedWords.SuggestedWordInfo.NOT_A_CONFIDENCE))
+            }
+            return SuggestedWords(list, null, null, false, false, false, SuggestedWords.INPUT_STYLE_TYPING, -1)
+        } catch (e: Exception) { return words }
     }
 
     fun setSuggestions(suggestedWords: SuggestedWords?, rtlSubtype: Boolean, cfg: ExpandableSuggestionBarConfiguration) {
