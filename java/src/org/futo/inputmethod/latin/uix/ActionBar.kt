@@ -1124,12 +1124,20 @@ fun ActionBar(
                         } else if(quickClipState != null) {
                             QuickClipView(quickClipState, onQuickClipDismiss)
                         } else if (words != null) {
-                            val showStripClipboard = styledToolbar && org.futo.inputmethod.latin.uix.settings.useDataStoreValue(WrenClipboardStripSetting) && inlineSuggestions.isEmpty()
+                            // WrenBoard 1.9 (item 3): any toolbar action can be pinned to the
+                            // right end of the strip as a bare icon, no key box, chevron-height ink,
+                            // mirroring the round chevron on the left (approved render 02).
+                            val stripPinnedActions = if(styledToolbar) {
+                                (if(!LocalInspectionMode.current) org.futo.inputmethod.latin.uix.settings.useDataStoreValue(PinnedActions) else PinnedActions.default).toActionList()
+                            } else emptyList()
+                            val stripPinned = stripPinnedActions.firstOrNull()
+                            val showStripClipboard = styledToolbar && stripPinned == null && org.futo.inputmethod.latin.uix.settings.useDataStoreValue(WrenClipboardStripSetting) && inlineSuggestions.isEmpty()
                             SuggestionItems(
                                 words,
-                                trailingSlot = if(showStripClipboard) ({
-                                    androidx.compose.material3.IconButton(onClick = { onActionActivated(ClipboardHistoryAction) }, modifier = Modifier.fillMaxSize()) {
-                                        Icon(painterResource(R.drawable.wren_tb_clipboard), contentDescription = stringResource(R.string.wren_home_clipboard), tint = LocalKeyboardScheme.current.onKeyboardContainer, modifier = Modifier.size(21.3.dp))
+                                trailingSlot = if(stripPinned != null || showStripClipboard) ({
+                                    val stripAction = stripPinned ?: ClipboardHistoryAction
+                                    androidx.compose.material3.IconButton(onClick = { onActionActivated(stripAction) }, modifier = Modifier.fillMaxSize()) {
+                                        Icon(painterResource(wrenToolbarIcon(stripAction.icon)), contentDescription = stringResource(stripAction.name), tint = LocalKeyboardScheme.current.onKeyboardContainer, modifier = Modifier.size(23.8.dp, 29.9.dp))
                                     }
                                 }) else null,
                                 onClick = {
