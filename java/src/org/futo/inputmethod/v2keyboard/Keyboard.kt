@@ -9,10 +9,10 @@ import org.futo.inputmethod.latin.settings.Settings
 object RowKeyListSerializer : SpacedListSerializer<Key>(KeyPathSerializer)
 
 // WrenBoard 1.4 SwiftKey parity (item 2): number row is 0.85 of the letter-row pitch (126px vs 149px at 480dpi).
-// SwiftKey parity (spec v1.1 items 12/15): number row = 44.8 dp key + 2.5 dp gap, arrow row = 38.8 dp key
-// + 2.5 dp gap, both as fractions of the 55.1 dp letter-row pitch (LetterRowPitchDp).
-const val NumberRowHeight: Double = 47.3 / 55.1
-const val ArrowRowHeight: Double = 41.3 / 55.1
+// SwiftKey parity (1.9 item 1): number row = 132 px = 46.93 dp pitch, arrow row = 109 px = 38.76 dp
+// pitch, both as fractions of the 55.1 dp letter-row pitch (LetterRowPitchDp).
+const val NumberRowHeight: Double = 46.93 / 55.1
+const val ArrowRowHeight: Double = 38.76 / 55.1
 
 enum class RowNumberRowMode(val displayByDefault: Boolean, val displayWhenExplicitlyActive: Boolean, val displayWhenExplicitlyInactive: Boolean) {
     Default(true, true, true),

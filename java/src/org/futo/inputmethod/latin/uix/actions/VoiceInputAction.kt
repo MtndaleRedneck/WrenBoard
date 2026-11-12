@@ -382,7 +382,7 @@ private class VoiceInputActionWindow(
     }
 }
 
-private val VoiceBarHeight = 41.5.dp // 124 px at 3 px/dp (owner's phone density)
+private val VoiceBarHeight = 45.16.dp // 1.9 item 7: the bar is the toolbar row, 127 px at 1080 px/2.8125 dpi
 
 private class VoiceInputNoModelWindow(val locale: Locale) : ActionWindow() {
     @Composable

@@ -63,12 +63,11 @@ import org.futo.voiceinput.shared.ui.MicrophoneDeviceState
 
 enum class VoiceBarMode { Stopped, Waiting, Listening, Working }
 
-private val BarBackground = Color(0xFF3C3B3E)
-private val WrenOrange = Color(0xFFFC8613)
-private val PillActiveBg = Color(0xFF624A32)   // waiting + listening
-private val PillWorkingBg = Color(0xFF4A3D33)
+private val BarBackground = Color(0xFF3C3C3C)
+private val WrenOrange = Color(0xFFFF8710)
+private val CircleDimBg = Color(0xFFFF8710).copy(alpha = 0.2f)   // 1.9 item 8: circle at 20% while active
 private val PillWorkingRing = Color(0xFFA8601E)
-private val PillStoppedIcon = Color(0xFF2B2A2D)
+private val PillStoppedIcon = Color(0xFF2B2A2D)   // 1.9 item 7: mic glyph color (Pumpkin tint unverified)
 
 @Composable
 fun VoiceRecognizeBar(
@@ -119,15 +118,6 @@ fun VoiceRecognizeBar(
                     role = Role.Button
                 }
         )
-
-        if (mode == VoiceBarMode.Stopped) {
-            Text(
-                text = stringResource(R.string.voicebar_tap_to_dictate),
-                color = WrenOrange,
-                fontSize = 18.sp,
-                modifier = Modifier.padding(start = 16.dp)
-            )
-        }
 
         Spacer(modifier = Modifier.weight(1.0f))
 
@@ -181,19 +171,13 @@ fun VoiceRecognizeBar(
             VoiceBarMode.Working -> stringResource(R.string.voicebar_working)
         }
         val tappable = mode != VoiceBarMode.Working
+        // WrenBoard 1.9 (items 7/8): SwiftKey's dictation control - the toolbar mic glyph in a 42 dp
+        // orange circle (100% idle, 20% while working/listening), 48 dp view with an 8 dp end margin.
         Box(
             contentAlignment = Alignment.Center,
             modifier = Modifier
-                .padding(end = 16.dp)
-                .size(width = 56.dp, height = 28.dp)
-                .background(
-                    when (mode) {
-                        VoiceBarMode.Stopped -> WrenOrange
-                        VoiceBarMode.Working -> PillWorkingBg
-                        else -> PillActiveBg
-                    },
-                    RoundedCornerShape(14.dp)
-                )
+                .padding(end = 8.dp)
+                .size(48.dp)
                 .onGloballyPositioned {
                     val c = screenCenter(it)
                     Log.i("WBDBG", "WINDOW VOICEBARPILL cx=${c.first} cy=${c.second} w=${it.size.width} h=${it.size.height}")
@@ -210,16 +194,26 @@ fun VoiceRecognizeBar(
                     if (tappable) role = Role.Button
                 }
         ) {
-            when (mode) {
-                VoiceBarMode.Stopped -> Icon(
-                    painter = painterResource(R.drawable.mic),
-                    contentDescription = null,
-                    tint = PillStoppedIcon,
-                    modifier = Modifier.size(11.dp, 15.dp)
-                )
-                VoiceBarMode.Waiting -> WaitingDots()
-                VoiceBarMode.Listening -> ListeningBars(magnitude)
-                VoiceBarMode.Working -> WorkingRing()
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier
+                    .size(42.dp)
+                    .background(
+                        if (mode == VoiceBarMode.Stopped) WrenOrange else CircleDimBg,
+                        androidx.compose.foundation.shape.CircleShape
+                    )
+            ) {
+                when (mode) {
+                    VoiceBarMode.Stopped -> Icon(
+                        painter = painterResource(R.drawable.wren_tb_mic),
+                        contentDescription = null,
+                        tint = PillStoppedIcon,
+                        modifier = Modifier.size(16.5.dp, 24.dp)
+                    )
+                    VoiceBarMode.Waiting -> WaitingDots()
+                    VoiceBarMode.Listening -> ListeningBars(magnitude)
+                    VoiceBarMode.Working -> WorkingRing()
+                }
             }
         }
     }
@@ -247,26 +241,26 @@ private fun WaitingDots() {
 
 @Composable
 private fun ListeningBars(magnitude: Float) {
-    // still-frame base heights from the v9 spec (16/32/44/26/36 px at 3 px/dp), scaled by live magnitude
-    val base = listOf(5.3f, 10.7f, 14.7f, 8.7f, 12.0f)
+    // WrenBoard 1.9 (item 8): SwiftKey's talk loop - 4 orange bars, 4.6 dp stroke, round caps,
+    // centres at -9.37/-3.12/+3.12/+9.37 dp around the circle centre on an 18.75 dp track.
+    // Still-frame lengths are 45/85/62/30% of the track; live magnitude scales the animation.
+    val base = listOf(0.45f, 0.85f, 0.62f, 0.30f)
+    val centres = listOf(-9.37f, -3.12f, 3.12f, 9.37f)
     val scale = 0.35f + 0.65f * magnitude.coerceIn(0.0f, 1.0f)
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Icon(
-            painter = painterResource(R.drawable.mic),
-            contentDescription = null,
-            tint = WrenOrange,
-            modifier = Modifier.size(8.7.dp, 11.7.dp)
-        )
-        Spacer(modifier = Modifier.width(4.7.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(2.dp), verticalAlignment = Alignment.CenterVertically) {
-            base.forEach { h ->
-                Box(
-                    modifier = Modifier
-                        .width(2.3.dp)
-                        .height((h * scale).coerceAtLeast(2.0f).dp)
-                        .background(WrenOrange, RoundedCornerShape(1.15.dp))
-                )
-            }
+    Canvas(modifier = Modifier.size(42.dp)) {
+        val track = 18.75.dp.toPx()
+        val stroke = 4.6.dp.toPx()
+        val cy = size.height / 2f
+        val cx = size.width / 2f
+        base.forEachIndexed { i, b ->
+            val h = (track * b * scale).coerceAtLeast(stroke)
+            drawLine(
+                color = WrenOrange,
+                start = androidx.compose.ui.geometry.Offset(cx + centres[i].dp.toPx(), cy - h / 2f),
+                end = androidx.compose.ui.geometry.Offset(cx + centres[i].dp.toPx(), cy + h / 2f),
+                strokeWidth = stroke,
+                cap = androidx.compose.ui.graphics.StrokeCap.Round
+            )
         }
     }
 }

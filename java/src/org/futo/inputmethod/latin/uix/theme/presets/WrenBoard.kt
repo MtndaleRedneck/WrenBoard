@@ -178,9 +178,9 @@ private fun dpPx(context: android.content.Context, v: Float) =
 // Approved outer key corner radius.
 private const val KeyRadiusDp = 5.0f
 
-/** Approved Pumpkin face: #3D3D3D to #020202 at 95%, white hints. */
+/** Approved Pumpkin face: #3D3D3D to #020202 at 95%, white hints, 1 px #0C0C0C border (1.9 item 1). */
 fun letterKey(context: android.content.Context): android.graphics.drawable.Drawable = WrenKeyDrawable(
-    0xF23D3D3D.toInt(), 0xF2020202.toInt(), 0xF2000000.toInt(), 0xF6777777.toInt(), true,
+    0xF23D3D3D.toInt(), 0xF2020202.toInt(), 0xF20C0C0C.toInt(), 0xF6777777.toInt(), true,
     dpPx(context, KeyRadiusDp), context.resources.displayMetrics)
 
 /** Lighter number-row face, with the same original key shape. */
