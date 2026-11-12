@@ -189,9 +189,10 @@ import kotlin.math.roundToInt
 
 val ActionBarHeight = 41.dp
 @Composable
-fun suggestionBarHeight(): Dp = if(LocalKeyboardScheme.current.primary == Color(0xFFFF8710)) 37.7.dp else ActionBarHeight
-/** SwiftKey parity (pixel spec v1.1 item 44): the toolbar row above the strip is 44.1 dp on key-styled themes. */
-val ToolbarRowHeight = 44.1.dp
+// WrenBoard 1.9 (item 1): SwiftKey suggestion strip measured 124 px at 1080 px/2.8125 dpi = 44.09 dp.
+fun suggestionBarHeight(): Dp = if(LocalKeyboardScheme.current.primary == Color(0xFFFF8710)) 44.09.dp else ActionBarHeight
+/** SwiftKey parity (1.9 item 1): the toolbar row above the strip is 127 px at 1080 px/2.8125 dpi = 45.16 dp. */
+val ToolbarRowHeight = 45.16.dp
 
 val ActionBarScrollIndexSetting = SettingsKey(
     intPreferencesKey("action_bar_scroll_index"),
