@@ -250,12 +250,27 @@ class LatinIME : InputMethodServiceCompose(), LatinIMELegacy.SuggestionStripCont
     // back arrow (not the keyboard down-chevron), and pressing back closes the panel through
     // onKeyDown -> uixManager.navigateActionBack(). setBackDisposition pushes the value to the
     // OS immediately; UixManager calls this when panels open and close.
+    private val backDispositionHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    private var pendingBackDispositionRepush: Runnable? = null
+
     fun syncBackDispositionForPanels() {
         val disposition = if(uixManager.hasOpenActionWindow()) BACK_DISPOSITION_ADJUST_NOTHING
             else BACK_DISPOSITION_DEFAULT
         setBackDisposition(disposition)
         if(BuildConfig.DEBUG) android.util.Log.i("WB18_NAV",
             "syncBackDisposition pushed=$disposition now=$backDisposition open=${uixManager.hasOpenActionWindow()} inputViewShown=$isInputViewShown")
+        // Tab 1 review (must-fix 4): SystemUI computes the navigation hint when the IME
+        // window status recalculates, which can land AFTER this push if the panel view has
+        // not attached yet. Re-push the same disposition shortly after; a duplicate push
+        // of the current value is harmless. A close cancels a pending open repush.
+        pendingBackDispositionRepush?.let { backDispositionHandler.removeCallbacks(it) }
+        val repush = Runnable {
+            setBackDisposition(disposition)
+            if(BuildConfig.DEBUG) android.util.Log.i("WB18_NAV",
+                "syncBackDisposition repushed=$disposition now=$backDisposition open=${uixManager.hasOpenActionWindow()} inputViewShown=$isInputViewShown")
+        }
+        pendingBackDispositionRepush = repush
+        backDispositionHandler.postDelayed(repush, 250)
     }
 
     private var isNavigationBarVisible = false
