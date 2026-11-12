@@ -472,7 +472,7 @@ private val WrenSuggestionShape = RoundedCornerShape(5.dp)
 @Composable
 private fun suggestionKeyBackground(pressed: Boolean = false): Modifier {
     if(LocalKeyboardScheme.current.primary != Color(0xFFFF8710)) {
-        return Modifier.padding(vertical = 1.dp).clip(WrenSuggestionShape)
+        return Modifier.padding(vertical = 1.5.dp).clip(WrenSuggestionShape)
             .background(Brush.verticalGradient(listOf(Color(0xFF3E3E3E), Color(0xFF060606))), WrenSuggestionShape)
             .border(1.dp, Color(0xFF0E0E0E), WrenSuggestionShape)
     }
