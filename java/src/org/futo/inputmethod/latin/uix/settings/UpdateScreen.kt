@@ -1,5 +1,6 @@
 package org.futo.inputmethod.latin.uix.settings
 
+import androidx.compose.ui.unit.dp
 import android.app.Activity
 import android.app.PendingIntent.FLAG_MUTABLE
 import android.app.PendingIntent.FLAG_UPDATE_CURRENT
