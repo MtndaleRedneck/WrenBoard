@@ -194,6 +194,9 @@ fun suggestionBarHeight(): Dp = if(LocalKeyboardScheme.current.primary == Color(
 /** SwiftKey parity (1.9 item 1): the toolbar row above the strip is 127 px at 1080 px/2.8125 dpi = 45.16 dp. */
 val ToolbarRowHeight = 45.16.dp
 
+/** WrenBoard 1.10: the toolbar is no longer fixed at six; as many chosen actions as fit (min 44 dp each), rest under "...". */
+fun wrenToolbarSlots(screenWidthDp: Int): Int = ((screenWidthDp - 40) / 44 - 1).coerceIn(3, 9)
+
 val ActionBarScrollIndexSetting = SettingsKey(
     intPreferencesKey("action_bar_scroll_index"),
     0
@@ -339,6 +342,30 @@ fun TextStyle.withCustomFont(orDefault: FontFamily? = null): TextStyle {
     }
 }
 
+/** WrenBoard 1.10: one text scale for all three suggestion chips (SwiftKey shows them at one size; only the middle is bold). */
+val LocalChipTextScale = androidx.compose.runtime.compositionLocalOf<Float?> { null }
+
+/** Common scale (0.55..1) so the longest of [words] fits its chip; every chip then uses it. */
+@Composable
+private fun rememberChipTextScale(words: List<String?>, weights: List<Float>): Float {
+    val measurer = rememberTextMeasurer()
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val screenDp = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp
+    return remember(words, weights, screenDp, density) {
+        val rowDp = (screenDp - 40).coerceAtLeast(120)
+        val sum = weights.sum()
+        var scale = 1f
+        words.forEachIndexed { i, w ->
+            if (w.isNullOrEmpty()) return@forEachIndexed
+            val style = suggestionStyleAlternative.copy(fontWeight = if (i == 1) FontWeight.Bold else FontWeight.Normal, letterSpacing = 0.sp)
+            val textPx = measurer.measure(AnnotatedString(w), style = style, softWrap = false, maxLines = 1, density = density).size.width
+            val chipPx = with(density) { (rowDp * weights[i] / sum - 14f).dp.toPx() }
+            if (textPx > 0) scale = minOf(scale, chipPx / textPx)
+        }
+        scale.coerceIn(0.55f, 1f)
+    }
+}
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun RowScope.SuggestionItem(words: SuggestedWords, idx: Int, isPrimary: Boolean, onClick: () -> Unit, onLongClick: () -> Unit, forcePrimary: Boolean, isEmoji: Boolean, slotWeight: Float = 1.0f) {
@@ -420,7 +447,13 @@ fun RowScope.SuggestionItem(words: SuggestedWords, idx: Int, isPrimary: Boolean,
                     .align(Center)
                     .padding(horizontal = 7.dp, vertical = 2.dp)
                     .testTag("SuggestionItemText")
-                if(isVerbatim && !isKeyStyledTheme()) {
+                val chipScale = LocalChipTextScale.current
+                if(isKeyStyledTheme() && chipScale != null) {
+                    // WrenBoard 1.10: same size in all three chips, same baseline; ellipsis only past the floor.
+                    Text(word, style = textStyle.copy(fontSize = textStyle.fontSize * chipScale, lineHeight = androidx.compose.ui.unit.TextUnit.Unspecified),
+                        maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.align(Center).padding(horizontal = 7.dp).testTag("SuggestionItemText"))
+                } else if(isVerbatim && !isKeyStyledTheme()) {
                     AutoFitText('"' + word + '"', style = textStyle.copy(fontStyle = FontStyle.Italic), modifier = modifier)
                 } else {
                     AutoFitText(word, style = textStyle, modifier = modifier)
@@ -636,16 +669,20 @@ fun RowScope.SuggestionItems(words: SuggestedWords, onClick: (i: Int) -> Unit, o
         val candidates = layout.sortedMatches
         centreSuggestion = spaceCommitSuggestion(layout.autocorrectMatch, layout.verbatimWord, candidates)
         val left = leftSuggestion(layout.verbatimWord, centreSuggestion, candidates) { it.mWord }
-        renderItem(left, leftWeight)
-        SuggestionSeparator()
-        renderItem(centreSuggestion, centreWeight)
-        SuggestionSeparator()
-        if (layout.emojiMatches.isNotEmpty()) {
-            renderItem(layout.emojiMatches[0], rightWeight / 2f)
+        val rightPick = if (layout.emojiMatches.isEmpty()) candidates.firstOrNull { it.mWord != centreSuggestion?.mWord && it.mWord != left?.mWord } else null
+        val chipScale = rememberChipTextScale(listOf(left?.mWord, centreSuggestion?.mWord, rightPick?.mWord), listOf(leftWeight, centreWeight, rightWeight))
+        CompositionLocalProvider(LocalChipTextScale provides chipScale) {
+            renderItem(left, leftWeight)
             SuggestionSeparator()
-            renderItem(layout.emojiMatches.getOrNull(1), rightWeight / 2f)
-        } else {
-            renderItem(candidates.firstOrNull { it.mWord != centreSuggestion?.mWord && it.mWord != left?.mWord }, rightWeight)
+            renderItem(centreSuggestion, centreWeight)
+            SuggestionSeparator()
+            if (layout.emojiMatches.isNotEmpty()) {
+                renderItem(layout.emojiMatches[0], rightWeight / 2f)
+                SuggestionSeparator()
+                renderItem(layout.emojiMatches.getOrNull(1), rightWeight / 2f)
+            } else {
+                renderItem(rightPick, rightWeight)
+            }
         }
         Box(Modifier.width(40.dp).fillMaxHeight(), contentAlignment = Alignment.Center) { trailingSlot?.invoke() }
         return
@@ -804,7 +841,7 @@ fun ActionItems(onSelect: (Action) -> Unit, onLongSelect: (Action) -> Unit) {
     val context = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current
     val unified = org.futo.inputmethod.latin.uix.actions.useUnifiedActions()
-    val actionItems = unified.visible.mapNotNull { org.futo.inputmethod.latin.uix.actions.AllActionsMap[it] }.filter { it.shownInEditor }.take(6)
+    val actionItems = unified.visible.mapNotNull { org.futo.inputmethod.latin.uix.actions.AllActionsMap[it] }.filter { it.shownInEditor }.take(12)
     val scrollItemIndex = 0
     val scrollItemOffset = 0
 
@@ -834,7 +871,7 @@ fun ActionItems(onSelect: (Action) -> Unit, onLongSelect: (Action) -> Unit) {
     if (swiftKeySlots) {
         // Up to six visible actions, plus the fixed More entry. Fewer actions fill the row evenly.
         BoxWithConstraints(Modifier.safeKeyboardPadding().fillMaxSize()) {
-            val shown = actionItems.filter { it != MoreActionsAction }.take(6) + MoreActionsAction
+            val shown = actionItems.filter { it != MoreActionsAction }.take(wrenToolbarSlots(androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp)) + MoreActionsAction
             val pitch = maxWidth / shown.size
             Row(Modifier.fillMaxHeight().align(Alignment.Center)) {
                 LazyRow(userScrollEnabled = false) {
@@ -1121,7 +1158,10 @@ fun ActionBar(
                             && inlineSuggestions.isNotEmpty()
                         ) {
                             InlineSuggestions(inlineSuggestions)
-                        } else if(quickClipState != null) {
+                        } else if(quickClipState != null && (!styledToolbar || words == null || words.isEmpty)) {
+                            // WrenBoard 1.10 (Ezzy: "Swiftkey never does that!"): the clipboard pill no longer takes the
+                            // suggestion strip over while there are words to show; the clipboard stays one tap away
+                            // on the toolbar and the strip's clipboard button.
                             QuickClipView(quickClipState, onQuickClipDismiss)
                         } else if (words != null) {
                             // WrenBoard 1.9 (item 3): any toolbar action can be pinned to the

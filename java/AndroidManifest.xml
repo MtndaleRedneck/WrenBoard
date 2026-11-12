@@ -16,6 +16,7 @@
 
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- Used for the GitHub release check only. Update, model and dictionary downloads open in the browser. No analytics or crash reporting. -->
     <uses-permission android:name="android.permission.INTERNET"/>
@@ -216,6 +217,17 @@
             android:name=".content.KbContentProvider"
             android:exported="false"
             android:grantUriPermissions="true" />
+
+        <!-- WrenBoard 1.10: hands the verified update APK to Android's install screen, like BingeMote and Listen Later. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.updates"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/wren_update_paths" />
+        </provider>
 
         <provider
             android:authorities="${applicationId}.clipboard"

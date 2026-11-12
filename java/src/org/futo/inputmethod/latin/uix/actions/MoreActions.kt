@@ -200,7 +200,7 @@ fun MoreActionsView(setNestedBack: ((() -> Boolean)?) -> Unit = {}) {
         scope.launch { context.saveUnifiedActions(model) }
     }
     val allVisible = draft.visible.filter { AllActionsMap[it]?.shownInEditor == true }
-    val toolbarIds = allVisible.take(6)
+    val toolbarIds = allVisible.take(org.futo.inputmethod.latin.uix.wrenToolbarSlots(androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp))
     val boxIds = if(hiddenOpen) draft.hidden.filter { AllActionsMap[it]?.shownInEditor == true } else allVisible
     val gridState = rememberLazyGridState()
     val density = androidx.compose.ui.platform.LocalDensity.current
@@ -378,7 +378,7 @@ fun MoreActionsView(setNestedBack: ((() -> Boolean)?) -> Unit = {}) {
             }
         }
         LazyVerticalGrid(state = gridState, userScrollEnabled = dragging == null, columns = GridCells.FixedSize(80.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier.fillMaxWidth().heightIn(max = 304.dp).padding(8.dp).onGloballyPositioned { gridBounds = it.boundsInRoot() }) {
+            modifier = Modifier.fillMaxWidth().heightIn(max = 420.dp).padding(8.dp).onGloballyPositioned { gridBounds = it.boundsInRoot() }) {
             items(boxIds, key = { it }) { id ->
                 val action = AllActionsMap[id]!!
                 Box {
@@ -442,7 +442,7 @@ fun ActionEditor(setNestedBack: ((() -> Boolean)?) -> Unit = {}) {
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .fillMaxHeight(0.75f),
+            .fillMaxHeight(0.92f),
         color = LocalKeyboardScheme.current.keyboardSurface,
         contentColor = LocalKeyboardScheme.current.onSurface,
         shape = RoundedCornerShape(32.dp, 32.dp, 0.dp, 0.dp)

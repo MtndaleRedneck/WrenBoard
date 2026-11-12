@@ -456,7 +456,7 @@ class GeneralIME(val helper: IMEHelper) : IMEInterface, WordLearner, SuggestionS
             )
         }
 
-        showSuggestionStrip(starterWordsIfNeeded(words, inputStyle, sequenceNumber))
+        showSuggestionStrip(starterWordsIfNeeded(withRunTogetherSplit(words, inputStyle, sequenceNumber), inputStyle, sequenceNumber))
         when(inputStyle) {
             SuggestedWords.INPUT_STYLE_TAIL_BATCH -> {
                 val updateBatch = {
@@ -823,6 +823,42 @@ class GeneralIME(val helper: IMEHelper) : IMEInterface, WordLearner, SuggestionS
     private fun starterSkip(why: String): Boolean {
         if (BuildConfig.DEBUG) Log.i("WBDBG", "STARTER skip $why")
         return true
+    }
+
+    /**
+     * WrenBoard 1.10 (Ezzy: SwiftKey offers "going blank" for "goingblank"): when the typed word is not a word but
+     * splits into two real words, offer the split right after the typed word. Words and dictionary only; no new data.
+     */
+    private fun withRunTogetherSplit(words: SuggestedWords, inputStyle: Int, sequenceNumber: Int): SuggestedWords {
+        try {
+            if (inputStyle != SuggestedWords.INPUT_STYLE_TYPING || words.isEmpty) return words
+            if (!inputLogic.mWordComposer.isComposingWord) return words
+            val typed = inputLogic.mWordComposer.typedWord ?: return words
+            if (typed.length < 4 || typed.length > 24 || !typed.all { it.isLetter() }) return words
+            val lower = typed.lowercase()
+            if (dictionaryFacilitator.isValidSpellingWord(lower)) return words
+            var best: String? = null
+            var bestScore = 0
+            for (i in 1 until lower.length) {
+                val a = lower.substring(0, i); val b = lower.substring(i)
+                val okA = a.length >= 2 || a == "a" || a == "i"
+                val okB = b.length >= 2 || b == "a" || b == "i"
+                if (!okA || !okB) continue
+                if (!dictionaryFacilitator.isValidSpellingWord(a) || !dictionaryFacilitator.isValidSpellingWord(b)) continue
+                val score = minOf(a.length, b.length)
+                if (score > bestScore) { bestScore = score; best = "$a $b" }
+            }
+            val split = best ?: return words
+            if (words.mSuggestedWordInfoList.any { it.mWord == split }) return words
+            val list = ArrayList(words.mSuggestedWordInfoList)
+            list.add(minOf(1, list.size), SuggestedWordInfo(split, "", SuggestedWordInfo.MAX_SCORE - 1,
+                SuggestedWordInfo.KIND_CORRECTION, Dictionary.DICTIONARY_HARDCODED, SuggestedWordInfo.NOT_AN_INDEX,
+                SuggestedWordInfo.NOT_A_CONFIDENCE))
+            return SuggestedWords(list, words.mRawSuggestions, null, words.mTypedWordValid, words.mWillAutoCorrect,
+                words.mIsObsoleteSuggestions, inputStyle, sequenceNumber)
+        } catch (e: Exception) {
+            return words
+        }
     }
 
     private fun starterWordsIfNeeded(words: SuggestedWords, inputStyle: Int, sequenceNumber: Int): SuggestedWords {
