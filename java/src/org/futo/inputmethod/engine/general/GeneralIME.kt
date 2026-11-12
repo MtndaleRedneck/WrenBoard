@@ -834,21 +834,7 @@ class GeneralIME(val helper: IMEHelper) : IMEInterface, WordLearner, SuggestionS
             if (inputStyle != SuggestedWords.INPUT_STYLE_TYPING || words.isEmpty) return words
             if (!inputLogic.mWordComposer.isComposingWord) return words
             val typed = inputLogic.mWordComposer.typedWord ?: return words
-            if (typed.length < 4 || typed.length > 24 || !typed.all { it.isLetter() }) return words
-            val lower = typed.lowercase()
-            if (dictionaryFacilitator.isValidSpellingWord(lower)) return words
-            var best: String? = null
-            var bestScore = 0
-            for (i in 1 until lower.length) {
-                val a = lower.substring(0, i); val b = lower.substring(i)
-                val okA = a.length >= 2 || a == "a" || a == "i"
-                val okB = b.length >= 2 || b == "a" || b == "i"
-                if (!okA || !okB) continue
-                if (!dictionaryFacilitator.isValidSpellingWord(a) || !dictionaryFacilitator.isValidSpellingWord(b)) continue
-                val score = minOf(a.length, b.length)
-                if (score > bestScore) { bestScore = score; best = "$a $b" }
-            }
-            val split = best ?: return words
+            val split = WrenWordSplit.best(typed) { dictionaryFacilitator.isValidSpellingWord(it) } ?: return words
             if (words.mSuggestedWordInfoList.any { it.mWord == split }) return words
             val list = ArrayList(words.mSuggestedWordInfoList)
             list.add(minOf(1, list.size), SuggestedWordInfo(split, "", SuggestedWordInfo.MAX_SCORE - 1,
