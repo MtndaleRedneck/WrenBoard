@@ -203,6 +203,10 @@ for i in $(seq 1 8); do adb shell input keyevent KEYCODE_DEL; done
 adb shell input text goingblank
 sleep 3
 adb exec-out screencap -p > "$OUT/split_goingblank.png"
+# Space after a run-together word: record what the editor holds (no unwanted replacement expected).
+adb shell input keyevent KEYCODE_SPACE
+sleep 3
+adb exec-out screencap -p > "$OUT/split_goingblank_space.png"
 for i in $(seq 1 12); do adb shell input keyevent KEYCODE_DEL; done
 # Independent density samples expose the real sizing formula. They do not calibrate the owner's phone.
 for DPI in 450 480; do
