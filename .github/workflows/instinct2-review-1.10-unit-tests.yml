@@ -200,14 +200,19 @@ jobs:
           echo '=== GATE: forbidden task classes ==='
           # Reject assemble/sign/apk/package/bundle/androidTest/connected/device/
           # emulator/adb/install/publish/upload - with EXACT allowances for the
-          # known resource-only task names:
+          # known resource/manifest/classpath task names observed in the
+          # unit-test task graph (dry run of the two test tasks only):
           #   :packageStableDebugResources
           #   :bundleStableDebugClassesToCompileJar
           #   :voiceinput-shared:packageDebugResources
           #   :voiceinput-shared:bundleDebugClassesToCompileJar
+          #   :processStableDebugManifestForPackage
+          #   :bundleStableDebugClassesToRuntimeJar
+          #   :voiceinput-shared:bundleLibCompileToJarDebug
+          #   :voiceinput-shared:bundleLibRuntimeToJarDebug
           bad=$(grep -E '^:[^ ]+ SKIPPED' /tmp/dryrun.log | awk '{print $1}' | sed 's/^://' \
             | grep -Ei '(assemble|sign|apk|package|bundle|androidtest|connected|device|emulator|adb|install|publish|upload)' \
-            | grep -Ev '^(packageStableDebugResources|bundleStableDebugClassesToCompileJar|voiceinput-shared:packageDebugResources|voiceinput-shared:bundleDebugClassesToCompileJar)$' \
+            | grep -Ev '^(packageStableDebugResources|bundleStableDebugClassesToCompileJar|voiceinput-shared:packageDebugResources|voiceinput-shared:bundleDebugClassesToCompileJar|processStableDebugManifestForPackage|bundleStableDebugClassesToRuntimeJar|voiceinput-shared:bundleLibCompileToJarDebug|voiceinput-shared:bundleLibRuntimeToJarDebug)$' \
             || true)
           if [ -n "$bad" ]; then
             echo '::error::forbidden task class present in the planned graph:'
