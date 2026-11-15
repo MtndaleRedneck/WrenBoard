@@ -359,10 +359,10 @@ private fun rememberChipTextScale(words: List<String?>, weights: List<Float>): F
             if (w.isNullOrEmpty()) return@forEachIndexed
             val style = suggestionStyleAlternative.copy(fontWeight = if (i == 1) FontWeight.Bold else FontWeight.Normal, letterSpacing = 0.sp)
             val textPx = measurer.measure(AnnotatedString(w), style = style, softWrap = false, maxLines = 1, density = density).size.width
-            val chipPx = with(density) { (rowDp * weights[i] / sum - 14f).dp.toPx() }
+            val chipPx = with(density) { (rowDp * weights[i] / sum - 26f).dp.toPx() }
             if (textPx > 0) scale = minOf(scale, chipPx / textPx)
         }
-        scale.coerceIn(0.55f, 1f)
+        scale.coerceIn(0.45f, 1f)
     }
 }
 
