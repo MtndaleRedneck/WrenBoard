@@ -831,9 +831,11 @@ class GeneralIME(val helper: IMEHelper) : IMEInterface, WordLearner, SuggestionS
      */
     private fun withRunTogetherSplit(words: SuggestedWords, inputStyle: Int, sequenceNumber: Int): SuggestedWords {
         try {
-            if (inputStyle != SuggestedWords.INPUT_STYLE_TYPING || words.isEmpty) return words
+            if (BuildConfig.DEBUG) Log.i("WBDBG", "SPLIT gate style=$inputStyle empty=${words.isEmpty} composing=${inputLogic.mWordComposer.isComposingWord} typed=${inputLogic.mWordComposer.typedWord}")
+            if (inputStyle == SuggestedWords.INPUT_STYLE_TAIL_BATCH || inputStyle == SuggestedWords.INPUT_STYLE_UPDATE_BATCH || words.isEmpty) return words
             if (!inputLogic.mWordComposer.isComposingWord) return words
             val typed = inputLogic.mWordComposer.typedWord ?: return words
+            if (BuildConfig.DEBUG) Log.i("WBDBG", "SPLIT valid going=${dictionaryFacilitator.isValidSpellingWord("going")} blank=${dictionaryFacilitator.isValidSpellingWord("blank")} whole=${dictionaryFacilitator.isValidSpellingWord(typed.lowercase())}")
             val split = WrenWordSplit.best(typed) { dictionaryFacilitator.isValidSpellingWord(it) } ?: return words
             if (words.mSuggestedWordInfoList.any { it.mWord == split }) return words
             val list = ArrayList(words.mSuggestedWordInfoList)
