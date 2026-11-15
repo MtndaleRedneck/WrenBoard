@@ -198,6 +198,12 @@ sleep 1
 adb shell input text hel
 sleep 3
 adb exec-out screencap -p > "$OUT/suggestions_approved.png"
+# WrenBoard 1.10: run-together word. SwiftKey offers "going blank" for "goingblank".
+for i in $(seq 1 8); do adb shell input keyevent KEYCODE_DEL; done
+adb shell input text goingblank
+sleep 3
+adb exec-out screencap -p > "$OUT/split_goingblank.png"
+for i in $(seq 1 12); do adb shell input keyevent KEYCODE_DEL; done
 # Independent density samples expose the real sizing formula. They do not calibrate the owner's phone.
 for DPI in 450 480; do
  adb shell wm density "$DPI"
