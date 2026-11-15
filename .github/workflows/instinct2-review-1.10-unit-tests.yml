@@ -1,0 +1,277 @@
+# instinct2-review-1.10-unit-tests.yml  (v4, PLAN - no mutations)
+# Reviewer-authored workflow: independent WrenBoard 1.10 unit-test run on the
+# exact target commit, pinned+verified toolchain, no artifacts, no cache,
+# no signing, no emulator.
+#
+# PLANNED LOCATION: .github/workflows/instinct2-review-1.10-unit-tests.yml
+# on branch instinct2/review-1.10-e059314 of MtndaleRedneck/WrenBoard.
+#
+# TRIGGER MODEL (v4): on:push, scoped to exactly this branch and exactly this
+# file. COMMIT IS RUN: the single mutation (one git push creating the branch
+# with exactly one new commit adding only this file) is also the run trigger.
+# That push is the ONE approval gate. Push semantics grounded 2026-11-15:
+# "Runs your workflow when you push a commit or tag... This includes
+# workflows that are not merged into the default branch."
+# - https://docs.github.com/en/actions/reference/events-that-trigger-workflows#push
+# "Path filters are not evaluated for pushes of tags."
+# "If you define both branches/branches-ignore and paths/paths-ignore, the
+# workflow will only run when both filters are satisfied."
+# - https://docs.github.com/en/actions/reference/workflow-syntax-for-github-actions
+
+name: instinct2-review-1.10-unit-tests
+
+on:
+  push:
+    branches:
+      - instinct2/review-1.10-e059314   # exactly this branch, nothing else
+    paths:
+      - '.github/workflows/instinct2-review-1.10-unit-tests.yml'   # exactly this file
+
+permissions:
+  contents: read
+
+concurrency:
+  group: instinct2-review-1.10-unit-tests
+  cancel-in-progress: false
+
+env:
+  TARGET_COMMIT: e059314c429b80f1a6968f3fb1ec0017e15948a1
+  # Harness env matching builder build 14 for output comparability.
+  # DISCLOSURE: BRANCH_NAME below is harness metadata for comparability with
+  # builder CI build 14. It is NOT the actual branch identity; the real branch
+  # is instinct2/review-1.10-e059314.
+  VERSION_CODE: "11"
+  VERSION_NAME: "1.10.0"
+  BRANCH_NAME: "instinct1/release-1.10.0"
+  # Gradle 8.14.3, vendor SHA-256 fetched 2026-11-15 from
+  # https://services.gradle.org/distributions/gradle-8.14.3-bin.zip.sha256
+  # (301 -> https://downloads.gradle.org/distributions/gradle-8.14.3-bin.zip.sha256)
+  GRADLE_URL: "https://services.gradle.org/distributions/gradle-8.14.3-bin.zip"
+  GRADLE_SHA256: "bd71102213493060956ec229d946beee57158dbd89d0e62b91bca0fa2c5f3531"
+  # Temurin JDK 17.0.21+9, vendor SHA-256 fetched 2026-11-15 from
+  # https://api.adoptium.net/v3/checksum/version/jdk-17.0.21%2B9/linux/x64/jdk/hotspot/normal/eclipse
+  JDK_URL: "https://github.com/adoptium/temurin17-binaries/releases/download/jdk-17.0.21%2B9/OpenJDK17U-jdk_x64_linux_hotspot_17.0.21_9.tar.gz"
+  JDK_SHA256: "8b9b611d917e3dfd8419d3566b5949226f69b052fed7e109c1368add1dfe8711"
+  # Android SDK packages, vendor SHA-1s from
+  # https://dl.google.com/android/repository/repository2-3.xml (fetched 2026-11-15)
+  SDK_PLATFORM_URL: "https://dl.google.com/android/repository/platform-35_r02.zip"
+  SDK_PLATFORM_SHA1: "0bb560a90a7a2cbd0dd8348224d518b638fe7949"
+  SDK_BUILDTOOLS_URL: "https://dl.google.com/android/repository/build-tools_r35_linux.zip"
+  SDK_BUILDTOOLS_SHA1: "2cfaa0bbb2336e9ec18ed3ecea84fa2e2af607bc"
+  SDK_NDK_URL: "https://dl.google.com/android/repository/android-ndk-r28c-linux.zip"
+  SDK_NDK_SHA1: "a7b54a5de87fecd125a17d54f73c446199e72a64"
+  SDK_CMAKE_URL: "https://dl.google.com/android/repository/cmake-3.22.1-linux.zip"
+  SDK_CMAKE_SHA1: "fd0a48b4a758310df8c7aa51f59840ed48fe7ed8"
+  JAVA_HOME: /opt/jdk-17.0.21+9
+  ANDROID_HOME: /opt/android-sdk
+  ANDROID_SDK_ROOT: /opt/android-sdk
+  # AGP's automatic SDK download feature disabled (grounded:
+  # https://developer.android.com/studio/intro/update#download-with-gradle -
+  # "To manually disable this feature, set android.builder.sdkDownload=false
+  # in the gradle.properties file for your project." Passed as -P so the
+  # reviewed tree is not modified.) NOTE: this disables AGP's SDK download
+  # feature; it does NOT prove zero SDK-loader network contact. See the
+  # unknown-egress posture in the host-audit step.
+  GRADLE_PROPS: "-Pandroid.builder.sdkDownload=false"
+
+jobs:
+  unit-tests:
+    name: WrenBoard 1.10 (e059314) unit tests - reviewer run
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+
+      - name: Checkout exact target commit (submodules off)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: e059314c429b80f1a6968f3fb1ec0017e15948a1
+          submodules: false
+          persist-credentials: false
+
+      - name: Verify commit identity
+        run: |
+          test "$(git rev-parse HEAD)" = "$TARGET_COMMIT"
+          git log -1 --format='commit=%H%ntree=%T%nsubject=%s'
+
+      - name: Blackhole huggingface.co (partial mitigation, not comprehensive)
+        run: |
+          # NOTE: an /etc/hosts entry only affects name resolution via NSS on
+          # this runner. A process using a hardcoded IP or its own resolver
+          # bypasses it. This is a partial mitigation for the unapproved
+          # weight host, not fail-closed network isolation. No probe of the
+          # host is made here (no HF traffic of any kind, including checks).
+          echo "127.0.0.1 huggingface.co" | sudo tee -a /etc/hosts
+          grep huggingface /etc/hosts
+
+      - name: Fetch only the three needed submodules, at pinned gitlinks
+        run: |
+          set -e
+          git submodule update --init -- libs translations java/res-large
+          git submodule status
+          test "$(git submodule status -- libs | awk '{print $1}')" = "be4362cf82022e613cd34ff95d579c8502eaad8e"
+          test "$(git submodule status -- translations | awk '{print $1}')" = "8cd47ae043e8d9fe23878ac7e473f4817b9e2681"
+          test "$(git submodule status -- java/res-large | awk '{print $1}')" = "d87d9dbdf3966bbe18413be375dab2f6c7bbdfdd"
+          # The huggingface.co submodule and the two unneeded submodules must stay empty
+          test -z "$(ls -A java/assets/futo-swipe)"
+          test -z "$(ls -A java/assets/themes)"
+          test -z "$(ls -A voiceinput-shared/src/main/ml)"
+
+      - name: Install Temurin JDK 17.0.21+9 (vendor SHA-256 checked before use)
+        run: |
+          set -e
+          curl -fsSL -o /tmp/jdk.tar.gz "$JDK_URL"
+          echo "${JDK_SHA256}  /tmp/jdk.tar.gz" | sha256sum -c -
+          sudo mkdir -p "$JAVA_HOME"
+          sudo tar -xzf /tmp/jdk.tar.gz -C "$JAVA_HOME" --strip-components=1
+          rm -f /tmp/jdk.tar.gz
+          echo "$JAVA_HOME/bin" >> "$GITHUB_PATH"
+          "$JAVA_HOME/bin/java" -version 2>&1
+
+      - name: Install Gradle 8.14.3 (vendor SHA-256 checked before use)
+        run: |
+          set -e
+          curl -fsSL -o /tmp/gradle.zip "$GRADLE_URL"
+          echo "${GRADLE_SHA256}  /tmp/gradle.zip" | sha256sum -c -
+          sudo unzip -q -d /opt /tmp/gradle.zip
+          echo "/opt/gradle-8.14.3/bin" >> "$GITHUB_PATH"
+          rm -f /tmp/gradle.zip
+
+      - name: Install Android SDK packages (each zip SHA-1 checked before extract)
+        run: |
+          set -e
+          sdk_fetch() {
+            url="$1"; sha1="$2"; dest="$3"
+            curl -fsSL -o /tmp/pkg.zip "$url"
+            echo "${sha1}  /tmp/pkg.zip" | sha1sum -c -
+            rm -rf /tmp/pkg-x && mkdir -p /tmp/pkg-x
+            unzip -q -d /tmp/pkg-x /tmp/pkg.zip
+            # every SDK zip contains exactly one top-level directory
+            top=$(ls /tmp/pkg-x | head -1)
+            sudo mkdir -p "$(dirname "$dest")"
+            sudo mv "/tmp/pkg-x/$top" "$dest"
+            rm -f /tmp/pkg.zip
+            # preserve the vendor source.properties verbatim; fail if absent
+            test -f "$dest/source.properties"
+            echo "--- $dest/source.properties (vendor, preserved verbatim) ---"
+            cat "$dest/source.properties"
+          }
+          sdk_fetch "$SDK_PLATFORM_URL"   "$SDK_PLATFORM_SHA1"   "$ANDROID_HOME/platforms/android-35"
+          sdk_fetch "$SDK_BUILDTOOLS_URL" "$SDK_BUILDTOOLS_SHA1" "$ANDROID_HOME/build-tools/35.0.0"
+          sdk_fetch "$SDK_NDK_URL"        "$SDK_NDK_SHA1"        "$ANDROID_HOME/ndk/28.2.13676358"
+          sdk_fetch "$SDK_CMAKE_URL"      "$SDK_CMAKE_SHA1"      "$ANDROID_HOME/cmake/3.22.1"
+
+      - name: Scoped license acceptance (exactly two licenses, by hash file)
+        run: |
+          # sdkmanager records acceptance as sha1 files of the license texts.
+          # We accept EXACTLY these two licenses and nothing else:
+          #   android-sdk-license  = Android Software Development Kit License Agreement
+          #   android-ndk-license  = Android NDK License Agreement
+          # Hash values corroborated by public sources (manifest section 5);
+          # no `yes | sdkmanager --licenses` (bulk acceptance + SIGPIPE risk).
+          sudo mkdir -p "$ANDROID_HOME/licenses"
+          printf '%s\n' \
+            '8933bad161af4178b1185d1a37fbf41ea5269c55' \
+            'd56f5187479451eabf01fb78af6dfcb131a6481e' \
+            '24333f8a63b6825ea9c5514f83c2829b004d1fee' \
+            | sudo tee "$ANDROID_HOME/licenses/android-sdk-license"
+          printf '%s\n' \
+            '601085b94cd77f0b54ff86406957099ebe79c4d6' \
+            | sudo tee "$ANDROID_HOME/licenses/android-ndk-license"
+
+      - name: Toolchain fingerprint into job log
+        run: |
+          echo "ImageVersion=$ImageVersion"
+          git --version
+          java -version 2>&1
+          gradle --version
+
+      - name: N0-style task-graph gate (dry run, BEFORE the real run)
+        run: |
+          set -e
+          gradle --no-daemon $GRADLE_PROPS -m testStableDebugUnitTest :voiceinput-shared:testDebugUnitTest > /tmp/dryrun.log 2>&1
+          echo '=== FULL PLANNED TASK GRAPH ==='
+          grep -E '^:[^ ]+ SKIPPED' /tmp/dryrun.log
+          echo '=== GATE: forbidden task classes ==='
+          # Reject assemble/sign/apk/package/bundle/androidTest/connected/device/
+          # emulator/adb/install/publish/upload - with EXACT allowances for the
+          # known resource-only task names:
+          #   :packageStableDebugResources
+          #   :bundleStableDebugClassesToCompileJar
+          #   :voiceinput-shared:packageDebugResources
+          #   :voiceinput-shared:bundleDebugClassesToCompileJar
+          bad=$(grep -E '^:[^ ]+ SKIPPED' /tmp/dryrun.log | awk '{print $1}' | sed 's/^://' \
+            | grep -Ei '(assemble|sign|apk|package|bundle|androidtest|connected|device|emulator|adb|install|publish|upload)' \
+            | grep -Ev '^(packageStableDebugResources|bundleStableDebugClassesToCompileJar|voiceinput-shared:packageDebugResources|voiceinput-shared:bundleDebugClassesToCompileJar)$' \
+            || true)
+          if [ -n "$bad" ]; then
+            echo '::error::forbidden task class present in the planned graph:'
+            echo "$bad"
+            exit 1
+          fi
+          echo 'gate passed: unit-test graph contains compile/resource/test tasks only'
+
+      - name: Run the two unit-test suites (only these tasks)
+        run: |
+          set -o pipefail
+          gradle --no-daemon --stacktrace $GRADLE_PROPS \
+            -Dorg.gradle.jvmargs="-Xmx4g -Dfile.encoding=UTF-8" \
+            testStableDebugUnitTest :voiceinput-shared:testDebugUnitTest 2>&1 | tee /tmp/run.log
+
+      - name: Evidence in job log (strict XML verification + raw XML + partial host audit)
+        if: always()
+        run: |
+          echo '=== IDENTITY ==='
+          git rev-parse HEAD
+          git submodule status
+          echo '=== STRICT JUNIT XML VERIFICATION (raw XML printed regardless; assertions evaluated after) ==='
+          python3 - <<'PYEOF'
+          import glob, xml.etree.ElementTree as ET
+          problems = []
+          def scan(pattern, expected, label):
+              files = sorted(glob.glob(pattern))
+              if not files:
+                  problems.append(f'{label}: no XML files at {pattern}')
+                  print(f'{label}: NO XML FILES at {pattern}')
+                  return []
+              t=f=e=s=0
+              for p in files:
+                  try:
+                      r = ET.parse(p).getroot()
+                  except Exception as ex:
+                      problems.append(f'XML PARSE FAILURE {p}: {ex}')
+                      print(f'{label}: XML PARSE FAILURE {p}: {ex}')
+                      continue
+                  t+=int(r.get('tests',0)); f+=int(r.get('failures',0))
+                  e+=int(r.get('errors',0));  s+=int(r.get('skipped',0))
+              print(f'{label}: files={len(files)} tests={t} failures={f} errors={e} skipped={s} (expected tests={expected}, 0 failures/errors/skipped)')
+              if t != expected or f != 0 or e != 0 or s != 0:
+                  problems.append(f'{label}: expected tests={expected} with 0 failures/errors/skipped, got tests={t} failures={f} errors={e} skipped={s}')
+              return files
+          fa = scan('build/test-results/testStableDebugUnitTest/*.xml', 101, 'app')
+          fb = scan('voiceinput-shared/build/test-results/testDebugUnitTest/*.xml', 22, 'voiceinput-shared')
+          print('=== RAW JUnit XML (every file, verbatim, printed whether or not assertions passed) ===')
+          for p in fa + fb:
+              print(f'----- {p} -----')
+              try:
+                  print(open(p, encoding="utf-8", errors="replace").read())
+              except Exception as ex:
+                  print(f'(unreadable: {ex})')
+          print('=== ASSERTION SUMMARY ===')
+          if problems:
+              for pr in problems:
+                  print(f'::error::{pr}')
+              raise SystemExit(1)
+          print('all XML assertions passed: app=101, voiceinput-shared=22, 0 failures/errors/skipped')
+          PYEOF
+          echo '=== HOST AUDIT (DETECTIVE ONLY, PARTIAL VISIBILITY) ==='
+          echo 'This lists only https hosts that appear in the gradle log.'
+          echo 'It is NOT a contacted-host inventory: traffic from other tools'
+          echo '(curl, git, AGP/sdklib loaders) is not in this log; those steps'
+          echo 'use fixed URLs pinned in this file, but that is by construction,'
+          echo 'not independent observation. Unknown egress cannot be excluded.'
+          echo 'No network-isolation claim is made.'
+          grep -oE 'https?://[A-Za-z0-9.-]+' /tmp/run.log | sort -u || true
+          if grep -q 'huggingface\.co' /tmp/run.log; then
+            echo '::error::huggingface.co appears in the gradle log'
+            exit 1
+          fi
