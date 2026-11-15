@@ -191,6 +191,7 @@ private fun downloadAndInstall(context: Context, updateResult: UpdateResult, onH
             if (context.packageManager.canRequestPackageInstalls()) {
                 if (launchInstaller(context, file)) {
                     failed = false
+                    UpdateStatus.attempts.handOver(attempt)
                     UpdateStatus.attempts.post(attempt, "")
                     runOnMain { onHandedOver() }
                 } else {
@@ -276,7 +277,10 @@ fun UpdateDialog(navController: NavHostController) {
                         UpdateStatus.pendingApk = null
                         // WrenBoard 1.10 hardening: check the file again before handing it over (it sat in cache meanwhile).
                         val ok = try { UpdateVerify.verify(appContext, f); true } catch (e: Throwable) { try { f.delete() } catch (_: Throwable) { }; UpdateStatus.readyVersion = -1; false }
-                        if (ok && launchInstaller(appContext, f)) navController.navigateUp()
+                        if (ok && launchInstaller(appContext, f)) {
+                            UpdateStatus.attempts.handOver(UpdateStatus.attempts.currentToken)
+                            navController.navigateUp()
+                        }
                     }
                 }
             }
