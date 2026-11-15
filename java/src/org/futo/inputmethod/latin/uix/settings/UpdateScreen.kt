@@ -274,7 +274,9 @@ fun UpdateDialog(navController: NavHostController) {
                     val f = UpdateStatus.pendingApk
                     if (f != null && appContext.packageManager.canRequestPackageInstalls()) {
                         UpdateStatus.pendingApk = null
-                        if (launchInstaller(appContext, f)) navController.navigateUp()
+                        // WrenBoard 1.10 hardening: check the file again before handing it over (it sat in cache meanwhile).
+                        val ok = try { UpdateVerify.verify(appContext, f); true } catch (e: Throwable) { try { f.delete() } catch (_: Throwable) { }; UpdateStatus.readyVersion = -1; false }
+                        if (ok && launchInstaller(appContext, f)) navController.navigateUp()
                     }
                 }
             }
