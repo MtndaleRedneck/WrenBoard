@@ -837,8 +837,9 @@ class GeneralIME(val helper: IMEHelper) : IMEInterface, WordLearner, SuggestionS
             val typed = inputLogic.mWordComposer.typedWord ?: return words
             if (BuildConfig.DEBUG) Log.i("WBDBG", "SPLIT valid going=${dictionaryFacilitator.isValidSpellingWord("going")} blank=${dictionaryFacilitator.isValidSpellingWord("blank")} whole=${dictionaryFacilitator.isValidSpellingWord(typed.lowercase())}")
             val split = WrenWordSplit.best(typed) { dictionaryFacilitator.isValidSpellingWord(it) } ?: return words
-            if (words.mSuggestedWordInfoList.any { it.mWord == split }) return words
-            val list = ArrayList(words.mSuggestedWordInfoList)
+            if (BuildConfig.DEBUG) Log.i("WBDBG", "SPLIT best='$split' list=${words.mSuggestedWordInfoList.joinToString("|") { it.mWord + ":" + it.kind }}")
+            // an engine candidate with the same text is moved to the front instead of being left further down
+            val list = ArrayList(words.mSuggestedWordInfoList.filter { it.mWord != split })
             // first slot among the non-typed candidates, so it becomes the left chip whatever the engine's own order is
             val at = list.indexOfFirst { it.kind != SuggestedWordInfo.KIND_TYPED }.let { if (it < 0) list.size else it }
             if (BuildConfig.DEBUG) Log.i("WBDBG", "SPLIT add '$split' at=$at of ${list.size}: ${list.joinToString("|") { it.mWord + ":" + it.kind }}")
