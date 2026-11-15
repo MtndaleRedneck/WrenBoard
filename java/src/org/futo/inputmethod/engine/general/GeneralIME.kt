@@ -839,7 +839,10 @@ class GeneralIME(val helper: IMEHelper) : IMEInterface, WordLearner, SuggestionS
             val split = WrenWordSplit.best(typed) { dictionaryFacilitator.isValidSpellingWord(it) } ?: return words
             if (words.mSuggestedWordInfoList.any { it.mWord == split }) return words
             val list = ArrayList(words.mSuggestedWordInfoList)
-            list.add(minOf(1, list.size), SuggestedWordInfo(split, "", SuggestedWordInfo.MAX_SCORE - 1,
+            // first slot among the non-typed candidates, so it becomes the left chip whatever the engine's own order is
+            val at = list.indexOfFirst { it.kind != SuggestedWordInfo.KIND_TYPED }.let { if (it < 0) list.size else it }
+            if (BuildConfig.DEBUG) Log.i("WBDBG", "SPLIT add '$split' at=$at of ${list.size}: ${list.joinToString("|") { it.mWord + ":" + it.kind }}")
+            list.add(at, SuggestedWordInfo(split, "", SuggestedWordInfo.MAX_SCORE - 1,
                 SuggestedWordInfo.KIND_CORRECTION, Dictionary.DICTIONARY_HARDCODED, SuggestedWordInfo.NOT_AN_INDEX,
                 SuggestedWordInfo.NOT_A_CONFIDENCE))
             return SuggestedWords(list, words.mRawSuggestions, null, words.mTypedWordValid, words.mWillAutoCorrect,
