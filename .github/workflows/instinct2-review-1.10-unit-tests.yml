@@ -145,10 +145,16 @@ jobs:
             echo "${sha1}  /tmp/pkg.zip" | sha1sum -c -
             rm -rf /tmp/pkg-x && mkdir -p /tmp/pkg-x
             unzip -q -d /tmp/pkg-x /tmp/pkg.zip
-            # every SDK zip contains exactly one top-level directory
-            top=$(ls /tmp/pkg-x | head -1)
-            sudo mkdir -p "$(dirname "$dest")"
-            sudo mv "/tmp/pkg-x/$top" "$dest"
+            # SDK zips have two layouts: exactly one top-level directory, or
+            # payload files at the archive root (cmake-3.22.1: bin/ doc/ share/ source.properties)
+            entries=$(ls -A /tmp/pkg-x)
+            if [ "$(printf '%s\n' "$entries" | wc -l)" = 1 ] && [ -d "/tmp/pkg-x/$entries" ]; then
+              sudo mkdir -p "$(dirname "$dest")"
+              sudo mv "/tmp/pkg-x/$entries" "$dest"
+            else
+              sudo mkdir -p "$dest"
+              sudo cp -a /tmp/pkg-x/. "$dest"/
+            fi
             rm -f /tmp/pkg.zip
             # preserve the vendor source.properties verbatim; fail if absent
             test -f "$dest/source.properties"
