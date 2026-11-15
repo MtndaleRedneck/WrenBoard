@@ -55,24 +55,16 @@ jobs:
           mkdir -p off
           cat > resolve-test-runtime.init.gradle <<'INIT'
           allprojects { p ->
-            p.afterEvaluate {
-              p.tasks.register('resolveTestRuntime') {
-                doLast {
-                  p.configurations.matching { (it.name == 'stableDebugUnitTestRuntimeClasspath' || it.name == 'debugUnitTestRuntimeClasspath') && it.canBeResolved }.each { c ->
-                    def n = c.files.size()
-                    def m = c.incoming.artifactView { v ->
-                      v.attributes { a -> a.attribute(Attribute.of('artifactType', String), 'android-classes-jar') }
-                    }.files.files.size()
-                    println "RESOLVED ${p.path}:${c.name} files=${n} android-classes-jar=${m}"
-                  }
-                }
-              }
+            p.tasks.withType(Test).configureEach { t ->
+              t.filter.includeTestsMatching("zz.resolve.only.NoSuchTest")
+              t.filter.failOnNoMatchingTests = false
+              t.doFirst { println "RESOLVE-ONLY ${t.path} classpathFiles=${t.classpath.files.size()}" }
             }
           }
           INIT
           G="./gradlew --no-daemon --max-workers=2 -Dorg.gradle.jvmargs=-Xmx5g -Dfile.encoding=UTF-8 -Pkotlin.compiler.execution.strategy=in-process -Pandroid.injected.build.abi=x86_64 -Pandroid.injected.testOnly=false"
           N1="assembleStableDebug assembleStableDebugAndroidTest compileStableDebugUnitTestKotlin compileStableDebugUnitTestJavaWithJavac :voiceinput-shared:assembleDebug :voiceinput-shared:compileDebugUnitTestKotlin :voiceinput-shared:compileDebugUnitTestJavaWithJavac"
-          R="resolveTestRuntime :voiceinput-shared:resolveTestRuntime"
+          R="testStableDebugUnitTest :voiceinput-shared:testDebugUnitTest"
           $G --init-script resolve-test-runtime.init.gradle --dry-run $N1 $R > off/dryrun.txt 2>&1 || echo "dryrun exit $?"
           echo "tasks in dry run: $(grep -c '^:' off/dryrun.txt)"; grep -E '^:[A-Za-z:-]*:(test[A-Za-z]*UnitTest|connected[A-Za-z]*)( |$)' off/dryrun.txt | tee off/test-tasks.txt || true
           $G --init-script resolve-test-runtime.init.gradle $N1 $R > off/n1-run.log 2>&1; echo "N1+resolve exit $?"; grep -E 'RESOLVED|BUILD' off/n1-run.log
