@@ -58,7 +58,7 @@ jobs:
             p.afterEvaluate {
               p.tasks.register('resolveTestRuntime') {
                 doLast {
-                  p.configurations.matching { it.name.endsWith('UnitTestRuntimeClasspath') && it.canBeResolved }.each { c ->
+                  p.configurations.matching { (it.name == 'stableDebugUnitTestRuntimeClasspath' || it.name == 'debugUnitTestRuntimeClasspath') && it.canBeResolved }.each { c ->
                     def n = c.files.size()
                     def m = c.incoming.artifactView { v ->
                       v.attributes { a -> a.attribute(Attribute.of('artifactType', String), 'android-classes-jar') }
