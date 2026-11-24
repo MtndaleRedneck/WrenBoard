@@ -54,7 +54,7 @@ jobs:
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;28.2.13676358"
       - uses: gradle/actions/setup-gradle@d9c87d481d55275bb5441eef3fe0e46805f9ef70 # v3.5.0
       - name: Run Android Lint (report-only)
-        run: ./gradlew -I .github/analysis/lint-sarif.init.gradle lint --continue
+        run: ./gradlew -I .github/analysis/lint-sarif.init.gradle lint --continue -PlintWaiverModules=':voiceinput-shared'
       - name: Collect lint reports
         id: collect
         if: always()
@@ -73,7 +73,10 @@ jobs:
             echo "ERROR: app lint produced no SARIF report - the scan did not complete; refusing to report green."
             exit 1
           fi
-          if ls /tmp/sarif-lint-voice/*.sarif >/dev/null 2>&1; then echo "has_voice=true" >> "$GITHUB_OUTPUT"; fi
+          if ! ls /tmp/sarif-lint-voice/*.sarif >/dev/null 2>&1; then
+            echo "ERROR: voiceinput-shared lint produced no SARIF report; refusing to report green."
+            exit 1
+          fi
       - name: Upload lint SARIF (app)
         if: always()
         uses: github/codeql-action/upload-sarif@v4
@@ -82,7 +85,7 @@ jobs:
           category: android-lint
           wait-for-processing: false
       - name: Upload lint SARIF (voiceinput-shared)
-        if: always() && steps.collect.outputs.has_voice == 'true'
+        if: always()
         uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: /tmp/sarif-lint-voice

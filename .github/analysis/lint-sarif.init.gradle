@@ -13,9 +13,13 @@ gradle.projectsLoaded {
                             htmlReport = true
                             abortOnError = false
                             checkReleaseBuilds = false
-                            // lint 8.10.1's Compose detector crashes on Kotlin 2.1 metadata (kotlinx-metadata max 2.0.0);
-                            // disabling only this one crashing check keeps the scan complete. Report-only, no product change.
-                            disable.add('CoroutineCreationDuringComposition')
+                            // lint 8.10.1's Compose detector crashes on Kotlin 2.1 metadata (kotlinx-metadata max 2.0.0).
+                            // Waiver scoped to the module(s) listed in -PlintWaiverModules (default: voiceinput-shared,
+                            // where the crash was observed). Re-enable when AGP/lint bundles kotlinx-metadata >= 2.1.
+                            def waiver = (p.rootProject.findProperty('lintWaiverModules') ?: ':voiceinput-shared').toString().split(',')*.trim()
+                            if (waiver.contains(p.path)) {
+                                disable.add('CoroutineCreationDuringComposition')
+                            }
                         }
                     }
                 }
