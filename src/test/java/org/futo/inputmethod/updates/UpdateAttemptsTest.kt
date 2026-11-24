@@ -1,5 +1,10 @@
 package org.futo.inputmethod.updates
 
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -209,6 +214,28 @@ class UpdateAttemptsTest {
         t.downloadEnded(a) // the coroutine's finally
         assertFalse(t.isBusy(now = 1_000L))
         assertEquals(UpdateAttempts.Outcome.Failed, t.lastOutcome)
+    }
+
+    @Test fun recheckClaimedButCoroutineNeverStartsStillFreesTheGate() = runBlocking {
+        // ChatGPT review of (18): a destination popped between the claim and the coroutine's first dispatch
+        // cancels the job before its body runs, so the body's finally never executes. The claim must be
+        // released by the job's completion cleanup (token-checked, idempotent), or updates stay busy for
+        // the rest of the process lifetime. (Tracker+pattern level with real coroutines, not screen-entry.)
+        val t = tracker()
+        val a = t.start()
+        t.downloadEnded(a)
+        assertTrue(t.beginRecheck(a))
+        val scope = CoroutineScope(Job())
+        scope.cancel() // the destination was popped before the coroutine's first dispatch
+        var bodyRan = false
+        val job = scope.launch {
+            bodyRan = true
+            try { /* verification and resolution */ } finally { t.downloadEnded(a) }
+        }
+        job.invokeOnCompletion { t.downloadEnded(a) }
+        job.join()
+        assertFalse(bodyRan) // proves the finally-only pattern really does leave this window
+        assertFalse(t.isBusy(now = 1_000L))
     }
 
     @Test fun handOverForAnOldAttemptIsRefused() {
