@@ -7,6 +7,7 @@ name: wren110-rel-runtime
 # logs) do not exist, so the runtime suite cannot probe the app. Fixture therefore =
 # release buildType + R8 + debug harness hooks; not byte-identical to the shipped APK.
 # Candidate source tree is untouched (guard step below).
+# retrigger r1 (602b staging/gate run)
 on:
   push:
     branches: [instinct1/release-1.10.0-relruntime]
@@ -150,6 +151,30 @@ jobs:
           AJAR="$ANDROID_HOME/platforms/$(ls "$ANDROID_HOME/platforms" | sort -V | tail -1)/android.jar"
           rm -rf /tmp/ktx && mkdir -p /tmp/ktx
           "$bt/d8" --min-api 24 --lib "$AJAR" --output /tmp/ktx $JARS
+          # Actual-cause fix (verified against run 45313681341 fixture bytes): d8 preserves the
+          # kotlin-stdlib multifile facade parts as package-private (as in the jar); R8 rewrote the
+          # APP's facade calls into direct part references, so in the instrumented process the app's
+          # references resolve against this injected dex and package-private parts throw
+          # IllegalAccessError (e.g. SettingsKt -> kotlin.collections.SetsKt__SetsKt). Set ACC_PUBLIC
+          # on every package-private class in the injected dex only (test-side fixture change; app
+          # APK and its R8 output untouched), then repair dex checksums.
+          python3 - <<'PYDEX'
+          import struct, hashlib, zlib
+          f = '/tmp/ktx/classes.dex'
+          d = bytearray(open(f,'rb').read())
+          cds, cdo = struct.unpack_from('<II', d, 0x60)
+          flipped = 0
+          for i in range(cds):
+              base = cdo + i*32
+              af = struct.unpack_from('<I', d, base+4)[0]
+              if not (af & 0x1):
+                  struct.pack_into('<I', d, base+4, af | 0x1)
+                  flipped += 1
+          d[12:32] = hashlib.sha1(bytes(d[32:])).digest()
+          struct.pack_into('<I', d, 8, zlib.adler32(bytes(d[12:])))
+          open(f,'wb').write(d)
+          print(f"injected dex: set ACC_PUBLIC on {flipped} package-private classes")
+          PYDEX
           N=$(unzip -Z1 w17-rel-tests.apk | grep -cE '^classes[0-9]*\.dex$')
           NEXT=$((N+1))
           echo "test apk dex count: $N; injecting as classes$NEXT.dex"
