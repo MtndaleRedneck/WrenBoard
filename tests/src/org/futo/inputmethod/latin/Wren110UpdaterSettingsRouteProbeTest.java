@@ -181,7 +181,7 @@ public class Wren110UpdaterSettingsRouteProbeTest extends InputTestsBase {
                 UpdateStatus.INSTANCE.getPendingApk());
         Log.i(TAG, "PROBE T5b return-state downloadText='"
                 + UpdateStatus.INSTANCE.getDownloadText().getValue() + "' isDownloading="
-                + UpdateStatus.INSTANCE.getIsDownloading().getValue() + " busy="
+                + UpdateStatus.INSTANCE.isDownloading().getValue() + " busy="
                 + UpdateStatus.INSTANCE.getAttempts().isBusy(System.currentTimeMillis()));
         // The manual restart the return flow actually requires (the Download button's own
         // production function), confirming it reaches the installer without a re-fetch.
