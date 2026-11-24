@@ -124,6 +124,10 @@ PROBE_EXIT=${PIPESTATUS[0]}
 # "Process crashed"), so the op is flipped here between sessions, never while one is live.
 # T5a enters the actual unknown-sources Settings route with the op denied; T5b verifies the
 # post-grant recovery (cold start, then the production download path reaches the installer).
+# Clear the system installer's leftover activities (T2's sheet sits in the app's task above the
+# update screen): force-stop removes them, so T5b's BACK from the Settings grant lands on the
+# cold-started update destination, not a stale sheet (r19 return-capture contamination).
+adb shell am force-stop com.google.android.packageinstaller
 adb shell appops set "$PKG" REQUEST_INSTALL_PACKAGES deny
 adb shell appops get "$PKG" REQUEST_INSTALL_PACKAGES
 timeout 300 adb shell am instrument -w -r -e class org.futo.inputmethod.latin.Wren110UpdaterSettingsRouteProbeTest#testT5aSettingsRouteEntry "$TESTPKG" | tee probe-out-t5a.txt
