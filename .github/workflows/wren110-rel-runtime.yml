@@ -7,7 +7,7 @@ name: wren110-rel-runtime
 # logs) do not exist, so the runtime suite cannot probe the app. Fixture therefore =
 # release buildType + R8 + debug harness hooks; not byte-identical to the shipped APK.
 # Candidate source tree is untouched (guard step below).
-# retrigger r2 (seed-store probe + updates fixture keep)
+# retrigger r3 (deterministic seed-race fix)
 on:
   push:
     branches: [instinct1/release-1.10.0-relruntime]
