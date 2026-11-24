@@ -43,7 +43,7 @@ public class PermissionsManager {
     private static PermissionsManager sInstance;
 
     public PermissionsManager(Context context) {
-        mContext = context;
+        mContext = context.getApplicationContext();
     }
 
     @Nonnull

@@ -97,7 +97,7 @@ public class RichInputMethodManager {
             return;
         }
         mImmWrapper = new InputMethodManagerCompatWrapper(context);
-        mContext = context;
+        mContext = context.getApplicationContext();
         mInputMethodInfoCache = new InputMethodInfoCache(
                 mImmWrapper.mImm, context.getPackageName());
 
