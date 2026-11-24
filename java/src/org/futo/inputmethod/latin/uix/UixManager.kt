@@ -1559,11 +1559,13 @@ class UixManager(private val latinIME: LatinIME) {
      * to the DISPLAY copy only, so no path (panel close, startup, punctuation-only text) leaves the strip empty.
      * I / The / You, only with starter words on and a field that takes suggestions, never while a word is being
      * typed. Not at draw time: the cursor read is a synchronous binder IPC, and per-recomposition calls risk
-     * main-thread stalls (1.10 review finding). Qualifier: a context change that produces no suggestion write
-     * (an async settings flip, or a cursor move the engine does not answer with new suggestions) leaves the
-     * display copy until the next write; the pre-1.10 draw-time read had the same observable staleness in
-     * practice because such changes trigger no recomposition either. Raw suggestedWords stays unguarded for
-     * non-display consumers.
+     * main-thread stalls (1.10 review finding). Refresh coverage: the display copy is recomputed on suggestion
+     * writes, on input start, and on selection updates (LatinIME.onUpdateSelection -> onSelectionUpdated),
+     * which covers cursor moves including ones the engine does not answer with new suggestions. Remaining
+     * qualified difference vs the pre-1.10 draw-time read (which refreshed on ANY recomposition): a settings
+     * flip that produces no write and no selection change can leave the display copy until the next write.
+     * The difference is bounded to starter-words presence in the strip; typed text and raw consumers are
+     * unaffected. Raw suggestedWords stays unguarded for non-display consumers.
      */
     private fun blankGuard(words: SuggestedWords?): SuggestedWords? {
         if (words != null && !words.isEmpty) return words
@@ -1581,6 +1583,13 @@ class UixManager(private val latinIME: LatinIME) {
             }
             return SuggestedWords(list, null, null, false, false, false, SuggestedWords.INPUT_STYLE_TYPING, -1)
         } catch (e: Exception) { return words }
+    }
+
+    /** Event-driven guard refresh for cursor moves: called from LatinIME.onUpdateSelection. Recomputes only
+     *  the display copy from the current raw value; safe for the binder read because this is an IME callback,
+     *  not a Compose draw. */
+    fun onSelectionUpdated() {
+        displaySuggestedWords.value = blankGuard(suggestedWords.value)
     }
 
     fun setSuggestions(suggestedWords: SuggestedWords?, rtlSubtype: Boolean, cfg: ExpandableSuggestionBarConfiguration) {

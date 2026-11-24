@@ -739,6 +739,9 @@ class LatinIME : InputMethodServiceCompose(), LatinIMELegacy.SuggestionStripCont
             candidatesStart,
             candidatesEnd
         )
+        // 1.10: refresh the suggestion-strip starter-words guard on cursor moves (event-driven,
+        // outside Compose draw), so the write-time guard does not go stale on no-write selection changes.
+        uixManager.onSelectionUpdated()
     }
 
     override fun onExtractedTextClicked() {
