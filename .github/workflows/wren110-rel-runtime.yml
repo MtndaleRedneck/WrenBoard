@@ -196,6 +196,9 @@ jobs:
           script: bash tools/wren18-runtime.sh w17-release.apk w17-rel-tests.apk
 
       - name: Diagnostics probes (disposition pipeline + updater lifecycle; frozen tools/wren18-runtime.sh untouched)
+        # Independent of prior legs: probe + captures must still run (and fail visibly) if an
+        # earlier step failed, so evidence is never silently skipped.
+        if: always()
         uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
         with:
           api-level: 33

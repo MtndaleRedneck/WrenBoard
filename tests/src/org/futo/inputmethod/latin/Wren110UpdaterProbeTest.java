@@ -17,7 +17,13 @@
  *
  * T2/T3b notes: the dummy file in T2 proves route/grant/installer UI only, never a valid
  * update installation. T3b uses the same-tree vc-12 APK (same source, same CI debug signer,
- * higher versionCode) staged by tools/wren110-probe.sh; that is the valid-replacement case.
+ * higher versionCode) staged by tools/wren110-probe.sh; it proves the production re-verify
+ * ACCEPTS the valid replacement and the production launch ROUTE fires. Route-level only: no
+ * completed install is performed or claimed.
+ * Grant precondition: the production ON_RESUME observer consumes pendingApk only when
+ * canRequestPackageInstalls() is true; without the grant ON_RESUME silently retains the file
+ * (source-observed, not probe-asserted). The probe script grants REQUEST_INSTALL_PACKAGES on
+ * the isolated emulator (appops, logged), so these cases exercise the granted path.
  * T4 uses synthetic clock values and says nothing about actual 10-minute UI timing.
  * No network, no real install completion, no publication.
  */
@@ -188,11 +194,12 @@ public class Wren110UpdaterProbeTest extends InputTestsBase {
                 + " fileExists=" + valid.exists() + " top=" + top);
         assertNull("T3b valid pendingApk consumed on resume", UpdateStatus.INSTANCE.getPendingApk());
         assertTrue("T3b valid fixture NOT deleted by re-verify", valid.exists());
-        // The install offer surfaces either as the package installer or, when the unknown-sources
-        // grant is missing, as the system install-unknown-apps screen. Both prove the production
-        // re-verify accepted the file and the production installer route fired.
-        assertTrue("T3b install offer surfaced (installer UI or unknown-sources screen), top=" + top,
-                top.contains("packageinstaller") || top.contains("com.android.settings"));
+        // Route-level assertion only: the install ROUTE reached Android's installer UI.
+        // No completed install is performed or claimed. The grant is established by the probe
+        // script (appops), so the installer screen itself, not the unknown-sources screen, is
+        // the expected top; canRequestPackageInstalls is logged above for the record.
+        assertTrue("T3b install route reached Android's installer UI (route only, no completed install), top=" + top,
+                top.contains("packageinstaller"));
         shell("input keyevent KEYCODE_BACK");
         Thread.sleep(1500);
     }

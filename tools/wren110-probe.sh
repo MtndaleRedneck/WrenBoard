@@ -7,6 +7,20 @@
 # workflow YAML block do not survive. All probe state therefore lives in this file.
 set -euo pipefail
 PKG=com.wrenboard.keyboard
+
+# Full-fidelity captures run on ANY exit (I2 capture-gap correction): an early set -e exit
+# (install/staging/IME/instrument) must not lose the captures - the known startup ANR evidence
+# lives in the early device state. Trap is armed before the first device action; the original
+# exit code is preserved. Unconditional: no tag filters, no grep caps, ANR traces if any exist.
+captures() {
+  adb logcat -d > probe-logcat-full.txt 2>&1 || true
+  adb shell dumpsys dropbox --print > probe-dropbox-full.txt 2>&1 || true
+  adb shell ls -la /data/anr/ > probe-anr-list.txt 2>&1 || true
+  adb pull /data/anr probe-anr || true
+  adb pull "/sdcard/Android/data/$PKG/files" probe-files || true
+}
+trap 'ec=$?; captures; exit $ec' EXIT
+
 adb root || true
 adb wait-for-device
 adb shell wm size 1080x2316
@@ -16,6 +30,14 @@ adb shell settings put secure navigation_mode 0 || true
 adb install -r -t w17-release.apk
 adb install -r -t w17-rel-tests.apk
 adb install -r tools/ime-target/out/imetarget.apk
+
+# Isolated-emulator test setting (not a real account change): the production ON_RESUME observer
+# only consumes pendingApk when canRequestPackageInstalls() is true (UpdateScreen.kt). Without
+# this grant the observer path is never reached and the probe would misread a precondition as
+# product behavior. Logged before and after.
+adb shell appops get "$PKG" REQUEST_INSTALL_PACKAGES || true
+adb shell appops set "$PKG" REQUEST_INSTALL_PACKAGES allow
+adb shell appops get "$PKG" REQUEST_INSTALL_PACKAGES
 
 # Stage the same-tree vc-12 update fixture into the app's updates cache dir. The CI release
 # fixture carries the CI-only debuggable patch, so run-as works without root; adb root chmod
@@ -59,20 +81,13 @@ echo "PROBE_EXIT=$PROBE_EXIT" | tee probe-exit.txt
 
 # Expected: 1 disposition test + 5 updater case tests (T1, T2, T3 tampered, T3b valid, T4).
 # Per-case JUnit3 methods keep case counts distinguishable: a case that dies mid-run shortens
-# the summary and fails this assertion instead of passing silently.
-RESULT_LINE=$(grep -E '^OK \(|^FAILURES!!!|^Tests run:' probe-out.txt || true)
+# the summary and fails this assertion instead of passing silently. CR/framing from the adb
+# stream is normalized by stripping \r; the match stays exact (anchored, exact count).
+RESULT_LINE=$(tr -d '\r' < probe-out.txt | grep -E '^OK \(|^FAILURES!!!|^Tests run:' || true)
 echo "instrumentation summary: $RESULT_LINE"
 RESULT_OK=0
-if grep -q '^OK (6 tests)$' probe-out.txt; then RESULT_OK=1; fi
+if tr -d '\r' < probe-out.txt | grep -qE '^OK \(6 tests\)[[:space:]]*$'; then RESULT_OK=1; fi
 echo "RESULT_OK=$RESULT_OK" | tee -a probe-exit.txt
-
-# Unconditional full-fidelity captures (I2 capture-adequacy correction): no tag filters,
-# no grep caps, ANR traces if any exist, including ordinary startup ANRs.
-adb logcat -d > probe-logcat-full.txt || true
-adb shell dumpsys dropbox --print > probe-dropbox-full.txt || true
-adb shell ls -la /data/anr/ > probe-anr-list.txt 2>&1 || true
-adb pull /data/anr probe-anr || true
-adb pull /sdcard/Android/data/$PKG/files probe-files || true
 
 test "$RESULT_OK" = 1
 test "$PROBE_EXIT" = 0
