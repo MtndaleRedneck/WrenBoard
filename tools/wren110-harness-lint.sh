@@ -96,4 +96,30 @@ done
 if [ "$badretire" -eq 0 ] && [ "$retires" -eq 5 ]; then
   echo "lint-ok: durable marker retires only in failure cleanup or after successful installer launch"
 fi
+# (28) direct-path durability (ChatGPT (27) review): downloadAndInstall stages its own durable
+# marker between handOver and launch, retires it only after launchInstaller(context, file)
+# returns true, and retires owned on the failure branch (whose finally deletes the file).
+dlaunch=$(grep -n 'if (launchInstaller(context, file)) {' "$SCR" | cut -d: -f1)
+dretire=$(grep -n 'context\.retirePendingInstallMarker()' "$SCR" | cut -d: -f1)
+downed=$(grep -n 'context\.retirePendingInstallMarkerIfOwned(attempt)' "$SCR" | cut -d: -f1)
+if [ -z "$dlaunch" ] || [ -z "$dretire" ] || [ -z "$downed" ]; then
+  echo "LINT-FAIL: (28) direct-path marker sites missing (launch=$dlaunch retire=$dretire owned=$downed)"; fail=1
+elif [ "$dretire" -lt "$dlaunch" ]; then
+  echo "LINT-FAIL: direct-path retire at $SCR:$dretire precedes launch at $dlaunch (stranded-update death window)"; fail=1
+else
+  dhand=$(grep -n 'if (UpdateStatus.attempts.handOver(attempt)) {' "$SCR" | head -1 | cut -d: -f1)
+  if ! sed -n "${dhand},${dlaunch}p" "$SCR" | grep -q 'prefs\[PENDING_INSTALL_ATTEMPT\] = attempt'; then
+    echo "LINT-FAIL: direct path stages no durable marker between handOver ($dhand) and launch ($dlaunch)"; fail=1
+  else
+    echo "lint-ok: direct path stages durable marker pre-launch and retires only post-launch or owned-on-failure"
+  fi
+fi
+# (27)/(28) cold-start ANR fix: the migration primer must not run on the main dispatcher.
+LIME=java/src/org/futo/inputmethod/latin/LatinIME.kt
+if grep -q 'launchJob { withContext(Dispatchers.IO) { readUnifiedActions() } }' "$LIME" \
+  && ! grep -q 'this\.readUnifiedActions()' "$LIME"; then
+  echo "lint-ok: unified-actions primer confined to Dispatchers.IO"
+else
+  echo "LINT-FAIL: readUnifiedActions must run via launchJob + withContext(Dispatchers.IO)"; fail=1
+fi
 exit $fail
