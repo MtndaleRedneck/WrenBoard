@@ -1,3 +1,5 @@
+# Fork PRs get a read-only token, so SARIF upload is skipped for them (the scan still runs and can fail red).
+# Triggers are pull_request/dispatch/schedule only (no pull_request_target).
 # Phase-2 static analysis: Android Lint + detekt, report-only.
 # Findings upload to GitHub code scanning (Security tab); the job NEVER fails
 # on findings. No product/build files are touched: lint SARIF output is injected
@@ -53,6 +55,10 @@ jobs:
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;28.2.13676358"
       - uses: gradle/actions/setup-gradle@d9c87d481d55275bb5441eef3fe0e46805f9ef70 # v3.5.0
+      - name: Clear any stale lint outputs
+        run: |
+          find . -path '*/build/reports/lint-results*' -type f -delete
+          rm -rf /tmp/sarif-lint-app /tmp/sarif-lint-voice /tmp/html-lint
       - name: Run Android Lint (report-only)
         run: ./gradlew -I .github/analysis/lint-sarif.init.gradle lint --continue -PlintWaiverModules=':voiceinput-shared'
       - name: Collect lint reports
@@ -67,7 +73,7 @@ jobs:
           find . -path '*/build/reports/lint-results*.html' -exec cp --backup=numbered {} /tmp/html-lint/ \;
           ls -la /tmp/sarif-lint-app/ /tmp/sarif-lint-voice/
           # any SARIF outside those two modules would be silently dropped: fail loudly instead
-          extra=$(find . -path '*/build/reports/lint-results*.sarif' ! -path './build/*' ! -path './voiceinput-shared/build/*' | head -5)
+          extra=$(find . -path '*/build/reports/lint-results*.sarif' ! -path './build/reports/lint-results*.sarif' ! -path './voiceinput-shared/build/reports/lint-results*.sarif' | head -5)
           if [ -n "$extra" ]; then echo "ERROR: unexpected lint SARIF location(s): $extra"; exit 1; fi
           if ! ls /tmp/sarif-lint-app/*.sarif >/dev/null 2>&1; then
             echo "ERROR: app lint produced no SARIF report - the scan did not complete; refusing to report green."
@@ -77,15 +83,23 @@ jobs:
             echo "ERROR: voiceinput-shared lint produced no SARIF report; refusing to report green."
             exit 1
           fi
+          python3 - <<'PY'
+          import glob, json, sys
+          for f in sorted(glob.glob('/tmp/sarif-lint-app/*.sarif') + glob.glob('/tmp/sarif-lint-voice/*.sarif')):
+              d = json.load(open(f))
+              if not d.get('runs'):
+                  print('ERROR: SARIF has no runs:', f); sys.exit(1)
+              print(f, 'runs=%d results=%d' % (len(d['runs']), sum(len(r.get('results', [])) for r in d['runs'])))
+          PY
       - name: Upload lint SARIF (app)
-        if: always()
+        if: always() && !(github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork)
         uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: /tmp/sarif-lint-app
           category: android-lint
           wait-for-processing: false
       - name: Upload lint SARIF (voiceinput-shared)
-        if: always()
+        if: always() && !(github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork)
         uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: /tmp/sarif-lint-voice
@@ -143,7 +157,7 @@ jobs:
           echo "detekt completed report-only (exit $rc, $count SARIF results)"
           ls -la /tmp/detekt.sarif /tmp/detekt.html
       - name: Upload detekt SARIF
-        if: always()
+        if: always() && !(github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork)
         uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: /tmp/detekt.sarif
