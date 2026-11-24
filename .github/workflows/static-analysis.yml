@@ -56,22 +56,37 @@ jobs:
       - name: Run Android Lint (report-only)
         run: ./gradlew -I .github/analysis/lint-sarif.init.gradle lint --continue
       - name: Collect lint reports
+        id: collect
         if: always()
         run: |
-          mkdir -p /tmp/sarif-lint /tmp/html-lint
-          find . -path '*/build/reports/lint-results*.sarif' -exec cp --backup=numbered {} /tmp/sarif-lint/ \;
+          # Two lint modules produce one SARIF each (app + voiceinput-shared). Code scanning
+          # rejects several runs under one category, so each module gets its own directory/category.
+          mkdir -p /tmp/sarif-lint-app /tmp/sarif-lint-voice /tmp/html-lint
+          cp build/reports/lint-results*.sarif /tmp/sarif-lint-app/ 2>/dev/null || true
+          cp voiceinput-shared/build/reports/lint-results*.sarif /tmp/sarif-lint-voice/ 2>/dev/null || true
           find . -path '*/build/reports/lint-results*.html' -exec cp --backup=numbered {} /tmp/html-lint/ \;
-          ls -la /tmp/sarif-lint/
-          if ! ls /tmp/sarif-lint/*.sarif >/dev/null 2>&1; then
-            echo "ERROR: lint produced no SARIF report - the scan did not complete; refusing to report green."
+          ls -la /tmp/sarif-lint-app/ /tmp/sarif-lint-voice/
+          # any SARIF outside those two modules would be silently dropped: fail loudly instead
+          extra=$(find . -path '*/build/reports/lint-results*.sarif' ! -path './build/*' ! -path './voiceinput-shared/build/*' | head -5)
+          if [ -n "$extra" ]; then echo "ERROR: unexpected lint SARIF location(s): $extra"; exit 1; fi
+          if ! ls /tmp/sarif-lint-app/*.sarif >/dev/null 2>&1; then
+            echo "ERROR: app lint produced no SARIF report - the scan did not complete; refusing to report green."
             exit 1
           fi
-      - name: Upload lint SARIF
+          if ls /tmp/sarif-lint-voice/*.sarif >/dev/null 2>&1; then echo "has_voice=true" >> "$GITHUB_OUTPUT"; fi
+      - name: Upload lint SARIF (app)
         if: always()
         uses: github/codeql-action/upload-sarif@v4
         with:
-          sarif_file: /tmp/sarif-lint
+          sarif_file: /tmp/sarif-lint-app
           category: android-lint
+          wait-for-processing: false
+      - name: Upload lint SARIF (voiceinput-shared)
+        if: always() && steps.collect.outputs.has_voice == 'true'
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: /tmp/sarif-lint-voice
+          category: android-lint-voiceinput-shared
           wait-for-processing: false
       - name: Upload lint HTML report
         if: always()
