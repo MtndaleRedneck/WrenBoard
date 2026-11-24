@@ -29,6 +29,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -159,7 +160,9 @@ private fun verifiedDownload(context: Context, updateResult: UpdateResult): java
 
 @DelicateCoroutinesApi
 private fun downloadAndInstall(context: Context, updateResult: UpdateResult, onHandedOver: () -> Unit) {
-    if (UpdateStatus.isDownloading.value) return
+    // WrenBoard 1.10 (review M1): the tracker, not only the progress flag, gates a new attempt, so no second
+    // download starts while a download runs or a handed-over install is still inside its window.
+    if (UpdateStatus.attempts.isBusy()) return
     val attempt = UpdateStatus.attempts.start()
     UpdateStatus.isDownloading.value = true
     UpdateStatus.progress.value = 0f
@@ -269,24 +272,48 @@ fun UpdateDialog(navController: NavHostController) {
         val appContext = context.applicationContext
         // WrenBoard 1.10: back from Android's "allow installs" screen, install the file already verified.
         val lifecycleOwner = LocalLifecycleOwner.current
+        // M1: observable busy for the buttons; refreshed on resume and when a download ends.
+        val attemptBusy = remember { mutableStateOf(UpdateStatus.attempts.isBusy()) }
         DisposableEffect(lifecycleOwner) {
             val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
                 if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
                     val f = UpdateStatus.pendingApk
                     if (f != null && appContext.packageManager.canRequestPackageInstalls()) {
                         UpdateStatus.pendingApk = null
-                        // WrenBoard 1.10 hardening: check the file again before handing it over (it sat in cache meanwhile).
-                        val ok = try { UpdateVerify.verify(appContext, f); true } catch (e: Throwable) { try { f.delete() } catch (_: Throwable) { }; UpdateStatus.readyVersion = -1; false }
-                        if (ok && launchInstaller(appContext, f)) {
-                            UpdateStatus.attempts.handOver(UpdateStatus.attempts.currentToken)
-                            navController.navigateUp()
+                        // WrenBoard 1.10 hardening: check the file again before handing it over (it sat in cache
+                        // meanwhile). The check parses the whole APK, so it runs off the main thread (review I2-1).
+                        val attempt = UpdateStatus.attempts.currentToken
+                        lifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
+                            val ok = try { UpdateVerify.verify(appContext, f); true } catch (e: Throwable) {
+                                try { f.delete() } catch (_: Throwable) { }
+                                UpdateStatus.readyVersion = -1
+                                // Review C2: say why instead of returning to the old words; the person can retry.
+                                UpdateStatus.attempts.fail(attempt, if (e is UpdateVerify.Failure) e.msg else "The downloaded file could not be checked, so it was not installed.")
+                                false
+                            }
+                            if (ok) {
+                                if (launchInstaller(appContext, f)) {
+                                    UpdateStatus.attempts.handOver(attempt)
+                                    withContext(Dispatchers.Main) { navController.navigateUp() }
+                                } else {
+                                    // Review C2: the installer did not open; say so and let the person retry.
+                                    UpdateStatus.attempts.fail(attempt, "Could not open the installer.")
+                                }
+                            }
                         }
+                    } else if (f == null) {
+                        // Review M1: back at this screen while a hand-over has no answer. A finished install replaces
+                        // this app process, so being here means it did not install: free the busy window for a retry
+                        // now. The 10-minute hand-over timeout stays the recovery for never coming back.
+                        UpdateStatus.attempts.endHandOver(UpdateStatus.attempts.currentToken, "The install did not finish. Tap Update to try again.")
                     }
+                    attemptBusy.value = UpdateStatus.attempts.isBusy()
                 }
             }
             lifecycleOwner.lifecycle.addObserver(observer)
             onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
         }
+        LaunchedEffect(isDownloading.value) { attemptBusy.value = UpdateStatus.attempts.isBusy() }
         AlertDialog(
             title = {
                 Text(text = "WrenBoard ${lastUpdateResult.nextVersionString} is available")
@@ -330,7 +357,7 @@ fun UpdateDialog(navController: NavHostController) {
             confirmButton = {
                 TextButton(onClick = {
                     downloadAndInstall(appContext, lastUpdateResult) { navController.navigateUp() }
-                }, enabled = !isDownloading.value) {
+                }, enabled = !isDownloading.value && !attemptBusy.value) {
                     Text(stringResource(R.string.autoupdater_perform_update))
                 }
             },
