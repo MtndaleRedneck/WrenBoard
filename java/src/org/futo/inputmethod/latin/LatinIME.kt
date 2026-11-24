@@ -448,7 +448,9 @@ class LatinIME : InputMethodServiceCompose(), LatinIMELegacy.SuggestionStripCont
         // idle). The edit is atomic, idempotent and restart-safe, and every real consumer
         // (useUnifiedActions' LaunchedEffect) primes the same key off the main thread, so
         // the synchronous edge bought nothing.
-        launchJob { readUnifiedActions() }
+        // Dispatchers.IO matters: readUnifiedActions is runBlocking internally, so a plain
+        // lifecycleScope.launch would still park the service main thread (ChatGPT (27) review).
+        launchJob { withContext(Dispatchers.IO) { readUnifiedActions() } }
         launchJob { uixManager.showUpdateNoticeIfNeeded() }
 
         launchJob {
