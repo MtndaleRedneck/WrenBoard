@@ -442,7 +442,13 @@ class LatinIME : InputMethodServiceCompose(), LatinIMELegacy.SuggestionStripCont
 
         scheduleUpdateCheckingJob(this)
         org.futo.inputmethod.latin.uix.actions.migrateToolbarForSaveWord(this)
-        this.readUnifiedActions()
+        // Migration primer must not block onCreate (1.10 (27)): a cold-start service has
+        // seconds before Android ANRs it, and runBlocking on a first DataStore read+write
+        // can outlast that under IO pressure (captured: service-execution ANR, workers
+        // idle). The edit is atomic, idempotent and restart-safe, and every real consumer
+        // (useUnifiedActions' LaunchedEffect) primes the same key off the main thread, so
+        // the synchronous edge bought nothing.
+        launchJob { readUnifiedActions() }
         launchJob { uixManager.showUpdateNoticeIfNeeded() }
 
         launchJob {
