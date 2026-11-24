@@ -37,7 +37,7 @@ jobs:
           git cat-file -e e1d5d1801e8885c85c81042b25f4959f32a5031a^{commit}
           test "$(git merge-base e1d5d1801e8885c85c81042b25f4959f32a5031a HEAD)" = "e1d5d1801e8885c85c81042b25f4959f32a5031a"
           git diff --name-only e1d5d1801e8885c85c81042b25f4959f32a5031a HEAD | sort > /tmp/wren-diff.txt
-          printf '%s\n' .github/workflows/wren110-rel-runtime.yml tests/src/org/futo/inputmethod/latin/Wren110BackDispositionProbeTest.java tests/src/org/futo/inputmethod/latin/Wren110UpdaterProbeTest.java tests/src/org/futo/inputmethod/latin/Wren110RetentionProbeTest.java tools/wren110-probe.sh | sort > /tmp/wren-allowed.txt
+          printf '%s\n' .github/workflows/wren110-rel-runtime.yml tests/src/org/futo/inputmethod/latin/Wren110BackDispositionProbeTest.java tests/src/org/futo/inputmethod/latin/Wren110UpdaterProbeTest.java tests/src/org/futo/inputmethod/latin/Wren110UpdaterSettingsRouteProbeTest.java tests/src/org/futo/inputmethod/latin/Wren110RetentionProbeTest.java tools/wren110-probe.sh | sort > /tmp/wren-allowed.txt
           EXTRA=$(comm -23 /tmp/wren-diff.txt /tmp/wren-allowed.txt)
           test -z "$EXTRA" || { echo "frozen-source guard: unexpected changed files: $EXTRA"; exit 1; }
       - name: Build dependencies
@@ -244,6 +244,8 @@ jobs:
           name: wren110-rel-probe
           path: |
             probe-out.txt
+            probe-out-t5a.txt
+            probe-out-t5b.txt
             posinstall-out.txt
             probe-exit.txt
             probe-logcat-full.txt

@@ -117,23 +117,51 @@ adb shell svc wifi disable || true
 adb shell svc data disable || true
 timeout 600 adb shell am instrument -w -r -e class org.futo.inputmethod.latin.Wren110BackDispositionProbeTest,org.futo.inputmethod.latin.Wren110RetentionProbeTest,org.futo.inputmethod.latin.Wren110UpdaterProbeTest "$TESTPKG" | tee probe-out.txt
 PROBE_EXIT=${PIPESTATUS[0]}
+
+# T5a/T5b run as SEPARATE instrumentation sessions: Android kills the app process on ANY
+# REQUEST_INSTALL_PACKAGES op change (run 45399355461 logcat, ActivityManager: "Killing
+# <pid>:com.wrenboard.keyboard ... REQUEST_INSTALL_PACKAGES changed"; mid-session toggle =
+# "Process crashed"), so the op is flipped here between sessions, never while one is live.
+# T5a enters the actual unknown-sources Settings route with the op denied; T5b verifies the
+# post-grant recovery (cold start, then the production download path reaches the installer).
+adb shell appops set "$PKG" REQUEST_INSTALL_PACKAGES deny
+adb shell appops get "$PKG" REQUEST_INSTALL_PACKAGES
+timeout 300 adb shell am instrument -w -r -e class org.futo.inputmethod.latin.Wren110UpdaterSettingsRouteProbeTest#testT5aSettingsRouteEntry "$TESTPKG" | tee probe-out-t5a.txt
+T5A_EXIT=${PIPESTATUS[0]}
+adb shell appops set "$PKG" REQUEST_INSTALL_PACKAGES allow
+adb shell appops get "$PKG" REQUEST_INSTALL_PACKAGES
+timeout 300 adb shell am instrument -w -r -e class org.futo.inputmethod.latin.Wren110UpdaterSettingsRouteProbeTest#testT5bPostGrantRecovery "$TESTPKG" | tee probe-out-t5b.txt
+T5B_EXIT=${PIPESTATUS[0]}
 set -e
 adb shell svc wifi enable || true
 adb shell svc data enable || true
 echo "PROBE_EXIT=$PROBE_EXIT" | tee probe-exit.txt
+echo "T5A_EXIT=$T5A_EXIT" | tee -a probe-exit.txt
+echo "T5B_EXIT=$T5B_EXIT" | tee -a probe-exit.txt
 
-# Expected: 1 disposition pipeline test + 3 retention case tests (accessibility/RIMM/permission
-# route) + 6 updater case tests (T1, T2, T3 tampered, T3b valid, T5 settings-route, T4) plus 3 JUnit3
-# ServiceTestCase setUp smoke tests (one per subclass), 12 total. The OK(N) count must match the
-# actual runner count or green runs fail the gate (run 45331743846: OK (8 tests) vs gate 6).
-# Per-case JUnit3 methods keep case counts distinguishable: a case that dies mid-run shortens
-# the summary and fails this assertion instead of passing silently. CR/framing from the adb
-# stream is normalized by stripping \r; the match stays exact (anchored, exact count).
+# Expected: run1 = 1 disposition pipeline test + 3 retention case tests (accessibility/RIMM/
+# permission route) + 5 updater case tests (T1, T2, T3 tampered, T3b valid, T4) plus 3 JUnit3
+# ServiceTestCase setUp smoke tests (one per subclass) = 12; T5a session = 1; T5b session = 1.
+# The OK(N) count must match the actual runner count or green runs fail the gate (run
+# 45331743846: OK (8 tests) vs gate 6). Per-case JUnit3 methods keep case counts
+# distinguishable: a case that dies mid-run shortens the summary and fails this assertion
+# instead of passing silently. CR/framing from the adb stream is normalized by stripping \r;
+# the match stays exact (anchored, exact count).
 RESULT_LINE=$(tr -d '\r' < probe-out.txt | grep -E '^OK \(|^FAILURES!!!|^Tests run:' || true)
 echo "instrumentation summary: $RESULT_LINE"
+T5A_LINE=$(tr -d '\r' < probe-out-t5a.txt | grep -E '^OK \(|^FAILURES!!!|^Tests run:' || true)
+echo "t5a summary: $T5A_LINE"
+T5B_LINE=$(tr -d '\r' < probe-out-t5b.txt | grep -E '^OK \(|^FAILURES!!!|^Tests run:' || true)
+echo "t5b summary: $T5B_LINE"
 RESULT_OK=0
-if tr -d '\r' < probe-out.txt | grep -qE '^OK \(13 tests\)[[:space:]]*$'; then RESULT_OK=1; fi
+if tr -d '\r' < probe-out.txt | grep -qE '^OK \(12 tests\)[[:space:]]*$'; then RESULT_OK=1; fi
 echo "RESULT_OK=$RESULT_OK" | tee -a probe-exit.txt
+T5A_OK=0
+if tr -d '\r' < probe-out-t5a.txt | grep -qE '^OK \(1 test\)[[:space:]]*$'; then T5A_OK=1; fi
+echo "T5A_OK=$T5A_OK" | tee -a probe-exit.txt
+T5B_OK=0
+if tr -d '\r' < probe-out-t5b.txt | grep -qE '^OK \(1 test\)[[:space:]]*$'; then T5B_OK=1; fi
+echo "T5B_OK=$T5B_OK" | tee -a probe-exit.txt
 
 # POSITIVE INSTALL (emulator, same-tree fixture): an ACTUAL completed package install of the
 # vc-12 build over the running vc-11 base (same CI debug signer), replacing route-only evidence
@@ -153,5 +181,9 @@ if grep -q 'Success' posinstall-out.txt && [ -n "$BASE_VC" ] && [ -n "$NEW_VC" ]
 echo "POS_INSTALL_OK=$POS_INSTALL_OK" | tee -a probe-exit.txt
 
 test "$RESULT_OK" = 1
+test "$T5A_OK" = 1
+test "$T5B_OK" = 1
 test "$PROBE_EXIT" = 0
+test "$T5A_EXIT" = 0
+test "$T5B_EXIT" = 0
 test "$POS_INSTALL_OK" = 1
