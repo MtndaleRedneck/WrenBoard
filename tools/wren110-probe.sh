@@ -115,7 +115,7 @@ set +e
 # hold deterministically. Re-enabled right after the run.
 adb shell svc wifi disable || true
 adb shell svc data disable || true
-timeout 600 adb shell am instrument -w -r -e class org.futo.inputmethod.latin.Wren110BackDispositionProbeTest,org.futo.inputmethod.latin.Wren110UpdaterProbeTest "$TESTPKG" | tee probe-out.txt
+timeout 600 adb shell am instrument -w -r -e class org.futo.inputmethod.latin.Wren110BackDispositionProbeTest,org.futo.inputmethod.latin.Wren110RetentionProbeTest,org.futo.inputmethod.latin.Wren110UpdaterProbeTest "$TESTPKG" | tee probe-out.txt
 PROBE_EXIT=${PIPESTATUS[0]}
 set -e
 adb shell svc wifi enable || true

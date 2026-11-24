@@ -7,7 +7,7 @@ name: wren110-rel-runtime
 # logs) do not exist, so the runtime suite cannot probe the app. Fixture therefore =
 # release buildType + R8 + debug harness hooks; not byte-identical to the shipped APK.
 # Candidate source tree is untouched (guard step below).
-# retrigger r6 (candidate bump 55472dca7: init-entry normalization + swipe app-context; revalidate changed bytes)
+# retrigger r7 (candidate 55472dca7 + Wren110RetentionProbeTest: bounded permission/spoken-locale/RIMM changed-byte checks per I2 closeout)
 on:
   push:
     branches: [instinct1/release-1.10.0-relruntime]
@@ -37,7 +37,7 @@ jobs:
           git cat-file -e e059314c429b80f1a6968f3fb1ec0017e15948a1^{commit}
           test "$(git merge-base e059314c429b80f1a6968f3fb1ec0017e15948a1 HEAD)" = "e059314c429b80f1a6968f3fb1ec0017e15948a1"
           git diff --name-only e059314c429b80f1a6968f3fb1ec0017e15948a1 HEAD | sort > /tmp/wren-diff.txt
-          printf '%s\n' .github/workflows/wren110-rel-runtime.yml tests/src/org/futo/inputmethod/latin/Wren110BackDispositionProbeTest.java tests/src/org/futo/inputmethod/latin/Wren110UpdaterProbeTest.java tools/wren110-probe.sh | sort > /tmp/wren-allowed.txt
+          printf '%s\n' .github/workflows/wren110-rel-runtime.yml tests/src/org/futo/inputmethod/latin/Wren110BackDispositionProbeTest.java tests/src/org/futo/inputmethod/latin/Wren110UpdaterProbeTest.java tests/src/org/futo/inputmethod/latin/Wren110RetentionProbeTest.java tools/wren110-probe.sh | sort > /tmp/wren-allowed.txt
           EXTRA=$(comm -23 /tmp/wren-diff.txt /tmp/wren-allowed.txt)
           test -z "$EXTRA" || { echo "frozen-source guard: unexpected changed files: $EXTRA"; exit 1; }
       - name: Build dependencies
