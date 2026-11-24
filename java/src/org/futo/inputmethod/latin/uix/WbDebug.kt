@@ -136,10 +136,11 @@ object WbDebug {
                             Log.i(TAG, "SPRM $k")
                         }
                         cmd.startsWith("seedupdate:") -> {
-                            // seedupdate:<version>|<apk url> : store an update-check result as if the check had found it
-                            val parts = cmd.removePrefix("seedupdate:").split("|", limit = 2)
+                            // seedupdate:<version>|<apk url>[|<sha256>] : store an update-check result as if the check had found it
+                            val parts = cmd.removePrefix("seedupdate:").split("|", limit = 3)
                             val result = org.futo.inputmethod.updates.UpdateResult(
-                                org.futo.inputmethod.updates.versionStringToCode(parts[0]), parts.getOrElse(1) { "" }, parts[0]
+                                org.futo.inputmethod.updates.versionStringToCode(parts[0]), parts.getOrElse(1) { "" }, parts[0],
+                                sha256 = parts.getOrNull(2)?.takeIf { it.isNotEmpty() }
                             )
                             ime.setSettingBlocking(org.futo.inputmethod.updates.LAST_UPDATE_CHECK_RESULT, kotlinx.serialization.json.Json.encodeToString(org.futo.inputmethod.updates.UpdateResult.serializer(), result))
                             ime.setSettingBlocking(org.futo.inputmethod.updates.LAST_UPDATE_CHECK_FAILED, false)

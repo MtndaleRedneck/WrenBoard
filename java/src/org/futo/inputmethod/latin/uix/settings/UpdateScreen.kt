@@ -237,10 +237,16 @@ private fun downloadAndInstall(context: Context, updateResult: UpdateResult, onH
                     // in-memory, so without it a process death in the hand-over -> launch window
                     // stranded the verified APK behind a reuse gate that could no longer select it.
                     // One edit keeps the three keys atomic; ATTEMPT tags it for owned retirement.
-                    context.dataStore.edit { prefs ->
-                        prefs[PENDING_INSTALL_VERSION] = updateResult.nextVersion
-                        prefs[PENDING_INSTALL_SHA256] = updateResult.sha256 ?: ""
-                        prefs[PENDING_INSTALL_ATTEMPT] = attempt
+                    // (30): only with a nonempty published digest - the recovery selector requires
+                    // one (markerSha.isNotEmpty() && == current.sha256), so a digest-less marker
+                    // could never be reselected; without a digest the window falls back to a fresh
+                    // download on the next attempt, as before the marker existed.
+                    if (updateResult.sha256 != null) {
+                        context.dataStore.edit { prefs ->
+                            prefs[PENDING_INSTALL_VERSION] = updateResult.nextVersion
+                            prefs[PENDING_INSTALL_SHA256] = updateResult.sha256
+                            prefs[PENDING_INSTALL_ATTEMPT] = attempt
+                        }
                     }
                     if (launchInstaller(context, file)) {
                         // Retention is recorded BEFORE the suspending durable cleanup (Instinct-2
@@ -276,13 +282,20 @@ private fun downloadAndInstall(context: Context, updateResult: UpdateResult, onH
                 // itself. Persist a resume marker: version + the published digest. The marker
                 // only SELECTS the staged file for the cold-start recheck; identity, skip state,
                 // digest and UpdateVerify's checks all re-run before any hand-over.
-                context.dataStore.edit { prefs ->
-                    prefs[PENDING_INSTALL_VERSION] = updateResult.nextVersion
-                    prefs[PENDING_INSTALL_SHA256] = updateResult.sha256 ?: ""
-                    // Attempt identity tags the marker so retirement can be conditional on it
-                    // (DataStore edit blocks serialize, so a later attempt's write can never be
-                    // erased by an older attempt's deferred clear).
-                    prefs[PENDING_INSTALL_ATTEMPT] = attempt
+                // (30): only with a nonempty published digest - the cold-start recovery selector
+                // requires one (markerSha.isNotEmpty() && == current.sha256), so a digest-less
+                // marker could never be reselected. Without a digest the in-memory pendingApk
+                // still resumes while the process lives; a grant-kill then falls back to a fresh
+                // download on return, as before the marker existed.
+                if (updateResult.sha256 != null) {
+                    context.dataStore.edit { prefs ->
+                        prefs[PENDING_INSTALL_VERSION] = updateResult.nextVersion
+                        prefs[PENDING_INSTALL_SHA256] = updateResult.sha256
+                        // Attempt identity tags the marker so retirement can be conditional on it
+                        // (DataStore edit blocks serialize, so a later attempt's write can never be
+                        // erased by an older attempt's deferred clear).
+                        prefs[PENDING_INSTALL_ATTEMPT] = attempt
+                    }
                 }
                 UpdateStatus.attempts.post(attempt, "Turn on Allow, then come back.")
                 try {
