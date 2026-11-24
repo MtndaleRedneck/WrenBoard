@@ -34,7 +34,10 @@ jobs:
         run: |
           set -euo pipefail
           git cat-file -e e059314c429b80f1a6968f3fb1ec0017e15948a1^{commit}
-          test "$(git diff --name-only e059314c429b80f1a6968f3fb1ec0017e15948a1 HEAD)" = .github/workflows/wren110-rel-runtime.yml
+          git diff --name-only e059314c429b80f1a6968f3fb1ec0017e15948a1 HEAD | sort > /tmp/wren-diff.txt
+          printf '%s\n' .github/workflows/wren110-rel-runtime.yml tests/src/org/futo/inputmethod/latin/Wren110BackDispositionProbeTest.java | sort > /tmp/wren-allowed.txt
+          EXTRA=$(comm -23 /tmp/wren-diff.txt /tmp/wren-allowed.txt)
+          test -z "$EXTRA" || { echo "frozen-source guard: unexpected changed files: $EXTRA"; exit 1; }
       - name: Build dependencies
         run: git submodule update --init java/assets/themes java/res-large libs translations voiceinput-shared/src/main/ml
       - name: Reuse shipped swipe weights for regression fixture
@@ -108,6 +111,30 @@ jobs:
           print('Resolved full app and test APKs',list(app.values()),list(tests.values()))
           PYAPK
           sha256sum w17-release.apk w17-rel-tests.apk
+      - name: Repair TEST-apk classpath (inject kotlin-stdlib dex; app APK and its R8 output untouched)
+        run: |
+          set -euo pipefail
+          # AGP excludes from the test APK any class it expects the app to supply; the R8-minified
+          # app no longer defines kotlin-stdlib, so the test APK must carry it itself. d8 the
+          # stdlib into one extra dex appended to the TEST apk only, then re-sign with the same
+          # committed debug keystore (java/shared.keystore). No production keeps added.
+          JARS=""
+          for art in 'kotlin-stdlib-[0-9]*.jar' 'kotlin-stdlib-jdk7-[0-9]*.jar' 'kotlin-stdlib-jdk8-[0-9]*.jar' 'annotations-*.jar'; do
+            J=$(find "$HOME/.gradle/caches/modules-2" -name "$art" ! -name '*sources*' ! -name '*javadoc*' 2>/dev/null | sort -V | tail -1 || true)
+            [ -n "$J" ] && JARS="$JARS $J" && echo "input: $J"
+          done
+          test -n "$JARS"
+          bt="$ANDROID_HOME/build-tools/$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -1)"
+          AJAR="$ANDROID_HOME/platforms/$(ls "$ANDROID_HOME/platforms" | sort -V | tail -1)/android.jar"
+          rm -rf /tmp/ktx && mkdir -p /tmp/ktx
+          "$bt/d8" --min-api 24 --lib "$AJAR" --output /tmp/ktx $JARS
+          N=$(unzip -Z1 w17-rel-tests.apk | grep -cE '^classes[0-9]*\.dex$')
+          NEXT=$((N+1))
+          echo "test apk dex count: $N; injecting as classes$NEXT.dex"
+          cp /tmp/ktx/classes.dex "/tmp/ktx/classes$NEXT.dex"
+          (cd /tmp/ktx && zip -q "$GITHUB_WORKSPACE/w17-rel-tests.apk" "classes$NEXT.dex")
+          "$bt/apksigner" sign --ks java/shared.keystore --ks-pass pass:android w17-rel-tests.apk
+          sha256sum w17-rel-tests.apk
       - name: Verify fixture signatures match (same debug keystore)
         run: |
           set -euo pipefail
@@ -123,6 +150,7 @@ jobs:
             w17-release.apk
             w17-rel-tests.apk
             build/test-results/
+            voiceinput-shared/build/test-results/
           retention-days: 3
       - name: Install screenshot text locator
         run: sudo apt-get update -q && sudo apt-get install -y -q tesseract-ocr
@@ -141,6 +169,58 @@ jobs:
           ram-size: 4096M
           disable-animations: false
           script: bash tools/wren18-runtime.sh w17-release.apk w17-rel-tests.apk
+
+      - name: Back-disposition pipeline probe (diagnostic, log-only; frozen tools/wren18-runtime.sh untouched)
+        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
+        with:
+          api-level: 33
+          target: google_apis
+          arch: x86_64
+          profile: Nexus 6
+          ram-size: 4096M
+          disable-animations: false
+          script: |
+            set -euxo pipefail
+            PKG=com.wrenboard.keyboard
+            adb root || true
+            adb wait-for-device
+            adb shell wm size 1080x2316
+            adb shell wm density 420
+            adb shell cmd overlay enable com.android.internal.systemui.navbar.threebutton || true
+            adb shell settings put secure navigation_mode 0 || true
+            adb install -r -t w17-release.apk
+            adb install -r -t w17-rel-tests.apk
+            adb install -r tools/ime-target/out/imetarget.apk
+            IME=""
+            for attempt in $(seq 1 20); do
+              IME=$(adb shell ime list -a -s | tr -d '\r' | grep "^$PKG/" | head -1 || true)
+              [ -n "$IME" ] && break
+              sleep 2
+            done
+            test -n "$IME"
+            adb shell ime enable "$IME"
+            adb shell ime set "$IME"
+            adb shell am start -W -n com.wrenboard.imetarget/.TestInput >/dev/null
+            sleep 2
+            adb shell input tap 400 500
+            sleep 5
+            TESTPKG=$(adb shell pm list instrumentation | tr -d '\r' | grep "target=$PKG" | sed -E 's/^instrumentation:([^ ]+).*/\1/' | head -1)
+            test -n "$TESTPKG"
+            timeout 300 adb shell am instrument -w -r -e class org.futo.inputmethod.latin.Wren110BackDispositionProbeTest "$TESTPKG" | tee probe-out.txt || true
+            adb logcat -d -s WBPROBE:I WB18_NAV:I > probe-log.txt || true
+            adb shell dumpsys dropbox --print 2>/dev/null | grep -i -B2 -A40 'anr\|crash' | head -150 > probe-dropbox.txt || true
+
+      - name: Preserve probe evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wren110-rel-probe
+          path: |
+            probe-out.txt
+            probe-log.txt
+            probe-dropbox.txt
+          retention-days: 3
+          if-no-files-found: warn
 
       - name: Preserve synthetic runtime evidence
         if: always()
