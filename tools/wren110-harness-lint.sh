@@ -34,4 +34,29 @@ for acc in $(grep -rhoE 'UpdateStatus\.INSTANCE\.[A-Za-z0-9_]+' tests/src/org/fu
     echo "lint-ok: UpdateStatus.INSTANCE.$acc -> $prop"
   fi
 done
+# 1.10 guard wiring (review findings): raw/display split. The expandable-container gate must read
+# the RAW value (its suggestion count picks the container; synthetic starters must not flip it), the
+# strip draw sites must read the display copy, and blankGuard must run at write/selection time only.
+UIX=java/src/org/futo/inputmethod/latin/uix/UixManager.kt
+gate=$(grep -A1 'needToUseExpandableSuggestionUi =' "$UIX" | tr -d ' ')
+if printf '%s' "$gate" | grep -q 'suggestedWords.value?.size()' && ! printf '%s' "$gate" | grep -q 'displaySuggestedWords'; then
+  echo "lint-ok: expandable gate reads raw suggestions"
+else
+  echo "LINT-FAIL: expandable gate must read raw suggestedWords.value, not the display copy"; fail=1
+fi
+draws=$(grep -c 'displaySuggestedWords.value' "$UIX")
+if [ "$draws" -ge 5 ]; then
+  echo "lint-ok: display copy wired at $draws sites (2 writes + 3 reads expected)"
+else
+  echo "LINT-FAIL: display copy wired at $draws sites, expected >= 5"; fail=1
+fi
+calls=$(grep -n 'blankGuard(' "$UIX" | grep -v 'fun blankGuard')
+if [ "$(printf '%s\n' "$calls" | wc -l)" -eq 3 ] \
+   && printf '%s\n' "$calls" | grep -q 'blankGuard(null)' \
+   && printf '%s\n' "$calls" | grep -q 'blankGuard(suggestedWords)' \
+   && printf '%s\n' "$calls" | grep -q 'blankGuard(suggestedWords.value)'; then
+  echo "lint-ok: blankGuard runs at write/selection time only (3 call sites, none at draw)"
+else
+  echo "LINT-FAIL: blankGuard call sites changed - expected write-time funnel, input start, selection refresh only:"; printf '%s\n' "$calls"; fail=1
+fi
 exit $fail
