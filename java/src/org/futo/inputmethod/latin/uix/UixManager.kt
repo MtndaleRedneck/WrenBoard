@@ -609,7 +609,9 @@ class UixManager(private val latinIME: LatinIME) {
     private val swiftKeyPadField = mutableStateOf(false)
     fun onInputStartingForPad(editorInfo: EditorInfo?) {
         swiftKeyPadField.value = org.futo.inputmethod.v2keyboard.isSwiftKeyPadField(editorInfo)
-        suggestedWords.value = null // Never carry an old editor's words into the first frame.
+        // Never carry an old editor's words into the first frame; the guard fills starters for an
+        // empty new field here (write time), not at draw time (see blankGuard).
+        suggestedWords.value = blankGuard(null)
         actionBackStack.clear()
     }
     private val suggestedWords: MutableState<SuggestedWords?> = mutableStateOf(null)
@@ -737,7 +739,7 @@ class UixManager(private val latinIME: LatinIME) {
         Column {
             // Don't show suggested words when it's not meant to be shown
             val suggestedWordsOrNull = if(shouldShowSuggestionStrip.value) {
-                blankGuard(suggestedWords.value) ?: SuggestedWords.getEmptyInstance()
+                suggestedWords.value ?: SuggestedWords.getEmptyInstance()
             } else {
                 null
             }
@@ -892,7 +894,7 @@ class UixManager(private val latinIME: LatinIME) {
             if((!mainKeyboardHidden.value && !latinIME.isInputConnectionOverridden)
                 || (latinIME.inputConnectionOverridenWithSuggestions)) {
                 val suggestedWordsOrNull = if (shouldShowSuggestionStrip.value) {
-                    blankGuard(suggestedWords.value)
+                    suggestedWords.value
                 } else {
                     null
                 }
@@ -1376,7 +1378,7 @@ class UixManager(private val latinIME: LatinIME) {
                     }) {
                         if(needToUseExpandableSuggestionUi) {
                             ActionBarWithExpandableCandidates(
-                                blankGuard(suggestedWords.value),
+                                suggestedWords.value,
                                 suggestionStripListener,
                                 isActionsExpanded = isActionsExpanded.value,
                                 toggleActionsExpanded = { toggleActionsExpanded() },
@@ -1547,9 +1549,12 @@ class UixManager(private val latinIME: LatinIME) {
     }
 
     /**
-     * WrenBoard 1.10 ("the top bar keeps going blank"): read at draw time, so no path (panel close, startup,
-     * punctuation-only text) leaves the strip empty. I / The / You, only with starter words on and a field that
-     * takes suggestions, never while a word is being typed.
+     * WrenBoard 1.10 ("the top bar keeps going blank"): applied at WRITE time (setSuggestions and input start),
+     * so no path (panel close, startup, punctuation-only text) leaves the strip empty. I / The / You, only with
+     * starter words on and a field that takes suggestions, never while a word is being typed. Not at draw time:
+     * the cursor read is a synchronous binder IPC, and per-recomposition calls risk main-thread stalls (1.10
+     * review finding); event-driven writes keep the same observable behavior because typing and cursor changes
+     * always arrive with a suggestion update.
      */
     private fun blankGuard(words: SuggestedWords?): SuggestedWords? {
         if (words != null && !words.isEmpty) return words
@@ -1571,7 +1576,7 @@ class UixManager(private val latinIME: LatinIME) {
 
     fun setSuggestions(suggestedWords: SuggestedWords?, rtlSubtype: Boolean, cfg: ExpandableSuggestionBarConfiguration) {
         if(org.futo.inputmethod.latin.BuildConfig.DEBUG) WbDebug.logSuggestions(suggestedWords)
-        this.suggestedWords.value = suggestedWords
+        this.suggestedWords.value = blankGuard(suggestedWords)
         this.expandableSuggestionCfg.value = cfg
 
         if(currentNotice.value != null && suggestedWords?.isEmpty != true) {
