@@ -99,6 +99,26 @@ public class Wren110UpdaterSettingsRouteProbeTest extends InputTestsBase {
                 long.class, String.class, java.util.List.class)
                 .newInstance(990000, "wbprobe", "99.0.0", 0L, null, java.util.Collections.emptyList());
         UpdateStatus.INSTANCE.setReadyVersion(990000);
+        // T5 diagnostic (probe-side only, no product change): the (22) reuse gate
+        // verifiedDownload() swallows the exact verify() Failure (catch -> delete -> null),
+        // after which the probe falls into the trust-gated download path and dies with the
+        // misleading "download address was not trusted" log. Reproduce the gate's inputs and
+        // the verify verdict BEFORE the production invoke so the real reason is in logcat.
+        final File stagedNow = new File(updatesDir(), UPDATE_APK);
+        Log.i(TAG, "PROBE T5 pre-invoke: readyVersion=" + UpdateStatus.INSTANCE.getReadyVersion()
+                + " nextVersion=990000 staged=" + stagedNow.exists()
+                + (stagedNow.exists() ? " size=" + stagedNow.length() : ""));
+        try {
+            final Class<?> uv = Class.forName("org.futo.inputmethod.updates.UpdateVerify");
+            final Object uvInst = uv.getField("INSTANCE").get(null);
+            final Method vm = uv.getDeclaredMethod("verify", Context.class, File.class, String.class);
+            vm.invoke(uvInst, ctx, stagedNow, null);
+            Log.i(TAG, "PROBE T5 pre-verify: PASS");
+        } catch (java.lang.reflect.InvocationTargetException ite) {
+            Log.i(TAG, "PROBE T5 pre-verify: FAIL " + ite.getCause());
+        } catch (Throwable t) {
+            Log.i(TAG, "PROBE T5 pre-verify: INSTRUMENT-ERROR " + t);
+        }
         final Method m = Class.forName("org.futo.inputmethod.latin.uix.settings.UpdateScreenKt")
                 .getDeclaredMethod("downloadAndInstall", Context.class, urc,
                         kotlin.jvm.functions.Function0.class);

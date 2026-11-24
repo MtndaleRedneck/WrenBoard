@@ -1,5 +1,5 @@
 name: wren110-rel-runtime
-# Release-variant runtime evidence for the frozen 1.10 candidate (6c0b044c7 = 1.10 (26)): release
+# Release-variant runtime evidence for the frozen 1.10 candidate (413024ebb = 1.10 (27)): release
 # buildType (R8 minified, shrink off) signed with the committed debug keystore fallback
 # (no secrets on this run), so the debug-signed androidTest APK can instrument it.
 # CI-time patch adds proguard keeps (test binding) and debuggable=true: without it
@@ -34,9 +34,9 @@ jobs:
       - name: Verify frozen app source
         run: |
           set -euo pipefail
-          git cat-file -e 6c0b044c7ba5845b4c685a47f9b941f24eef921b^{commit}
-          test "$(git merge-base 6c0b044c7ba5845b4c685a47f9b941f24eef921b HEAD)" = "6c0b044c7ba5845b4c685a47f9b941f24eef921b"
-          git diff --name-only 6c0b044c7ba5845b4c685a47f9b941f24eef921b HEAD | sort > /tmp/wren-diff.txt
+          git cat-file -e 413024ebb65fd5f9ce04e1e48b9a2d0d621691c7^{commit}
+          test "$(git merge-base 413024ebb65fd5f9ce04e1e48b9a2d0d621691c7 HEAD)" = "413024ebb65fd5f9ce04e1e48b9a2d0d621691c7"
+          git diff --name-only 413024ebb65fd5f9ce04e1e48b9a2d0d621691c7 HEAD | sort > /tmp/wren-diff.txt
           printf '%s\n' .github/workflows/wren110-rel-runtime.yml tests/src/org/futo/inputmethod/latin/Wren110BackDispositionProbeTest.java tests/src/org/futo/inputmethod/latin/Wren110UpdaterProbeTest.java tests/src/org/futo/inputmethod/latin/Wren110UpdaterSettingsRouteProbeTest.java tests/src/org/futo/inputmethod/latin/Wren110RetentionProbeTest.java tests/src/org/futo/inputmethod/latin/Wren110NavBackDiagProbeTest.java tools/wren110-probe.sh tools/wren110-harness-lint.sh tools/wren110-t6-chip.py | sort > /tmp/wren-allowed.txt
           EXTRA=$(comm -23 /tmp/wren-diff.txt /tmp/wren-allowed.txt)
           test -z "$EXTRA" || { echo "frozen-source guard: unexpected changed files: $EXTRA"; exit 1; }
@@ -78,6 +78,9 @@ jobs:
           # probe binding only: isBusy/handOver/currentToken are never called by app code,
           # so R8 strips them (run 45321885141 T4 NoSuchMethodError). Fixture keep, not product.
           -keep class org.futo.inputmethod.updates.** { *; }
+          # nav-diag probe binding only: getCurrentBackStack is never called by app code,
+          # so R8 strips it (run 45449933706 NAVDIAG NoSuchMethodError). Fixture keep, not product.
+          -keepclassmembers class androidx.navigation.NavController { *** getCurrentBackStack(); }
           EOFKEEPS
           python3 - <<'PYPATCH'
           from pathlib import Path
@@ -273,7 +276,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: wren110-rel-runtime
-# Release-variant runtime evidence for the frozen 1.10 candidate (6c0b044c7 = 1.10 (26)): release
+# Release-variant runtime evidence for the frozen 1.10 candidate (413024ebb = 1.10 (27)): release
 # buildType (R8 minified, shrink off) signed with the committed debug keystore fallback
 # (no secrets on this run), so the debug-signed androidTest APK can instrument it.
 # CI-time patch adds proguard keeps (test binding) and debuggable=true: without it
