@@ -60,6 +60,16 @@ val DISABLE_UPDATE_REMINDER = SettingsKey(booleanPreferencesKey("disable_update_
 
 val SKIPPED_UPDATE_VERSION = intPreferencesKey("skipped_update_version")
 
+// 1.10 resume-after-grant: Android kills the app process when "Allow from this source" is
+// granted (StorageManagerService kills on the MODE_ALLOWED transition), wiping the in-memory
+// pendingApk before the person comes back. The marker SELECTS the staged file for the
+// cold-start recheck only - version identity against the current update result, skip state,
+// the published digest and UpdateVerify's checks all gate any install; a marker alone never
+// authorizes one.
+val PENDING_INSTALL_VERSION = intPreferencesKey("pending_install_version")
+val PENDING_INSTALL_SHA256 = stringPreferencesKey("pending_install_sha256")
+val PENDING_INSTALL_ATTEMPT = longPreferencesKey("pending_install_attempt")
+
 val DEFER_MANUAL_UPDATE_UNTIL = longPreferencesKey("defer_manual_update_until")
 val DEFERMENT_VERSION = intPreferencesKey("defer_manual_update_version")
 const val MANUAL_UPDATE_PERIOD_MS = 1000L * 60L * 60L * 24L * 7L * 10L // Every ten weeks (~2.5 months)

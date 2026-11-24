@@ -91,6 +91,12 @@ class UpdateAttempts(
      * busy window and say so, so the person can retry now instead of waiting out [HANDOVER_MAX_MS]. The timeout
      * stays the recovery for never coming back. Returns false when this attempt has no active hand-over.
      */
+    /** True while [attempt] is current and its hand-over has no answer yet. Snapshot for the
+     *  resume-return path, which retires the durable marker BEFORE freeing the tracker: while
+     *  this holds, beginRecheck refuses every claim, so no resume can claim the old selector
+     *  in the retire-then-free window. */
+    fun isHandedOver(attempt: Long): Boolean = synchronized(lock) { attempt == token && handedOver }
+
     fun endHandOver(attempt: Long, words: String): Boolean = synchronized(lock) {
         if (attempt != token || !handedOver) return false
         handedOver = false
