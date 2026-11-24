@@ -142,7 +142,9 @@ echo "RESULT_OK=$RESULT_OK" | tee -a probe-exit.txt
 # shipping-deliverable versionCode check: the standing rule (final deliverable versionCode must
 # exceed the installed candidate) is verified separately at release time.
 BASE_VC=$(adb shell dumpsys package "$PKG" | grep -E 'versionCode=' | head -1 | sed -E 's/.*versionCode=([0-9]+).*/\1/')
-adb install -r w17-vc12.apk | tee posinstall-out.txt
+# -t required: the fixture is built testOnly=true (same flag as the base install above); stderr
+# folded into the capture so the failure reason is preserved, not lost to the console.
+adb install -r -t w17-vc12.apk 2>&1 | tee posinstall-out.txt
 NEW_VC=$(adb shell dumpsys package "$PKG" | grep -E 'versionCode=' | head -1 | sed -E 's/.*versionCode=([0-9]+).*/\1/')
 IME_LISTED=$(adb shell ime list -s | tr -d '\r' | grep -c "$PKG" || true)
 echo "POSITIVE_INSTALL base_vc=$BASE_VC new_vc=$NEW_VC ime_listed=$IME_LISTED" | tee -a probe-exit.txt

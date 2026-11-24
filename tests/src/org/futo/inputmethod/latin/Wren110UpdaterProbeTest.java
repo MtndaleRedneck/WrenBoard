@@ -246,21 +246,34 @@ public class Wren110UpdaterProbeTest extends InputTestsBase {
         requireSeedCurrent();
         backgroundAndResume();
         Thread.sleep(2000);
-        final String top = grepFirst(shell("dumpsys activity activities"), "topResumedActivity");
+        // Poll the top-activity check: the installer STAGING window (system "Staging app..."
+        // sheet over the update dialog, observed in run 45363089122's upd-t3b-after-resume.png)
+        // has a transient with no topResumedActivity line; sampling once can land in it.
+        String top = "";
+        for (int i = 0; i < 6 && !top.contains("packageinstaller"); i++) {
+            top = grepFirst(shell("dumpsys activity activities"), "topResumedActivity");
+            Log.i(TAG, "PROBE T3b top poll " + i + "=" + top);
+            if (!top.contains("packageinstaller")) Thread.sleep(2000);
+        }
         saveShot("upd-t3b-after-resume.png");
         Log.i(TAG, "PROBE T3b post-resume pendingApk=" + UpdateStatus.INSTANCE.getPendingApk()
                 + " readyVersion=" + UpdateStatus.INSTANCE.getReadyVersion()
                 + " fileExists=" + valid.exists() + " top=" + top);
-        assertNull("T3b valid pendingApk consumed on resume", UpdateStatus.INSTANCE.getPendingApk());
-        assertTrue("T3b valid fixture NOT deleted by re-verify", valid.exists());
-        // Route-level assertion only: the install ROUTE reached Android's installer UI.
-        // No completed install is performed or claimed. The grant is established by the probe
-        // script (appops), so the installer screen itself, not the unknown-sources screen, is
-        // the expected top; canRequestPackageInstalls is logged above for the record.
-        assertTrue("T3b install route reached Android's installer UI (route only, no completed install), top=" + top,
-                top.contains("packageinstaller"));
-        shell("input keyevent KEYCODE_BACK");
-        Thread.sleep(1500);
+        try {
+            assertNull("T3b valid pendingApk consumed on resume", UpdateStatus.INSTANCE.getPendingApk());
+            assertTrue("T3b valid fixture NOT deleted by re-verify", valid.exists());
+            // Route-level assertion only: the install ROUTE reached Android's installer UI.
+            // No completed install is performed or claimed. The grant is established by the probe
+            // script (appops), so the installer screen itself, not the unknown-sources screen, is
+            // the expected top; canRequestPackageInstalls is logged above for the record.
+            assertTrue("T3b install route reached Android's installer UI (route only, no completed install), top=" + top,
+                    top.contains("packageinstaller"));
+        } finally {
+            // Always leave the installer UI: a failed assert must not strand a live staging
+            // session that collides with the probe script's later positive-install step.
+            shell("input keyevent KEYCODE_BACK");
+            Thread.sleep(1500);
+        }
     }
 
     // T4: hand-over guard transitions with a SYNTHETIC clock (log-only; no statement about the
