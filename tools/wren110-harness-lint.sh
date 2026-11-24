@@ -114,6 +114,26 @@ else
     echo "lint-ok: direct path stages durable marker pre-launch and retires only post-launch or owned-on-failure"
   fi
 fi
+# (29) I2 review: the successful direct hand-off records retention (failed = false) BEFORE the
+# guarded suspending cleanup (recordSuccessfulHandOff), and the helper guards the retire.
+dwin=$(sed -n "${dlaunch},$((dlaunch+16))p" "$SCR")
+if printf '%s' "$dwin" | grep -q 'failed = false' && printf '%s' "$dwin" | grep -q 'recordSuccessfulHandOff('; then
+  fr=$(printf '%s\n' "$dwin" | grep -n 'failed = false' | head -1 | cut -d: -f1)
+  rh=$(printf '%s\n' "$dwin" | grep -n 'recordSuccessfulHandOff(' | head -1 | cut -d: -f1)
+  if [ "$fr" -lt "$rh" ]; then
+    echo "lint-ok: direct hand-off records retention before durable cleanup"
+  else
+    echo "LINT-FAIL: failed=false must precede recordSuccessfulHandOff after the direct launch"; fail=1
+  fi
+else
+  echo "LINT-FAIL: (29) direct hand-off ordering missing after launch at $SCR:$dlaunch"; fail=1
+fi
+HLP=java/src/org/futo/inputmethod/latin/uix/settings/HandOffCleanup.kt
+if grep -q 'catch (t: Throwable)' "$HLP" && grep -q 'onCleanupFailure(t)' "$HLP"; then
+  echo "lint-ok: marker retire guarded as optional cleanup (HandOffCleanup.kt)"
+else
+  echo "LINT-FAIL: recordSuccessfulHandOff must guard retireMarker and report via onCleanupFailure"; fail=1
+fi
 # (27)/(28) cold-start ANR fix: the migration primer must not run on the main dispatcher.
 LIME=java/src/org/futo/inputmethod/latin/LatinIME.kt
 if grep -q 'launchJob { withContext(Dispatchers.IO) { readUnifiedActions() } }' "$LIME" \
