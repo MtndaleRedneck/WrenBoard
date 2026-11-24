@@ -1570,11 +1570,13 @@ class UixManager(private val latinIME: LatinIME) {
     private fun blankGuard(words: SuggestedWords?): SuggestedWords? {
         if (words != null && !words.isEmpty) return words
         try {
-            if (!latinIME.getSetting(StarterWordsSetting)) return words
+            // Phase 1 (no IPC), same short-circuit order as before; the cursor read below is the
+            // only binder call and runs solely when starters are otherwise allowed.
             val cur = org.futo.inputmethod.latin.settings.Settings.getInstance().current
-            if (!cur.needsToLookupSuggestions() || !cur.isSuggestionsEnabledPerUserSettings) return words
+            if (!SuggestionStripGuard.settingsAllowFill(latinIME.getSetting(StarterWordsSetting),
+                    cur.needsToLookupSuggestions(), cur.isSuggestionsEnabledPerUserSettings)) return words
             val before = latinIME.currentInputConnection?.getTextBeforeCursor(1, 0)
-            if (!before.isNullOrEmpty() && before[0].isLetterOrDigit()) return words
+            if (!SuggestionStripGuard.cursorAllowsFill(before)) return words
             val list = ArrayList<SuggestedWords.SuggestedWordInfo>()
             org.futo.inputmethod.engine.general.WrenStarterWords.FALLBACK.forEach { w ->
                 list.add(SuggestedWords.SuggestedWordInfo(w, "", SuggestedWords.SuggestedWordInfo.MAX_SCORE,
