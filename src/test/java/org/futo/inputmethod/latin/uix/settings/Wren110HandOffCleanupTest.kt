@@ -1,11 +1,15 @@
 package org.futo.inputmethod.latin.uix.settings
 
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.IOException
 import java.util.concurrent.CancellationException
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * WrenBoard 1.10 (Instinct-2 (28) review): after a successful installer launch the durable
@@ -50,6 +54,34 @@ class Wren110HandOffCleanupTest {
         )
         assertTrue(handedOver)
         assertTrue(cleanupFailure is CancellationException)
+    }
+
+    /** ChatGPT ((30) review): cancels the coroutine's ACTUAL Job while it is suspended inside
+     *  the marker retire, then runs the production finally's shape - the final reset must still
+     *  execute. A manually thrown CancellationException never cancels the job, so it cannot
+     *  exercise this. */
+    @Test fun actualJobCancelDuringRetireStillRunsFinalReset() = runBlocking {
+        val retireEntered = CountDownLatch(1)
+        val resetRan = AtomicBoolean(false)
+        val job = launch {
+            try {
+                recordSuccessfulHandOff(
+                    retireMarker = {
+                        retireEntered.countDown()
+                        kotlinx.coroutines.delay(Long.MAX_VALUE) // parked here when cancelled
+                    },
+                    onHandedOver = { },
+                    onCleanupFailure = { },
+                )
+            } finally {
+                // The production finally's reset, via the same cancellation-safe helper.
+                runFinalCleanupRegardless { resetRan.set(true) }
+            }
+        }
+        org.junit.Assert.assertTrue(retireEntered.await(5, TimeUnit.SECONDS))
+        job.cancel()
+        job.join()
+        assertTrue("final reset must run even after the job was cancelled mid-retire", resetRan.get())
     }
 
     @Test fun successfulRetireReportsNoCleanupFailure() = runBlocking {

@@ -1,5 +1,8 @@
 package org.futo.inputmethod.latin.uix.settings
 
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
+
 /** Instinct-2 ((28) review): hand-off ownership and file retention are recorded BEFORE any
  *  suspending durable cleanup, so a marker-retire failure or cancellation can never route the
  *  already-handed-over file into the caller's failed-download deletion or a false failure
@@ -19,3 +22,11 @@ internal suspend fun recordSuccessfulHandOff(
         onCleanupFailure(t)
     }
 }
+
+/** ChatGPT ((30) review): the final busy-state reset must survive cancellation of the
+ *  attempt's job. A cancel delivered during the marker cleanup leaves the job cancelled, and
+ *  a plain withContext(Dispatchers.Main) then throws before the reset runs, latching
+ *  isDownloading true forever. Running the reset under NonCancellable keeps the successful
+ *  hand-off / file-retention state intact and always clears the flag. */
+internal suspend fun runFinalCleanupRegardless(reset: suspend () -> Unit) =
+    withContext(NonCancellable) { reset() }
