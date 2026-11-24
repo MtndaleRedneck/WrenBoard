@@ -123,7 +123,7 @@ adb shell svc data enable || true
 echo "PROBE_EXIT=$PROBE_EXIT" | tee probe-exit.txt
 
 # Expected: 1 disposition pipeline test + 3 retention case tests (accessibility/RIMM/permission
-# route) + 5 updater case tests (T1, T2, T3 tampered, T3b valid, T4) plus 3 JUnit3
+# route) + 6 updater case tests (T1, T2, T3 tampered, T3b valid, T5 settings-route, T4) plus 3 JUnit3
 # ServiceTestCase setUp smoke tests (one per subclass), 12 total. The OK(N) count must match the
 # actual runner count or green runs fail the gate (run 45331743846: OK (8 tests) vs gate 6).
 # Per-case JUnit3 methods keep case counts distinguishable: a case that dies mid-run shortens
@@ -132,7 +132,7 @@ echo "PROBE_EXIT=$PROBE_EXIT" | tee probe-exit.txt
 RESULT_LINE=$(tr -d '\r' < probe-out.txt | grep -E '^OK \(|^FAILURES!!!|^Tests run:' || true)
 echo "instrumentation summary: $RESULT_LINE"
 RESULT_OK=0
-if tr -d '\r' < probe-out.txt | grep -qE '^OK \(12 tests\)[[:space:]]*$'; then RESULT_OK=1; fi
+if tr -d '\r' < probe-out.txt | grep -qE '^OK \(13 tests\)[[:space:]]*$'; then RESULT_OK=1; fi
 echo "RESULT_OK=$RESULT_OK" | tee -a probe-exit.txt
 
 # POSITIVE INSTALL (emulator, same-tree fixture): an ACTUAL completed package install of the
