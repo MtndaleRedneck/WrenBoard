@@ -149,6 +149,37 @@ class UpdateAttemptsTest {
         assertFalse(t.isBusy(now = UpdateAttempts.HANDOVER_MAX_MS + 1))
     }
 
+    @Test fun returningToTheScreenFreesAHandedOverAttempt() {
+        // Review M1: the installer sheet gave no answer and the person is back (a finished install would have
+        // replaced the process). The busy window ends and says so, so Update can be tapped again right away.
+        val t = tracker()
+        val a = t.start()
+        t.handOver(a, now = 0L)
+        t.downloadEnded(a)
+        assertTrue(t.isBusy(now = 1_000L))
+        assertTrue(t.endHandOver(a, "The install did not finish. Tap Update to try again."))
+        assertFalse(t.isBusy(now = 1_000L))
+        assertEquals("The install did not finish. Tap Update to try again.", t.text)
+        // ... well inside the old ten-minute window
+        assertTrue(1_000L < UpdateAttempts.HANDOVER_MAX_MS)
+    }
+
+    @Test fun endHandOverFromAnOldAttemptIsIgnored() {
+        val t = tracker()
+        val a = t.start()
+        t.handOver(a, now = 0L)
+        t.downloadEnded(a)
+        assertFalse(t.endHandOver(a + 999, "stale"))
+        assertTrue(t.isBusy(now = 1_000L))
+    }
+
+    @Test fun endHandOverWithoutAHandOverIsANoOp() {
+        val t = tracker()
+        val a = t.start()
+        assertFalse(t.endHandOver(a, "nothing handed over"))
+        assertTrue(t.isBusy(now = 0L)) // the running download still counts
+    }
+
     @Test fun failureClearsTheHandOver() {
         val t = tracker()
         val a = t.start()

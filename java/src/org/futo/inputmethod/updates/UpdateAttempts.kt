@@ -67,6 +67,19 @@ class UpdateAttempts(
         if (attempt == token) { handedOver = true; handedOverAt = now }
     }
 
+    /**
+     * WrenBoard 1.10 (review M1): the update screen is showing again while this attempt's hand-over had no answer.
+     * A finished install replaces the app process, so reaching the screen means the install did not happen: free the
+     * busy window and say so, so the person can retry now instead of waiting out [HANDOVER_MAX_MS]. The timeout
+     * stays the recovery for never coming back. Returns false when this attempt has no active hand-over.
+     */
+    fun endHandOver(attempt: Long, words: String): Boolean = synchronized(lock) {
+        if (attempt != token || !handedOver) return false
+        handedOver = false
+        set(words)
+        true
+    }
+
     /** The download/hand-over part of [attempt] ended (the installer may still answer later). */
     fun downloadEnded(attempt: Long) = synchronized(lock) {
         if (attempt == token) running = false
