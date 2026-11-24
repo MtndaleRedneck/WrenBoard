@@ -1,4 +1,4 @@
-# Fork PRs get a read-only token, so SARIF upload is skipped for them (the scan still runs and can fail red).
+# Fork PRs and Dependabot PRs get a read-only token, so SARIF upload is skipped for them (the scan still runs and can fail red).
 # Triggers are pull_request/dispatch/schedule only (no pull_request_target).
 # Phase-2 static analysis: Android Lint + detekt, report-only.
 # Findings upload to GitHub code scanning (Security tab); the job NEVER fails
@@ -92,14 +92,14 @@ jobs:
               print(f, 'runs=%d results=%d' % (len(d['runs']), sum(len(r.get('results', [])) for r in d['runs'])))
           PY
       - name: Upload lint SARIF (app)
-        if: always() && !(github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork)
+        if: always() && !(github.event_name == 'pull_request' && (github.event.pull_request.head.repo.fork || github.actor == 'dependabot[bot]'))
         uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: /tmp/sarif-lint-app
           category: android-lint
           wait-for-processing: false
       - name: Upload lint SARIF (voiceinput-shared)
-        if: always() && !(github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork)
+        if: always() && !(github.event_name == 'pull_request' && (github.event.pull_request.head.repo.fork || github.actor == 'dependabot[bot]'))
         uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: /tmp/sarif-lint-voice
@@ -157,7 +157,7 @@ jobs:
           echo "detekt completed report-only (exit $rc, $count SARIF results)"
           ls -la /tmp/detekt.sarif /tmp/detekt.html
       - name: Upload detekt SARIF
-        if: always() && !(github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork)
+        if: always() && !(github.event_name == 'pull_request' && (github.event.pull_request.head.repo.fork || github.actor == 'dependabot[bot]'))
         uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: /tmp/detekt.sarif
