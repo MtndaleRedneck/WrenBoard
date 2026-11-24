@@ -103,8 +103,37 @@ public class Wren110UpdaterProbeTest extends InputTestsBase {
     private void seedAndOpenUpdateScreen() throws Exception {
         shell("am broadcast -a " + PKG + ".WBDBG -p " + PKG + " --es cmd seedupdate:99.0.0|wbprobe");
         Thread.sleep(1000);
+        probeSeededStore();
         shell("am broadcast -a " + PKG + ".WBDBG -p " + PKG + " --es cmd settings:update");
         Thread.sleep(4000);
+        probeSeededStore();
+    }
+
+    /**
+     * Decisive write-vs-read probe for the T3/T3b seed gap (run 45321885141: seed logged
+     * SEEDED but the update screen showed the up-to-date branch). Reads only the datastore
+     * file NAMES/sizes and whether the seeded marker bytes are present - never file contents.
+     * Marker in the credential-encrypted file => write committed, read side is the gap.
+     * Marker nowhere => write fell through to the in-memory direct-boot store (try-lock miss).
+     */
+    private void probeSeededStore() {
+        try {
+            final File[] bases = new File[]{
+                    new File("/data/user/0/" + PKG + "/files/datastore"),
+                    new File("/data/user_de/0/" + PKG + "/files/datastore")};
+            for (final File base : bases) {
+                final File[] fs = base.listFiles();
+                Log.i(TAG, "PROBE store dir " + base + " files=" + (fs == null ? "null" : fs.length));
+                if (fs == null) continue;
+                for (final File f : fs) {
+                    final byte[] b = java.nio.file.Files.readAllBytes(f.toPath());
+                    final boolean hit = new String(b, "ISO-8859-1").contains("99.0.0");
+                    Log.i(TAG, "PROBE store file=" + f.getName() + " size=" + b.length + " seeded99=" + hit);
+                }
+            }
+        } catch (Throwable t) {
+            Log.i(TAG, "PROBE store read failed: " + t);
+        }
     }
 
     /** Background, then resume the settings activity so the UpdateDialog ON_RESUME observer fires. */

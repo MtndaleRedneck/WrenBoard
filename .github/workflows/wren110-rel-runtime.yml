@@ -7,7 +7,7 @@ name: wren110-rel-runtime
 # logs) do not exist, so the runtime suite cannot probe the app. Fixture therefore =
 # release buildType + R8 + debug harness hooks; not byte-identical to the shipped APK.
 # Candidate source tree is untouched (guard step below).
-# retrigger r1 (602b staging/gate run)
+# retrigger r2 (seed-store probe + updates fixture keep)
 on:
   push:
     branches: [instinct1/release-1.10.0-relruntime]
@@ -73,6 +73,9 @@ jobs:
           cat > proguard-wren-test-keeps.pro <<'EOFKEEPS'
           -keep class org.futo.inputmethod.latin.LatinIME { *; }
           -keep class org.futo.inputmethod.latin.uix.** { *; }
+          # probe binding only: isBusy/handOver/currentToken are never called by app code,
+          # so R8 strips them (run 45321885141 T4 NoSuchMethodError). Fixture keep, not product.
+          -keep class org.futo.inputmethod.updates.** { *; }
           EOFKEEPS
           python3 - <<'PYPATCH'
           from pathlib import Path
