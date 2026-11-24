@@ -1,0 +1,156 @@
+name: wren110-signed-smoke
+# Exact-artifact leg of 1.10 verification: downloads the signed release APK from the
+# private TestLab draft (asset 750664136), fails closed on sha256 / signer pin /
+# package metadata, installs it on an emulator, pulls the installed base.apk back and
+# re-hashes (installed-bytes check), then drives a black-box smoke: enable + set IME,
+# focus editor, keyboard render, typing, Back, screenshots, dumpsys, crash scan.
+# Release bytes carry no harness hooks (BuildConfig.DEBUG false), so there are no
+# WBDBG/WB18_NAV probes here; those diagnostics live in wren110-rel-runtime.
+on:
+  push:
+    branches: [instinct1/release-1.10.0-relruntime]
+    paths: [.github/workflows/wren110-signed-smoke.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: wren110-signed-smoke
+  cancel-in-progress: false
+jobs:
+  smoke:
+    if: github.repository == 'MtndaleRedneck/WrenBoard' && github.event.repository.private == false
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      EXPECTED_APK_SHA256: 726435fc970ce7d5695b5f3f306de8e6b9dc7432de5eb980cd0869cf16a8969f
+      EXPECTED_CERT_SHA256: ad41ab713027aca87389019721d102d67cacaae349cc625aa14f76240801f7fc
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Verify frozen app source
+        run: |
+          set -euo pipefail
+          git cat-file -e e059314c429b80f1a6968f3fb1ec0017e15948a1^{commit}
+          test "$(git diff --name-only e059314c429b80f1a6968f3fb1ec0017e15948a1 HEAD | sort | tr '\n' ' ')" = ".github/workflows/wren110-rel-runtime.yml .github/workflows/wren110-signed-smoke.yml "
+      - name: Build ime-target APK (SDK tools only)
+        run: bash tools/ime-target/build.sh
+      - name: Download exact signed APK from the private TestLab draft
+        env:
+          GH_TOKEN: ${{ secrets.TESTLAB_READ }}
+        run: |
+          set -euo pipefail
+          test -n "$GH_TOKEN"
+          gh api repos/MtndaleRedneck/TestLab/releases/assets/750664136 -H "Accept: application/octet-stream" > signed.apk
+          echo "$EXPECTED_APK_SHA256  signed.apk" | sha256sum -c -
+      - name: Verify signer pin and package metadata
+        run: |
+          set -euo pipefail
+          bt="$ANDROID_HOME/build-tools/$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -1)"
+          "$bt/apksigner" verify --print-certs signed.apk > signer.txt
+          python3 - "$EXPECTED_CERT_SHA256" signer.txt <<'PY_SIGNER
+          "$bt/aapt2" dump badging signed.apk > badging.txt
+          grep -m1 '^package:' badging.txt
+          python3 - <<'PY_METADATA
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Write smoke script
+        run: |
+          cat > /tmp/wren110-smoke.sh <<'EOSMOKE'
+          set -euxo pipefail
+          APK=$1
+          PKG=com.wrenboard.keyboard
+          OUT=smoke110
+          mkdir -p "$OUT"
+          adb root || true
+          adb wait-for-device
+          adb shell wm size 1080x2316
+          adb shell wm density 420
+          adb shell cmd overlay enable com.android.internal.systemui.navbar.threebutton || true
+          adb shell settings put secure navigation_mode 0 || true
+          sleep 2
+          adb shell am force-stop com.google.android.apps.nexuslauncher || true
+          adb install -r "$APK"
+          adb install -r tools/ime-target/out/imetarget.apk
+          adb shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1 >/dev/null
+          IME=""
+          for attempt in $(seq 1 20); do
+            IME=$(adb shell ime list -a -s | tr -d '\r' | grep "^$PKG/" | head -1 || true)
+            [ -n "$IME" ] && break
+            sleep 2
+          done
+          test -n "$IME"
+          adb shell ime enable "$IME"
+          adb shell ime set "$IME"
+          adb shell settings put secure show_ime_with_hard_keyboard 1
+          adb shell pm grant "$PKG" android.permission.RECORD_AUDIO
+          adb shell dumpsys package "$PKG" | grep -m1 versionCode | tee "$OUT/versionCode.txt"
+          sleep 3
+          adb shell am start -W -n com.wrenboard.imetarget/.TestInput >/dev/null
+          sleep 3
+          for attempt in $(seq 1 8); do
+            adb shell input tap 400 500
+            adb shell input keyevent KEYCODE_WAKEUP
+            sleep 3
+          done
+          adb exec-out screencap -p > "$OUT/keyboard.png"
+          adb shell dumpsys input_method > "$OUT/im_keyboard.txt"
+          adb shell input text helloworld
+          sleep 3
+          adb exec-out screencap -p > "$OUT/typed.png"
+          adb shell input keyevent KEYCODE_BACK
+          sleep 2
+          adb exec-out screencap -p > "$OUT/back.png"
+          adb shell dumpsys input_method > "$OUT/im_back.txt" || true
+          adb shell dumpsys window > "$OUT/wm.txt" || true
+          adb logcat -d -s AndroidRuntime:E > "$OUT/logcat.txt" || true
+          APPPATH=$(adb shell pm path "$PKG" | tr -d '\r' | sed 's/^package://' | head -1)
+          test -n "$APPPATH"
+          adb pull "$APPPATH" "$OUT/installed-base.apk" >/dev/null
+          echo "$EXPECTED_APK_SHA256  $OUT/installed-base.apk" | sha256sum -c -
+          grep -q "mCurMethodId=$PKG/" "$OUT/im_keyboard.txt"
+          if grep -qE 'FATAL EXCEPTION|AndroidRuntime.*com.wrenboard' "$OUT/logcat.txt"; then
+            echo "crash signature in logcat"; exit 1
+          fi
+          python3 - "$OUT" <<'PYV'
+          import sys
+          from pathlib import Path
+          from PIL import Image
+          out = Path(sys.argv[1])
+          kb = Image.open(out / 'keyboard.png').convert('L')
+          typed = Image.open(out / 'typed.png').convert('L')
+          back = Image.open(out / 'back.png').convert('L')
+          import PIL.ImageChops as IC
+          def diff(a, b):
+              d = IC.difference(a, b)
+              h = d.histogram()
+              total = d.size[0] * d.size[1]
+              return sum(i * n for i, n in enumerate(h)) / max(total, 1)
+          d_typed = diff(kb, typed)
+          d_back = diff(kb, back)
+          print(f"pixel-diff typed={d_typed:.2f} back={d_back:.2f}")
+          assert d_back > 1.0, "Back did not change the screen (keyboard likely never rendered or never hid)"
+          PYV
+          echo "SMOKE-PASS"
+          EOSMOKE
+      - name: Black-box smoke on emulator
+        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
+        with:
+          api-level: 33
+          target: google_apis
+          arch: x86_64
+          profile: Nexus 6
+          ram-size: 4096M
+          disable-animations: false
+          script: bash /tmp/wren110-smoke.sh signed.apk
+      - name: Preserve smoke evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wren110-signed-smoke
+          path: smoke110/
+          retention-days: 3
