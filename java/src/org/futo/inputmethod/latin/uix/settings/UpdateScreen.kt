@@ -320,7 +320,9 @@ private fun downloadAndInstall(context: Context, updateResult: UpdateResult, onH
             // A failed or stopped download is deleted; a good one stays for the installer to read.
             if (failed) { try { file?.delete() } catch (_: Throwable) { }; UpdateStatus.readyVersion = -1 }
             UpdateStatus.attempts.downloadEnded(attempt)
-            withContext(Dispatchers.Main) { UpdateStatus.isDownloading.value = false }
+            // (31) (ChatGPT (30) review): cancellation-safe - a cancel delivered during the
+            // marker cleanup must not latch isDownloading true (see runFinalCleanupRegardless).
+            runFinalCleanupRegardless { withContext(Dispatchers.Main) { UpdateStatus.isDownloading.value = false } }
         }
     }
 }
