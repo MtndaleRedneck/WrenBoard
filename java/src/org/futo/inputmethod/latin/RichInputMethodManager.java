@@ -92,12 +92,15 @@ public class RichInputMethodManager {
         }
     }
 
-    private void initInternal(final Context context) {
+    private void initInternal(Context context) {
         if (isInitialized()) {
             return;
         }
+        // Normalize before ALL consumers (I2 closeout): the raw caller context also reaches
+        // InputMethodManagerCompatWrapper and first-init SubtypeLocaleUtils, not just mContext.
+        context = context.getApplicationContext();
         mImmWrapper = new InputMethodManagerCompatWrapper(context);
-        mContext = context.getApplicationContext();
+        mContext = context;
         mInputMethodInfoCache = new InputMethodInfoCache(
                 mImmWrapper.mImm, context.getPackageName());
 

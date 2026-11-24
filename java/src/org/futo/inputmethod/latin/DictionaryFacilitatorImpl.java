@@ -370,7 +370,7 @@ public class DictionaryFacilitatorImpl implements DictionaryFacilitator {
 
         mPrevKeyboard = null;
         if(DictionaryFacilitatorImpl.swipeDecoderDictionary == null) {
-            DictionaryFacilitatorImpl.swipeDecoderDictionary = new SwipeDecoderDictionary(context, Locale.ENGLISH);
+            DictionaryFacilitatorImpl.swipeDecoderDictionary = new SwipeDecoderDictionary(context.getApplicationContext(), Locale.ENGLISH);
         }
 
         final HashMap<Locale, ArrayList<String>> existingDictionariesToCleanup = new HashMap<>();
