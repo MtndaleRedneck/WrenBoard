@@ -1,5 +1,5 @@
 name: wren110-rel-runtime
-# Release-variant runtime evidence for the frozen 1.10 candidate (da2afa0d8 = 1.10 (30)): release
+# Release-variant runtime evidence for the frozen 1.10 candidate (efc88c03b = 1.10 (31)): release
 # buildType (R8 minified, shrink off) signed with the committed debug keystore fallback
 # (no secrets on this run), so the debug-signed androidTest APK can instrument it.
 # CI-time patch adds proguard keeps (test binding) and debuggable=true: without it
@@ -34,9 +34,9 @@ jobs:
       - name: Verify frozen app source
         run: |
           set -euo pipefail
-          git cat-file -e da2afa0d8f0e8b12ee6278c835409598948dcc72^{commit}
-          test "$(git merge-base da2afa0d8f0e8b12ee6278c835409598948dcc72 HEAD)" = "da2afa0d8f0e8b12ee6278c835409598948dcc72"
-          git diff --name-only da2afa0d8f0e8b12ee6278c835409598948dcc72 HEAD | sort > /tmp/wren-diff.txt
+          git cat-file -e efc88c03badf3f0a8f942078682748d0d623fae1^{commit}
+          test "$(git merge-base efc88c03badf3f0a8f942078682748d0d623fae1 HEAD)" = "efc88c03badf3f0a8f942078682748d0d623fae1"
+          git diff --name-only efc88c03badf3f0a8f942078682748d0d623fae1 HEAD | sort > /tmp/wren-diff.txt
           printf '%s\n' .github/workflows/wren110-rel-runtime.yml tests/src/org/futo/inputmethod/latin/Wren110BackDispositionProbeTest.java tests/src/org/futo/inputmethod/latin/Wren110UpdaterProbeTest.java tests/src/org/futo/inputmethod/latin/Wren110UpdaterSettingsRouteProbeTest.java tests/src/org/futo/inputmethod/latin/Wren110RetentionProbeTest.java tests/src/org/futo/inputmethod/latin/Wren110NavBackDiagProbeTest.java tools/wren110-probe.sh tools/wren110-harness-lint.sh tools/wren110-t6-chip.py | sort > /tmp/wren-allowed.txt
           EXTRA=$(comm -23 /tmp/wren-diff.txt /tmp/wren-allowed.txt)
           test -z "$EXTRA" || { echo "frozen-source guard: unexpected changed files: $EXTRA"; exit 1; }
@@ -276,7 +276,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: wren110-rel-runtime
-# Release-variant runtime evidence for the frozen 1.10 candidate (da2afa0d8 = 1.10 (30)): release
+# Release-variant runtime evidence for the frozen 1.10 candidate (efc88c03b = 1.10 (31)): release
 # buildType (R8 minified, shrink off) signed with the committed debug keystore fallback
 # (no secrets on this run), so the debug-signed androidTest APK can instrument it.
 # CI-time patch adds proguard keeps (test binding) and debuggable=true: without it

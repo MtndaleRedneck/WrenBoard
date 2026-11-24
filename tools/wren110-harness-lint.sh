@@ -134,6 +134,13 @@ if grep -q 'catch (t: Throwable)' "$HLP" && grep -q 'onCleanupFailure(t)' "$HLP"
 else
   echo "LINT-FAIL: recordSuccessfulHandOff must guard retireMarker and report via onCleanupFailure"; fail=1
 fi
+# (31) ChatGPT review: the busy-flag reset must be cancellation-safe.
+if grep -q 'runFinalCleanupRegardless { withContext(Dispatchers.Main) { UpdateStatus.isDownloading.value = false } }' "$SCR" \
+  && grep -q 'withContext(NonCancellable)' "$HLP"; then
+  echo "lint-ok: busy-flag reset is cancellation-safe (NonCancellable)"
+else
+  echo "LINT-FAIL: final busy reset must go through runFinalCleanupRegardless (NonCancellable)"; fail=1
+fi
 # (27)/(28) cold-start ANR fix: the migration primer must not run on the main dispatcher.
 LIME=java/src/org/futo/inputmethod/latin/LatinIME.kt
 if grep -q 'launchJob { withContext(Dispatchers.IO) { readUnifiedActions() } }' "$LIME" \
