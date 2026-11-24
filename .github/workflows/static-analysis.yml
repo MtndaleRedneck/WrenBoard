@@ -1,12 +1,19 @@
 # Phase-2 static analysis: Android Lint + detekt, report-only.
 # Findings upload to GitHub code scanning (Security tab); the job NEVER fails
-# on findings (lint abortOnError=false via init script; detekt's findings exit
-# code is accepted explicitly). Tool/configuration failures DO fail the step -
-# no blanket || true on analysis runs.
-# No product/build files touched: lint SARIF output is injected by an init
-# script; detekt runs as the official standalone CLI (no Gradle plugin, no
-# build-file changes). detekt CLI pinned: v1.23.8 -all.jar, sha256
-# self-measured 2026-11-23 (detekt publishes no checksums); re-verified here.
+# on findings. No product/build files are touched: lint SARIF output is injected
+# by an init script; detekt runs as the official standalone CLI (no Gradle
+# plugin application, no build-file changes).
+# detekt CLI pinned: v1.23.8 -all.jar from the official GitHub release,
+# sha256 measured on download 2026-11-23 (detekt publishes no checksums).
+# Exit handling (instinct1 patch, contract VERIFIED 2026-11-23 against the exact
+# pinned jar with controlled clean/findings/invalid-config/missing-input runs):
+#   detekt CLI 1.23.8: 0 = no findings, 2 = findings present, 1 = config/usage
+#   error (no SARIF written). Accept ONLY 0 and 2; anything else fails red.
+#   Outputs are deleted before each run and a fresh, non-empty, parseable SARIF
+#   is required afterwards, so no stale artifact can masquerade as a result.
+#   lint: abortOnError=false (init script) keeps findings non-failing, so a
+#   nonzero gradle exit means a genuine scan/build error and fails red.
+#   upload-sarif does not continue on error: a failed upload is visible.
 name: Static Analysis (lint/detekt)
 
 on:
@@ -46,18 +53,19 @@ jobs:
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;28.2.13676358"
       - uses: gradle/actions/setup-gradle@d9c87d481d55275bb5441eef3fe0e46805f9ef70 # v3.5.0
-      # abortOnError=false (init script) means findings cannot fail this step;
-      # a nonzero exit here is a tool/configuration failure and fails honestly.
       - name: Run Android Lint (report-only)
         run: ./gradlew -I .github/analysis/lint-sarif.init.gradle lint --continue
       - name: Collect lint reports
         if: always()
         run: |
           mkdir -p /tmp/sarif-lint /tmp/html-lint
-          find . -path '*/build/reports/lint-results*.sarif' -exec cp --backup=numbered {} /tmp/sarif-lint/ \; || true
-          find . -path '*/build/reports/lint-results*.html' -exec cp --backup=numbered {} /tmp/html-lint/ \; || true
-          echo "lint sarif files: $(ls /tmp/sarif-lint | wc -l), html files: $(ls /tmp/html-lint | wc -l)"
-          ls -la /tmp/sarif-lint/ || true
+          find . -path '*/build/reports/lint-results*.sarif' -exec cp --backup=numbered {} /tmp/sarif-lint/ \;
+          find . -path '*/build/reports/lint-results*.html' -exec cp --backup=numbered {} /tmp/html-lint/ \;
+          ls -la /tmp/sarif-lint/
+          if ! ls /tmp/sarif-lint/*.sarif >/dev/null 2>&1; then
+            echo "ERROR: lint produced no SARIF report - the scan did not complete; refusing to report green."
+            exit 1
+          fi
       - name: Upload lint SARIF
         if: always()
         uses: github/codeql-action/upload-sarif@v4
@@ -65,7 +73,6 @@ jobs:
           sarif_file: /tmp/sarif-lint
           category: android-lint
           wait-for-processing: false
-        continue-on-error: true
       - name: Upload lint HTML report
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -92,12 +99,9 @@ jobs:
           curl -sSfL -o /tmp/detekt-cli.jar \
             https://github.com/detekt/detekt/releases/download/v1.23.8/detekt-cli-1.23.8-all.jar
           echo "2ce2ff952e150baf28a29cda70a363b0340b3e81a55f43e51ec5edffc3d066c1  /tmp/detekt-cli.jar" | sha256sum -c -
-      # Locally rehearsed 2026-11-23 on the main tree (a1e67cd77): 977 findings,
-      # exit code 2 with valid SARIF written; exit 0 = clean. Findings (0/2)
-      # never fail the job; any other exit, or a missing SARIF, is a tool
-      # failure and fails the step honestly.
       - name: Run detekt (report-only)
         run: |
+          rm -f /tmp/detekt.sarif /tmp/detekt.html
           set +e
           java -jar /tmp/detekt-cli.jar \
             --input . \
@@ -107,11 +111,19 @@ jobs:
             --excludes "**/build/**,**/res/**,**/.git/**" \
             --report sarif:/tmp/detekt.sarif \
             --report html:/tmp/detekt.html
-          ec=$?
+          rc=$?
           set -e
-          echo "detekt exit code: $ec"
-          test "$ec" -eq 0 -o "$ec" -eq 2
-          test -s /tmp/detekt.sarif
+          if [ "$rc" -ne 0 ] && [ "$rc" -ne 2 ]; then
+            echo "ERROR: detekt exited $rc (verified contract: 0=clean, 2=findings, 1=error); refusing to report green."
+            exit "$rc"
+          fi
+          if [ ! -s /tmp/detekt.sarif ]; then
+            echo "ERROR: detekt produced no fresh non-empty SARIF; refusing to report green."
+            exit 1
+          fi
+          count=$(python3 -c "import json,sys; d=json.load(open('/tmp/detekt.sarif')); print(sum(len(r.get('results',[])) for r in d['runs']))")
+          echo "detekt completed report-only (exit $rc, $count SARIF results)"
+          ls -la /tmp/detekt.sarif /tmp/detekt.html
       - name: Upload detekt SARIF
         if: always()
         uses: github/codeql-action/upload-sarif@v4
@@ -119,7 +131,6 @@ jobs:
           sarif_file: /tmp/detekt.sarif
           category: detekt
           wait-for-processing: false
-        continue-on-error: true
       - name: Upload detekt HTML report
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
