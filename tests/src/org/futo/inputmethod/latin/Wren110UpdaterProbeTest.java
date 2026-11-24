@@ -109,6 +109,22 @@ public class Wren110UpdaterProbeTest extends InputTestsBase {
         probeSeededStore();
     }
 
+    /** Fail (harness precondition, not product) unless the seed is still the current stored
+     *  result; one re-seed retry. Deterministic guard required before the observer cases. */
+    private void requireSeedCurrent() throws Exception {
+        for (int attempt = 0; attempt < 2; attempt++) {
+            final boolean[] found = new boolean[]{false};
+            probeSeededStore(found);
+            if (found[0]) return;
+            Log.i(TAG, "PROBE seed not current (attempt " + attempt + "); re-seeding");
+            shell("am broadcast -a " + PKG + ".WBDBG -p " + PKG + " --es cmd seedupdate:99.0.0|wbprobe");
+            Thread.sleep(1500);
+        }
+        final boolean[] found = new boolean[]{false};
+        probeSeededStore(found);
+        if (!found[0]) fail("PRECONDITION NOT MET: seeded update result not current in store (harness/emulator state, not product)");
+    }
+
     /**
      * Decisive write-vs-read probe for the T3/T3b seed gap (run 45321885141: seed logged
      * SEEDED but the update screen showed the up-to-date branch). Reads only the datastore
@@ -117,6 +133,11 @@ public class Wren110UpdaterProbeTest extends InputTestsBase {
      * Marker nowhere => write fell through to the in-memory direct-boot store (try-lock miss).
      */
     private void probeSeededStore() {
+        probeSeededStore(new boolean[]{false});
+    }
+
+    /** @param found out-param: true when the seeded marker is present in any store file. */
+    private void probeSeededStore(final boolean[] found) {
         try {
             final File[] bases = new File[]{
                     new File("/data/user/0/" + PKG + "/files/datastore"),
@@ -129,6 +150,7 @@ public class Wren110UpdaterProbeTest extends InputTestsBase {
                     final byte[] b = java.nio.file.Files.readAllBytes(f.toPath());
                     final boolean hit = new String(b, "ISO-8859-1").contains("99.0.0");
                     Log.i(TAG, "PROBE store file=" + f.getName() + " size=" + b.length + " seeded99=" + hit);
+                    if (hit) found[0] = true;
                 }
             }
         } catch (Throwable t) {
@@ -189,6 +211,7 @@ public class Wren110UpdaterProbeTest extends InputTestsBase {
         if (!ctx.getPackageManager().canRequestPackageInstalls()) {
             fail("PRECONDITION NOT MET: canRequestPackageInstalls false after appops grant (harness/emulator state, not product)");
         }
+        requireSeedCurrent();
         backgroundAndResume();
         saveShot("upd-t3-after-resume.png");
         Log.i(TAG, "PROBE T3 post-resume pendingApk=" + UpdateStatus.INSTANCE.getPendingApk()
@@ -220,6 +243,7 @@ public class Wren110UpdaterProbeTest extends InputTestsBase {
         if (!ctx.getPackageManager().canRequestPackageInstalls()) {
             fail("PRECONDITION NOT MET: canRequestPackageInstalls false after appops grant (harness/emulator state, not product)");
         }
+        requireSeedCurrent();
         backgroundAndResume();
         Thread.sleep(2000);
         final String top = grepFirst(shell("dumpsys activity activities"), "topResumedActivity");

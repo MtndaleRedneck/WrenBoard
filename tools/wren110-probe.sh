@@ -107,9 +107,19 @@ test -n "$TESTPKG"
 # am instrument's process exit code is not a reliable verdict; the terminal instrumentation
 # result summary is asserted below in addition to the exit code.
 set +e
+# Deterministic race fix (run 45327274226): the emulator has network, so the app's real
+# periodic/on-open update check fetches the live 1.9.0 feed a few seconds after the WBDBG seed
+# and OVERWRITES last_update_check_result (1.9.0 < fixture 1.10.0 -> up-to-date -> observer
+# never registers). A failed check does NOT touch the stored result (UpdateChecking
+# saveUpdateResult failure branch), so cutting network around instrumentation makes the seed
+# hold deterministically. Re-enabled right after the run.
+adb shell svc wifi disable || true
+adb shell svc data disable || true
 timeout 600 adb shell am instrument -w -r -e class org.futo.inputmethod.latin.Wren110BackDispositionProbeTest,org.futo.inputmethod.latin.Wren110UpdaterProbeTest "$TESTPKG" | tee probe-out.txt
 PROBE_EXIT=${PIPESTATUS[0]}
 set -e
+adb shell svc wifi enable || true
+adb shell svc data enable || true
 echo "PROBE_EXIT=$PROBE_EXIT" | tee probe-exit.txt
 
 # Expected: 1 disposition test + 5 updater case tests (T1, T2, T3 tampered, T3b valid, T4).
