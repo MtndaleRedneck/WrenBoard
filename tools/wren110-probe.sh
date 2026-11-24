@@ -237,6 +237,17 @@ echo "T6 committed field after chip tap + x: [$FIELD]" | tee -a probe-exit.txt
 if [ "$FIELD" = "going blank x" ]; then T6_OK=1; fi
 echo "T6_OK=$T6_OK" | tee -a probe-exit.txt
 
+# r21 nav-failure diagnostic (Wren18NavigationTest flaked once at its final back-walk assert on
+# code green before and after; the decisive logcat window had rotated). Replays the nested-chain
+# back-walk with full back-stack/foreground capture on every step: a recurrence now arrives with
+# the evidence to separate a consumed back (phantom stack entries) from a slow finish (timing).
+NAVDIAG_OK=0
+timeout 300 adb shell am instrument -w -r -e class org.futo.inputmethod.latin.Wren110NavBackDiagProbeTest "$TESTPKG" | tee navdiag-out.txt | tail -4
+grep -q "OK (1 test)" navdiag-out.txt && NAVDIAG_OK=1
+echo "NAVDIAG_OK=$NAVDIAG_OK" | tee -a probe-exit.txt
+adb pull /sdcard/Android/data/com.wrenboard.keyboard/files/wren110-navdiag/ navdiag/ || true
+
+test "$NAVDIAG_OK" = 1
 test "$T6_OK" = 1
 test "$RESULT_OK" = 1
 test "$T5A_OK" = 1
