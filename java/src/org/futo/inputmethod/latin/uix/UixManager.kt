@@ -609,12 +609,18 @@ class UixManager(private val latinIME: LatinIME) {
     private val swiftKeyPadField = mutableStateOf(false)
     fun onInputStartingForPad(editorInfo: EditorInfo?) {
         swiftKeyPadField.value = org.futo.inputmethod.v2keyboard.isSwiftKeyPadField(editorInfo)
-        // Never carry an old editor's words into the first frame; the guard fills starters for an
-        // empty new field here (write time), not at draw time (see blankGuard).
-        suggestedWords.value = blankGuard(null)
+        // Never carry an old editor's words into the first frame; the display copy gets starters
+        // for an empty new field here (write time), not at draw time (see blankGuard).
+        suggestedWords.value = null
+        displaySuggestedWords.value = blankGuard(null)
         actionBackStack.clear()
     }
+    // Raw suggestions as delivered by the engine. Non-display consumers (the expandable-container
+    // gate) must keep reading this raw value: the display copy below may carry synthetic starters
+    // the container logic must not see.
     private val suggestedWords: MutableState<SuggestedWords?> = mutableStateOf(null)
+    // Display-only copy: blankGuard applied at write time. Only the suggestion-strip draw sites read this.
+    private val displaySuggestedWords: MutableState<SuggestedWords?> = mutableStateOf(null)
     private val expandableSuggestionCfg: MutableState<ExpandableSuggestionBarConfiguration> = mutableStateOf(
         NonExpandableSuggestionBar
     )
@@ -739,7 +745,7 @@ class UixManager(private val latinIME: LatinIME) {
         Column {
             // Don't show suggested words when it's not meant to be shown
             val suggestedWordsOrNull = if(shouldShowSuggestionStrip.value) {
-                suggestedWords.value ?: SuggestedWords.getEmptyInstance()
+                displaySuggestedWords.value ?: SuggestedWords.getEmptyInstance()
             } else {
                 null
             }
@@ -894,7 +900,7 @@ class UixManager(private val latinIME: LatinIME) {
             if((!mainKeyboardHidden.value && !latinIME.isInputConnectionOverridden)
                 || (latinIME.inputConnectionOverridenWithSuggestions)) {
                 val suggestedWordsOrNull = if (shouldShowSuggestionStrip.value) {
-                    suggestedWords.value
+                    displaySuggestedWords.value
                 } else {
                     null
                 }
@@ -1378,7 +1384,7 @@ class UixManager(private val latinIME: LatinIME) {
                     }) {
                         if(needToUseExpandableSuggestionUi) {
                             ActionBarWithExpandableCandidates(
-                                suggestedWords.value,
+                                displaySuggestedWords.value,
                                 suggestionStripListener,
                                 isActionsExpanded = isActionsExpanded.value,
                                 toggleActionsExpanded = { toggleActionsExpanded() },
@@ -1549,12 +1555,15 @@ class UixManager(private val latinIME: LatinIME) {
     }
 
     /**
-     * WrenBoard 1.10 ("the top bar keeps going blank"): applied at WRITE time (setSuggestions and input start),
-     * so no path (panel close, startup, punctuation-only text) leaves the strip empty. I / The / You, only with
-     * starter words on and a field that takes suggestions, never while a word is being typed. Not at draw time:
-     * the cursor read is a synchronous binder IPC, and per-recomposition calls risk main-thread stalls (1.10
-     * review finding); event-driven writes keep the same observable behavior because typing and cursor changes
-     * always arrive with a suggestion update.
+     * WrenBoard 1.10 ("the top bar keeps going blank"): applied at WRITE time (setSuggestions and input start)
+     * to the DISPLAY copy only, so no path (panel close, startup, punctuation-only text) leaves the strip empty.
+     * I / The / You, only with starter words on and a field that takes suggestions, never while a word is being
+     * typed. Not at draw time: the cursor read is a synchronous binder IPC, and per-recomposition calls risk
+     * main-thread stalls (1.10 review finding). Qualifier: a context change that produces no suggestion write
+     * (an async settings flip, or a cursor move the engine does not answer with new suggestions) leaves the
+     * display copy until the next write; the pre-1.10 draw-time read had the same observable staleness in
+     * practice because such changes trigger no recomposition either. Raw suggestedWords stays unguarded for
+     * non-display consumers.
      */
     private fun blankGuard(words: SuggestedWords?): SuggestedWords? {
         if (words != null && !words.isEmpty) return words
@@ -1576,7 +1585,8 @@ class UixManager(private val latinIME: LatinIME) {
 
     fun setSuggestions(suggestedWords: SuggestedWords?, rtlSubtype: Boolean, cfg: ExpandableSuggestionBarConfiguration) {
         if(org.futo.inputmethod.latin.BuildConfig.DEBUG) WbDebug.logSuggestions(suggestedWords)
-        this.suggestedWords.value = blankGuard(suggestedWords)
+        this.suggestedWords.value = suggestedWords
+        this.displaySuggestedWords.value = blankGuard(suggestedWords)
         this.expandableSuggestionCfg.value = cfg
 
         if(currentNotice.value != null && suggestedWords?.isEmpty != true) {
