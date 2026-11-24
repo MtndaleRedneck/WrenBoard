@@ -53,6 +53,8 @@ jobs:
           "$bt/aapt2" dump badging signed.apk > badging.txt
           grep -m1 '^package:' badging.txt
           python3 - <<'PY_METADATA
+      - name: Install image tools for the pixel verdict
+        run: python3 -m pip install --break-system-packages pillow
       - name: Enable KVM
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
