@@ -59,22 +59,26 @@ public class Wren110RetentionProbeTest extends InputTestsBase {
                 + " identityApp=" + (stored == app));
         assertSame("AccessibilityUtils.mContext must be the application context", app, stored);
 
-        // Spoken-locale resolution on the changed bytes: the spoken string read from the stored
-        // context must be non-empty and byte-identical to the application's own resolution.
+        // Spoken-locale caveat check (I2): compare the SERVICE's own resource resolution against
+        // the stored (application) context - not stored-vs-app, which would be a tautology after
+        // the identity assert above. Discriminates a config mismatch between the service's
+        // resources and the application resources the stored context now reads from.
         final CharSequence viaStored = stored.getText(R.string.spoken_use_headphones);
-        final CharSequence viaApp = app.getText(R.string.spoken_use_headphones);
-        Log.i(TAG, "PROBE spoken_use_headphones viaStored=\"" + viaStored + "\" equalApp="
-                + viaStored.toString().contentEquals(viaApp));
+        final CharSequence viaService = getService().getText(R.string.spoken_use_headphones);
+        Log.i(TAG, "PROBE spoken_use_headphones viaStored=\"" + viaStored + "\" viaService=\""
+                + viaService + "\" equalService=" + viaStored.toString().contentEquals(viaService));
         assertTrue("spoken_use_headphones must resolve non-empty", viaStored.length() > 0);
-        assertTrue("spoken string via stored context must equal application resolution",
-                viaStored.toString().contentEquals(viaApp));
+        assertTrue("spoken string via stored context must equal service resolution",
+                viaStored.toString().contentEquals(viaService));
 
         final String storedLocales = stored.getResources().getConfiguration().getLocales()
                 .toString();
-        final String appLocales = app.getResources().getConfiguration().getLocales().toString();
-        Log.i(TAG, "PROBE accessibility locales stored=" + storedLocales + " app=" + appLocales);
-        assertEquals("locale list via stored context must equal application locale list",
-                appLocales, storedLocales);
+        final String serviceLocales = getService().getResources().getConfiguration().getLocales()
+                .toString();
+        Log.i(TAG, "PROBE accessibility locales stored=" + storedLocales + " service="
+                + serviceLocales);
+        assertEquals("locale list via stored context must equal service locale list",
+                serviceLocales, storedLocales);
     }
 
     /** RichInputMethodManager: init-entry normalization; mContext and SubtypeLocaleUtils resources
@@ -89,15 +93,17 @@ public class Wren110RetentionProbeTest extends InputTestsBase {
                 + " identityApp=" + (stored == app));
         assertSame("RichInputMethodManager.mContext must be the application context", app, stored);
 
+        // SubtypeLocaleUtils.sResources: LOGGED ONLY, not asserted (I2): the Resources singleton
+        // is shared per config, so identity and locale equality pass on old bytes too - neither
+        // discriminates the fix. The service-vs-stored locale parity assert above is the
+        // discriminating check; this records the actual first-init input for the record.
         final Resources sRes = (Resources) readField(null, SubtypeLocaleUtils.class, "sResources");
         assertNotNull("SubtypeLocaleUtils must be initialized by service startup", sRes);
         final boolean identityApp = sRes == app.getResources();
+        final boolean identityService = sRes == getService().getResources();
         final String sLocales = sRes.getConfiguration().getLocales().toString();
-        final String appLocales = app.getResources().getConfiguration().getLocales().toString();
         Log.i(TAG, "PROBE subtype sResources identityApp=" + identityApp
-                + " locales=" + sLocales + " appLocales=" + appLocales);
-        assertEquals("SubtypeLocaleUtils locales must equal application locales",
-                appLocales, sLocales);
+                + " identityService=" + identityService + " locales=" + sLocales);
     }
 
     /** PermissionsManager: first-caller normalization and the PermissionsActivity launch route.
@@ -120,7 +126,7 @@ public class Wren110RetentionProbeTest extends InputTestsBase {
                 != PackageManager.PERMISSION_GRANTED;
         Log.i(TAG, "PROBE permissions " + PERM + " denied=" + denied);
         if (!denied) {
-            Log.i(TAG, "PROBE permissions launch route NOT exercised: permission already granted");
+            Log.i(TAG, "PERMISSION_ROUTE=SKIPPED_ALREADY_GRANTED");
             return;
         }
         final Instrumentation.ActivityMonitor monitor = new Instrumentation.ActivityMonitor(
@@ -138,7 +144,8 @@ public class Wren110RetentionProbeTest extends InputTestsBase {
             }
         });
         final Activity launched = monitor.waitForActivityWithTimeout(8000);
-        Log.i(TAG, "PROBE permissions launch route fired=" + (launched != null));
+        // Unambiguous greppable token: green count alone must not carry this verdict (I2).
+        Log.i(TAG, "PERMISSION_ROUTE=" + (launched != null ? "FIRED" : "NOT_FIRED_TIMEOUT"));
         assertNotNull("PermissionsActivity launch route must fire from the stored app context",
                 launched);
         instr.runOnMainSync(new Runnable() {
