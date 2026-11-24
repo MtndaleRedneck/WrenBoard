@@ -1,7 +1,7 @@
 /*
  * WrenBoard 1.10 diagnostics ONLY (relruntime branch, frozen-source guard allowlist; not in e059314).
  *
- * Bounded changed-byte checks for candidate 55472dca7 ("1.10 (16)") requested during I2 closeout:
+ * Bounded changed-byte checks for candidate 7c6ffa5fd ("1.10 (17)") requested during I2 closeout:
  * the application-context retention fixes (PermissionsManager, AccessibilityUtils,
  * RichInputMethodManager init-entry normalization, SubtypeLocaleUtils first-init input) must be
  * verified on the CHANGED bytes through the REAL production first-caller path. Each test here is
