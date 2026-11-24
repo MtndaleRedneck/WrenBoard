@@ -59,4 +59,13 @@ if [ "$(printf '%s\n' "$calls" | wc -l)" -eq 3 ] \
 else
   echo "LINT-FAIL: blankGuard call sites changed - expected write-time funnel, input start, selection refresh only:"; printf '%s\n' "$calls"; fail=1
 fi
+# NavController back-stack access from Java: the stack is Kotlin `val currentBackStack:
+# StateFlow<List<NavBackStackEntry>>`, exposed to Java as getCurrentBackStack().getValue().
+# A getBackStack() call on the controller does not exist (r25 compile loss: 7-min build wasted).
+badstack=$(grep -rn 'getNavController()\.getBackStack()' tests/src --include=*.java || true)
+if [ -z "$badstack" ]; then
+  echo "lint-ok: no forbidden NavController.getBackStack() accessor (use getCurrentBackStack().getValue())"
+else
+  echo "LINT-FAIL: NavController exposes getCurrentBackStack().getValue(), not getBackStack():"; printf '%s\n' "$badstack"; fail=1
+fi
 exit $fail

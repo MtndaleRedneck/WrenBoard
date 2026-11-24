@@ -36,7 +36,7 @@ public class Wren110NavBackDiagProbeTest {
     private void logStack(String tag) {
         InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
             List<String> names = new ArrayList<>();
-            for (NavBackStackEntry e : activity().getNavController().getBackStack()) {
+            for (NavBackStackEntry e : activity().getNavController().getCurrentBackStack().getValue()) {
                 names.add(e.getDestination().getRoute() == null ? ("id:" + e.getDestination().getId()) : e.getDestination().getRoute());
             }
             String cur = activity().getNavController().getCurrentDestination() == null ? "null"
