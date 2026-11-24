@@ -371,11 +371,6 @@ fun UpdateDialog(navController: NavHostController) {
                                         // dismissed dialog produces no side effects. (onDispose only removes the
                                         // observer; it does not cancel this job while the destination is alive.)
                                         ensureActive()
-                                        // Owned cleanup, same boundary as the persisted branch:
-                                        // this hand-over supersedes the durable marker keys the
-                                        // staging branch wrote; clear them only after the file
-                                        // verified, so an earlier death leaves recovery intact.
-                                        appContext.retirePendingInstallMarker()
                                         // Launch only when the hand-over was recorded for a still-current attempt.
                                         if (UpdateStatus.attempts.handOver(attempt)) {
                                             UpdateStatus.attempts.downloadEnded(attempt)
@@ -385,6 +380,14 @@ fun UpdateDialog(navController: NavHostController) {
                                             // without the person's confirmation in the system installer).
                                             ensureActive()
                                             if (launchInstaller(appContext, f)) {
+                                                // Durable cleanup last (ChatGPT (25) review): the marker
+                                                // outlives the in-memory hand-over across process death, so
+                                                // retiring it before the sheet was actually up could strand a
+                                                // verified file no branch could reselect. Death before this
+                                                // point leaves marker + file for the cold-start recovery;
+                                                // death after the sheet is up replays the M1 hand-off
+                                                // (recovery re-hands the same verified file; Android serializes).
+                                                appContext.retirePendingInstallMarker()
                                                 withContext(Dispatchers.Main) { navController.navigateUp() }
                                             } else {
                                                 // Review C2: the installer did not open; say so and let the person retry.
@@ -440,20 +443,23 @@ fun UpdateDialog(navController: NavHostController) {
                                                 false
                                             }
                                             if (ok) {
-                                                // Claim boundary: the recovery selector is cleared
-                                                // only AFTER the digest + trust checks pass and
-                                                // before the hand-over. Cancellation or process
-                                                // death earlier retains marker + file so a later
-                                                // resume retries instead of stranding them; after
-                                                // this point the hand-over guard owns the
-                                                // installer-return UX, so a cancelled sheet never
-                                                // auto-retries.
-                                                appContext.retirePendingInstallMarker()
+                                                // Claim boundary: the durable marker is kept until
+                                                // the installer sheet is actually up (ChatGPT (25)
+                                                // review). Cancellation or process death anywhere
+                                                // before the successful launch retains marker + file,
+                                                // so a later resume reselects and re-verifies instead
+                                                // of stranding them; the hand-over guard is in-memory
+                                                // and cannot own anything across death. Death after
+                                                // the sheet is up but before the retire replays the
+                                                // M1 hand-off; a cancelled sheet never auto-retries.
                                                 ensureActive()
                                                 if (UpdateStatus.attempts.handOver(attempt)) {
                                                     UpdateStatus.attempts.downloadEnded(attempt)
                                                     ensureActive()
                                                     if (launchInstaller(appContext, candidate)) {
+                                                        // Marker dies only once the sheet is up;
+                                                        // see the claim-boundary comment above.
+                                                        appContext.retirePendingInstallMarker()
                                                         withContext(Dispatchers.Main) { navController.navigateUp() }
                                                     } else {
                                                         UpdateStatus.attempts.fail(attempt, "Could not open the installer.")
