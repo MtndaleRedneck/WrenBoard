@@ -1,5 +1,5 @@
 name: wren110-rel-runtime
-# Release-variant runtime evidence for the frozen 1.10 candidate (7c6ffa5fd): release
+# Release-variant runtime evidence for the frozen 1.10 candidate (d2a67cfe0): release
 # buildType (R8 minified, shrink off) signed with the committed debug keystore fallback
 # (no secrets on this run), so the debug-signed androidTest APK can instrument it.
 # CI-time patch adds proguard keeps (test binding) and debuggable=true: without it
@@ -34,9 +34,9 @@ jobs:
       - name: Verify frozen app source
         run: |
           set -euo pipefail
-          git cat-file -e 7c6ffa5fdcd3f9e0cc3ef537a148d63032bc13ee^{commit}
-          test "$(git merge-base 7c6ffa5fdcd3f9e0cc3ef537a148d63032bc13ee HEAD)" = "7c6ffa5fdcd3f9e0cc3ef537a148d63032bc13ee"
-          git diff --name-only 7c6ffa5fdcd3f9e0cc3ef537a148d63032bc13ee HEAD | sort > /tmp/wren-diff.txt
+          git cat-file -e d2a67cfe0fedf30fdf09bd95404807a807547e22^{commit}
+          test "$(git merge-base d2a67cfe0fedf30fdf09bd95404807a807547e22 HEAD)" = "d2a67cfe0fedf30fdf09bd95404807a807547e22"
+          git diff --name-only d2a67cfe0fedf30fdf09bd95404807a807547e22 HEAD | sort > /tmp/wren-diff.txt
           printf '%s\n' .github/workflows/wren110-rel-runtime.yml tests/src/org/futo/inputmethod/latin/Wren110BackDispositionProbeTest.java tests/src/org/futo/inputmethod/latin/Wren110UpdaterProbeTest.java tests/src/org/futo/inputmethod/latin/Wren110RetentionProbeTest.java tools/wren110-probe.sh | sort > /tmp/wren-allowed.txt
           EXTRA=$(comm -23 /tmp/wren-diff.txt /tmp/wren-allowed.txt)
           test -z "$EXTRA" || { echo "frozen-source guard: unexpected changed files: $EXTRA"; exit 1; }
@@ -259,7 +259,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: wren110-rel-runtime
-# Release-variant runtime evidence for the frozen 1.10 candidate (7c6ffa5fd): release
+# Release-variant runtime evidence for the frozen 1.10 candidate (d2a67cfe0): release
 # buildType (R8 minified, shrink off) signed with the committed debug keystore fallback
 # (no secrets on this run), so the debug-signed androidTest APK can instrument it.
 # CI-time patch adds proguard keeps (test binding) and debuggable=true: without it
