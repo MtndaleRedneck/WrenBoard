@@ -149,8 +149,10 @@ public class Wren110UpdaterSettingsRouteProbeTest extends InputTestsBase {
             assertTrue("T5a the ACTUAL unknown-sources Settings route became top, top=" + top,
                     top.contains("com.android.settings"));
         } finally {
-            shell("input keyevent KEYCODE_BACK");
-            Thread.sleep(1500);
+            // No BACK here: the Settings screen stays on top so T5b captures the actual
+            // return navigation after the grant. The op change between sessions kills this
+            // process; log its pid so T5b can prove the cold start.
+            Log.i(TAG, "PROBE T5a pid=" + shell("pidof " + PKG).trim());
         }
     }
 
@@ -163,8 +165,26 @@ public class Wren110UpdaterSettingsRouteProbeTest extends InputTestsBase {
         final Context ctx = getService().getApplicationContext();
         assertTrue("T5b precondition: install-unknown-apps allowed",
                 ctx.getPackageManager().canRequestPackageInstalls());
+        // Actual grant-side return evidence (logged, not asserted as product verdict): the
+        // Settings screen T5a left on top, what BACK returns to after the op-change kill,
+        // and what update state the cold-started app shows (the promised flow in
+        // UpdateScreen.kt is "the install starts when the person comes back").
+        Log.i(TAG, "PROBE T5b pre-return top="
+                + grepFirst(shell("dumpsys activity activities"), "topResumedActivity"));
+        Log.i(TAG, "PROBE T5b pid=" + shell("pidof " + PKG).trim());
+        shell("input keyevent KEYCODE_BACK");
+        Thread.sleep(3000);
+        final String returnTop = grepFirst(shell("dumpsys activity activities"), "topResumedActivity");
+        Log.i(TAG, "PROBE T5b post-return top=" + returnTop);
+        saveShot("upd-t5b-return-screen.png");
         assertNull("T5b documents cold-start loss of in-memory pendingApk after the op-change kill",
                 UpdateStatus.INSTANCE.getPendingApk());
+        Log.i(TAG, "PROBE T5b return-state downloadText='"
+                + UpdateStatus.INSTANCE.getDownloadText().getValue() + "' isDownloading="
+                + UpdateStatus.INSTANCE.getIsDownloading().getValue() + " busy="
+                + UpdateStatus.INSTANCE.getAttempts().isBusy(System.currentTimeMillis()));
+        // The manual restart the return flow actually requires (the Download button's own
+        // production function), confirming it reaches the installer without a re-fetch.
         stageValidFixtureAsDownload();
         seedAndOpenUpdateScreen();
         invokeProductionDownloadAndInstall(ctx);
