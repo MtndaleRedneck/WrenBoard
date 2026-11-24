@@ -243,14 +243,21 @@ private fun downloadAndInstall(context: Context, updateResult: UpdateResult, onH
                         prefs[PENDING_INSTALL_ATTEMPT] = attempt
                     }
                     if (launchInstaller(context, file)) {
-                        // Durable cleanup last, same as the two resume paths: the marker lives
-                        // until the sheet is actually up. Death before this point leaves
-                        // marker + file for the cold-start recovery; death after replays the M1
-                        // hand-off (recovery re-hands the same verified file; Android serializes).
-                        context.retirePendingInstallMarker()
+                        // Retention is recorded BEFORE the suspending durable cleanup (Instinct-2
+                        // (28) review): with the order reversed, a retire throw/cancel fell into
+                        // the outer catch/finally while `failed` was still true, deleting the
+                        // already-handed-over APK, resetting readyVersion and reporting a false
+                        // failure - and could leave the marker pointing at the deleted file. The
+                        // marker lives until the sheet is up, same as the two resume paths; death
+                        // before this point leaves marker + file for the cold-start recovery,
+                        // death after replays the M1 hand-off (Android serializes the sheets).
                         failed = false
                         UpdateStatus.attempts.post(attempt, "")
-                        runOnMain { onHandedOver() }
+                        recordSuccessfulHandOff(
+                            retireMarker = { context.retirePendingInstallMarker() },
+                            onHandedOver = { runOnMain { onHandedOver() } },
+                            onCleanupFailure = { Log.w("UpdateScreen", "Update attempt $attempt: marker cleanup failed; the next attempt supersedes the stale marker", it) },
+                        )
                     } else {
                         // The finally deletes the file, so this attempt's marker goes with it
                         // (owned: a newer attempt's marker survives).
