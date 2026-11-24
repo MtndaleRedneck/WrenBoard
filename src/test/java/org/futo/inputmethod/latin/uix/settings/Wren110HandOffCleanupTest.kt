@@ -65,7 +65,10 @@ class Wren110HandOffCleanupTest {
     @Test fun actualJobCancelDuringRetireStillRunsFinalReset() = runBlocking {
         val retireEntered = CountDownLatch(1)
         val resetRan = AtomicBoolean(false)
-        val job = launch {
+        // Dispatchers.Default: the child must run on a real worker thread. On runBlocking's
+        // confined event loop the blocking latch await below would starve the child before it
+        // could enter the retire (CI run 45464024369 red on exactly that).
+        val job = launch(Dispatchers.Default) {
             try {
                 recordSuccessfulHandOff(
                     retireMarker = {
