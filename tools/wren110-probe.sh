@@ -193,10 +193,27 @@ echo "POS_INSTALL_OK=$POS_INSTALL_OK" | tee -a probe-exit.txt
 T6_OK=0
 adb shell ime enable "$IME" || true
 adb shell ime set "$IME" || true
+# r22 loss: without this the emulator's hard-keyboard flag keeps the soft IME off screen and
+# there is no strip to tap (keyevents still type). Same setting the frozen wren18 leg uses.
+adb shell settings put secure show_ime_with_hard_keyboard 1
 adb shell am start -W -n com.wrenboard.imetarget/.TestInput >/dev/null
 sleep 3
-adb shell input tap 400 500
-sleep 3
+KBV=0
+for attempt in $(seq 1 8); do
+  adb shell input tap 400 500
+  sleep 3
+  if adb shell dumpsys input_method | grep -qE 'mInputShown=true|mImeWindowVisible=true|mIsImeVisible=true'; then KBV=1; break; fi
+  adb shell am start -W -n com.wrenboard.imetarget/.TestInput >/dev/null
+  adb shell ime set "$IME" || true
+  sleep 2
+done
+echo "T6 keyboard visible: $KBV" | tee -a probe-exit.txt
+if [ "$KBV" != 1 ]; then
+  adb exec-out screencap -p > probe-t6-strip.png
+  echo "T6 keyboard never became visible; no strip to tap" | tee t6-chip.txt
+  echo "T6_OK=0" | tee -a probe-exit.txt
+  test "$T6_OK" = 1
+fi
 for K in KEYCODE_G KEYCODE_O KEYCODE_I KEYCODE_N KEYCODE_G KEYCODE_B KEYCODE_L KEYCODE_A KEYCODE_N KEYCODE_K; do
   adb shell input keyevent "$K"
   sleep 1
