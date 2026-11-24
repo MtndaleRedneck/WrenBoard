@@ -294,9 +294,12 @@ fun UpdateDialog(navController: NavHostController) {
                         val attempt = UpdateStatus.attempts.currentToken
                         if (UpdateStatus.attempts.beginRecheck(attempt)) {
                             UpdateStatus.pendingApk = null
-                            lifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
-                                // finally: a scope cancelled between claim and resolution frees the running mark
-                                // with no other side effects, so updates never stick busy (lifecycle review).
+                            val job = lifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
+                                // finally + the completion cleanup below: a scope cancelled between the claim
+                                // and this coroutine's first dispatch never runs the body at all, so the
+                                // finally alone could leave the tracker busy for good (ChatGPT (18) review).
+                                // The completion handler runs even then; downloadEnded is token-checked and
+                                // idempotent, so double cleanup is harmless.
                                 try {
                                     val ok = try { UpdateVerify.verify(appContext, f); true } catch (e: Throwable) {
                                         if (e is kotlinx.coroutines.CancellationException) throw e
@@ -338,6 +341,7 @@ fun UpdateDialog(navController: NavHostController) {
                                     UpdateStatus.attempts.downloadEnded(attempt)
                                 }
                             }
+                            job.invokeOnCompletion { UpdateStatus.attempts.downloadEnded(attempt) }
                         }
                     } else if (f == null) {
                         // Review M1: back at this screen while a hand-over has no answer. A completed self-install
