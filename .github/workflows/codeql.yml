@@ -23,6 +23,9 @@ jobs:
   analyze:
     name: Analyze (java-kotlin)
     runs-on: ubuntu-latest
+    env:
+      VERSION_NAME: 1.10.0   # build.gradle requires VERSION_CODE/VERSION_NAME env (defaults to -1)
+      VERSION_CODE: "11"
     permissions:
       security-events: write   # upload results to the Security tab
       contents: read
