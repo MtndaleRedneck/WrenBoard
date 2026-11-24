@@ -68,4 +68,32 @@ if [ -z "$badstack" ]; then
 else
   echo "LINT-FAIL: NavController exposes getCurrentBackStack().getValue(), not getBackStack():"; printf '%s\n' "$badstack"; fail=1
 fi
+# (26) updater durability ordering (ChatGPT (25) review): the durable pending-install marker
+# must outlive the in-memory hand-over. Every retirePendingInstallMarker() call is either a
+# cleanup where the staged file is gone (delete within 4 lines before, or attempts.fail within
+# 3 lines after) or post-launch cleanup (launchInstaller within 12 lines before, comments
+# between). A retire before handOver reopens the stranded-update death window.
+SCR=java/src/org/futo/inputmethod/latin/uix/settings/UpdateScreen.kt
+retires=$(grep -c 'appContext\.retirePendingInstallMarker()' "$SCR" || true)
+if [ "$retires" -ne 5 ]; then
+  echo "LINT-FAIL: expected 5 retirePendingInstallMarker sites (3 file-gone + 2 post-launch), found $retires"; fail=1
+fi
+badretire=0
+for n in $(grep -n 'appContext\.retirePendingInstallMarker()' "$SCR" | cut -d: -f1); do
+  after=$(sed -n "$((n+1)),$((n+3))p" "$SCR")
+  before=$(sed -n "$((n>n-12 ? n-12 : 1)),$((n-1))p" "$SCR")
+  if printf '%s' "$after" | grep -q 'attempts\.fail('; then :
+  elif printf '%s' "$before" | grep -q '\.delete()'; then :
+  elif printf '%s' "$before" | grep -q 'if (launchInstaller('; then :
+  else echo "LINT-FAIL: retire at $SCR:$n is neither file-gone cleanup nor post-launch"; badretire=1; fi
+done
+for n in $(grep -n 'attempts\.handOver(attempt)' "$SCR" | cut -d: -f1); do
+  before=$(sed -n "$((n>n-8 ? n-8 : 1)),$((n-1))p" "$SCR")
+  if printf '%s' "$before" | grep -q 'retirePendingInstallMarker()'; then
+    echo "LINT-FAIL: retire within 8 lines before handOver at $SCR:$n (stranded-update death window)"; badretire=1
+  fi
+done
+if [ "$badretire" -eq 0 ] && [ "$retires" -eq 5 ]; then
+  echo "lint-ok: durable marker retires only in failure cleanup or after successful installer launch"
+fi
 exit $fail
