@@ -37,9 +37,11 @@ jobs:
           git cat-file -e e1d5d1801e8885c85c81042b25f4959f32a5031a^{commit}
           test "$(git merge-base e1d5d1801e8885c85c81042b25f4959f32a5031a HEAD)" = "e1d5d1801e8885c85c81042b25f4959f32a5031a"
           git diff --name-only e1d5d1801e8885c85c81042b25f4959f32a5031a HEAD | sort > /tmp/wren-diff.txt
-          printf '%s\n' .github/workflows/wren110-rel-runtime.yml tests/src/org/futo/inputmethod/latin/Wren110BackDispositionProbeTest.java tests/src/org/futo/inputmethod/latin/Wren110UpdaterProbeTest.java tests/src/org/futo/inputmethod/latin/Wren110UpdaterSettingsRouteProbeTest.java tests/src/org/futo/inputmethod/latin/Wren110RetentionProbeTest.java tools/wren110-probe.sh | sort > /tmp/wren-allowed.txt
+          printf '%s\n' .github/workflows/wren110-rel-runtime.yml tests/src/org/futo/inputmethod/latin/Wren110BackDispositionProbeTest.java tests/src/org/futo/inputmethod/latin/Wren110UpdaterProbeTest.java tests/src/org/futo/inputmethod/latin/Wren110UpdaterSettingsRouteProbeTest.java tests/src/org/futo/inputmethod/latin/Wren110RetentionProbeTest.java tools/wren110-probe.sh tools/wren110-harness-lint.sh | sort > /tmp/wren-allowed.txt
           EXTRA=$(comm -23 /tmp/wren-diff.txt /tmp/wren-allowed.txt)
           test -z "$EXTRA" || { echo "frozen-source guard: unexpected changed files: $EXTRA"; exit 1; }
+      - name: Harness preflight lint (seconds; catches probe-test accessor compile errors before the ~6-min fixture build)
+        run: bash tools/wren110-harness-lint.sh
       - name: Build dependencies
         run: git submodule update --init java/assets/themes java/res-large libs translations voiceinput-shared/src/main/ml
       - name: Reuse shipped swipe weights for regression fixture
@@ -208,6 +210,7 @@ jobs:
       - name: Install screenshot text locator
         run: sudo apt-get update -q && sudo apt-get install -y -q tesseract-ocr
       - name: Enable KVM
+        if: always()
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
@@ -225,8 +228,11 @@ jobs:
 
       - name: Diagnostics probes (disposition pipeline + updater lifecycle; frozen tools/wren18-runtime.sh untouched)
         # Independent of prior legs: probe + captures must still run (and fail visibly) if an
-        # earlier step failed, so evidence is never silently skipped.
-        if: always()
+        # earlier step failed, so evidence is never silently skipped. But without the fixture
+        # APKs there is nothing to probe: skip instead of spending ~10 min in the emulator
+        # boot wait (r18 loss class). KVM runs if:always() above so a partial failure never
+        # strips hardware acceleration from a run whose fixtures did build.
+        if: always() && hashFiles('w17-release.apk') != '' && hashFiles('w17-rel-tests.apk') != '' && hashFiles('w17-vc12.apk') != '' && hashFiles('tools/ime-target/out/imetarget.apk') != ''
         uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
         with:
           api-level: 33
