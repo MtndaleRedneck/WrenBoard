@@ -232,15 +232,29 @@ private fun downloadAndInstall(context: Context, updateResult: UpdateResult, onH
                 // resets readyVersion. Unreachable under the current gated UI (the busy gate holds for the
                 // whole download, so the token cannot change mid-attempt); latent for future callers only.
                 if (UpdateStatus.attempts.handOver(attempt)) {
-                    // A fresh direct hand-over supersedes any staged resume marker (the person
-                    // tapped Update again with permission already granted): clear it so a later
-                    // resume cannot re-select the old file.
-                    context.retirePendingInstallMarker()
+                    // WrenBoard 1.10 (28) (ChatGPT (27) review): stage the same durable marker the
+                    // denied-permission flow writes, superseding any stale one. readyVersion is
+                    // in-memory, so without it a process death in the hand-over -> launch window
+                    // stranded the verified APK behind a reuse gate that could no longer select it.
+                    // One edit keeps the three keys atomic; ATTEMPT tags it for owned retirement.
+                    context.dataStore.edit { prefs ->
+                        prefs[PENDING_INSTALL_VERSION] = updateResult.nextVersion
+                        prefs[PENDING_INSTALL_SHA256] = updateResult.sha256 ?: ""
+                        prefs[PENDING_INSTALL_ATTEMPT] = attempt
+                    }
                     if (launchInstaller(context, file)) {
+                        // Durable cleanup last, same as the two resume paths: the marker lives
+                        // until the sheet is actually up. Death before this point leaves
+                        // marker + file for the cold-start recovery; death after replays the M1
+                        // hand-off (recovery re-hands the same verified file; Android serializes).
+                        context.retirePendingInstallMarker()
                         failed = false
                         UpdateStatus.attempts.post(attempt, "")
                         runOnMain { onHandedOver() }
                     } else {
+                        // The finally deletes the file, so this attempt's marker goes with it
+                        // (owned: a newer attempt's marker survives).
+                        context.retirePendingInstallMarkerIfOwned(attempt)
                         UpdateStatus.attempts.fail(attempt, "Could not open the installer.")
                     }
                 }
