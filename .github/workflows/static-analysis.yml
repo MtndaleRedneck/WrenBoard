@@ -153,7 +153,7 @@ jobs:
             echo "ERROR: detekt produced no fresh non-empty SARIF; refusing to report green."
             exit 1
           fi
-          count=$(python3 -c "import json,sys; d=json.load(open('/tmp/detekt.sarif')); print(sum(len(r.get('results',[])) for r in d['runs']))")
+          count=$(python3 -c "import json,sys; d=json.load(open('/tmp/detekt.sarif')); runs=d.get('runs') or sys.exit('ERROR: detekt SARIF has no runs'); print(sum(len(r.get('results',[])) for r in runs))")
           echo "detekt completed report-only (exit $rc, $count SARIF results)"
           ls -la /tmp/detekt.sarif /tmp/detekt.html
       - name: Upload detekt SARIF
