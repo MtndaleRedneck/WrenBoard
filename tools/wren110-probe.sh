@@ -39,20 +39,53 @@ adb shell appops get "$PKG" REQUEST_INSTALL_PACKAGES || true
 adb shell appops set "$PKG" REQUEST_INSTALL_PACKAGES allow
 adb shell appops get "$PKG" REQUEST_INSTALL_PACKAGES
 
-# Stage the same-tree vc-12 update fixture into the app's updates cache dir. The CI release
-# fixture carries the CI-only debuggable patch, so run-as works without root; adb root chmod
-# fallback for images where run-as refuses. T3b asserts the fixture exists (fail-closed), so
-# a staging failure surfaces as a probe failure, not a silent skip.
+# Stage the same-tree vc-12 update fixture into the app's updates cache dir. No nested
+# `sh -c`: adb joins host argv with spaces before the device shell, so an inner quoted
+# payload would lose its grouping (I2 staging hypothesis). Each run-as call is one simple
+# command. adb-root fallback chowns to the app's own uid:gid (from the existing cache dir),
+# so a root-created updates dir never stays app-unwritable.
 adb push w17-vc12.apk /data/local/tmp/w17-vc12.apk
-if adb shell run-as "$PKG" sh -c 'mkdir -p cache/updates && cp /data/local/tmp/w17-vc12.apk cache/updates/w17-vc12-fixture.apk && ls -la cache/updates/w17-vc12-fixture.apk'; then
-  echo "fixture staged via run-as"
+STAGED=""
+if adb shell run-as "$PKG" mkdir -p cache/updates && \
+   adb shell run-as "$PKG" cp /data/local/tmp/w17-vc12.apk cache/updates/w17-vc12-fixture.apk; then
+  STAGED=run-as
 else
   echo "run-as staging failed; trying adb root fallback"
   adb root || true
   sleep 2
   adb wait-for-device
-  adb shell "mkdir -p /data/data/$PKG/cache/updates && cp /data/local/tmp/w17-vc12.apk /data/data/$PKG/cache/updates/w17-vc12-fixture.apk && chmod 666 /data/data/$PKG/cache/updates/w17-vc12-fixture.apk"
-  echo "fixture staged via adb root fallback"
+  adb shell "mkdir -p /data/data/$PKG/cache/updates"
+  adb shell "cp /data/local/tmp/w17-vc12.apk /data/data/$PKG/cache/updates/w17-vc12-fixture.apk"
+  APPOWN=$(adb shell stat -c '%u:%g' "/data/data/$PKG/cache" | tr -d '\r')
+  echo "app uid:gid from cache dir: $APPOWN"
+  adb shell "chown $APPOWN /data/data/$PKG/cache/updates /data/data/$PKG/cache/updates/w17-vc12-fixture.apk"
+  STAGED=root
+fi
+echo "fixture staged via $STAGED"
+
+# Actual-device verification before ANY T3/T3b interpretation (a stub is not proof). The check
+# matches the staging route: run-as route gets a real write test as the app user; the root
+# route (run-as refused image) verifies numeric ownership of file AND directory against the
+# app's own uid:gid, so a root-created updates dir never reads as app-unwritable.
+if [ "$STAGED" = "run-as" ]; then
+  adb shell run-as "$PKG" ls -la cache/updates/
+  if adb shell run-as "$PKG" touch cache/updates/.wtest && adb shell run-as "$PKG" rm cache/updates/.wtest; then
+    echo "updates cache writability as app user: OK (run-as)"
+  else
+    echo "updates cache writability as app user: FAILED (run-as) - T3b fixture precondition broken; classify any T3 failure as harness, not product"
+    exit 1
+  fi
+else
+  adb shell ls -la "/data/data/$PKG/cache/updates/"
+  FIXOWN=$(adb shell stat -c '%u:%g' "/data/data/$PKG/cache/updates/w17-vc12-fixture.apk" | tr -d '\r')
+  DIROWN=$(adb shell stat -c '%u:%g' "/data/data/$PKG/cache/updates" | tr -d '\r')
+  echo "ownership: fixture=$FIXOWN dir=$DIROWN app=$APPOWN"
+  if [ "$FIXOWN" = "$APPOWN" ] && [ "$DIROWN" = "$APPOWN" ]; then
+    echo "updates cache ownership verified (root route)"
+  else
+    echo "updates cache ownership MISMATCH (root route) - T3b fixture precondition broken; classify any T3 failure as harness, not product"
+    exit 1
+  fi
 fi
 
 IME=""

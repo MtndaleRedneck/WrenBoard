@@ -157,6 +157,9 @@ public class Wren110UpdaterProbeTest extends InputTestsBase {
                 + ctx.getPackageManager().canRequestPackageInstalls()
                 + " pendingApk=" + UpdateStatus.INSTANCE.getPendingApk()
                 + " readyVersion=" + UpdateStatus.INSTANCE.getReadyVersion());
+        if (!ctx.getPackageManager().canRequestPackageInstalls()) {
+            fail("PRECONDITION NOT MET: canRequestPackageInstalls false after appops grant (harness/emulator state, not product)");
+        }
         backgroundAndResume();
         saveShot("upd-t3-after-resume.png");
         Log.i(TAG, "PROBE T3 post-resume pendingApk=" + UpdateStatus.INSTANCE.getPendingApk()
@@ -185,6 +188,9 @@ public class Wren110UpdaterProbeTest extends InputTestsBase {
                 + ctx.getPackageManager().canRequestPackageInstalls()
                 + " pendingApk=" + UpdateStatus.INSTANCE.getPendingApk()
                 + " readyVersion=" + UpdateStatus.INSTANCE.getReadyVersion());
+        if (!ctx.getPackageManager().canRequestPackageInstalls()) {
+            fail("PRECONDITION NOT MET: canRequestPackageInstalls false after appops grant (harness/emulator state, not product)");
+        }
         backgroundAndResume();
         Thread.sleep(2000);
         final String top = grepFirst(shell("dumpsys activity activities"), "topResumedActivity");
