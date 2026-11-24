@@ -81,8 +81,8 @@ object UpdateVerify {
     fun toHex(b: ByteArray) = b.joinToString("") { "%02x".format(it) }
 
     /** Confirms the file is WrenBoard, newer, and signed with the same key as the running app. Throws [Failure]. */
-    fun verify(ctx: Context, f: File) {
-        try { verifyInner(ctx, f) }
+    fun verify(ctx: Context, f: File, expectedSha256: String? = null) {
+        try { verifyInner(ctx, f, expectedSha256) }
         catch (e: Failure) { throw e }
         catch (e: Exception) { throw Failure("The downloaded file could not be checked, so it was not installed.") }
     }
@@ -100,7 +100,18 @@ object UpdateVerify {
         }
 
     @Suppress("DEPRECATION")
-    private fun verifyInner(ctx: Context, f: File) {
+    private fun verifyInner(ctx: Context, f: File, expectedSha256: String? = null) {
+        // Exact release identity when an expected digest is supplied (cold-start resume): the
+        // staged bytes must still match the published checksum - archive parsing below is not
+        // integrity proof. Same comparison as the download path (constant form, lowercase hex).
+        if (expectedSha256 != null) {
+            val md = MessageDigest.getInstance("SHA-256")
+            f.inputStream().use { ins ->
+                val buf = ByteArray(32 * 1024); var n = ins.read(buf)
+                while (n >= 0) { md.update(buf, 0, n); n = ins.read(buf) }
+            }
+            if (toHex(md.digest()) != expectedSha256) throw Failure("The file did not match the published checksum, so it was deleted.")
+        }
         val pm = ctx.packageManager
         val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) PackageManager.GET_SIGNING_CERTIFICATES else PackageManager.GET_SIGNATURES
         val arch = pm.getPackageArchiveInfo(f.path, flags) ?: throw Failure("The downloaded file is not a valid app.")

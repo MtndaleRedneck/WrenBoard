@@ -54,16 +54,26 @@ import kotlinx.coroutines.withContext
 //import okhttp3.Request
 import org.futo.inputmethod.latin.R
 import org.futo.inputmethod.latin.uix.InfoDialog
+import androidx.datastore.preferences.core.edit
+
+import org.futo.inputmethod.latin.uix.dataStore
 import org.futo.inputmethod.latin.uix.getSetting
+import org.futo.inputmethod.latin.uix.getSettingBlocking
 import org.futo.inputmethod.latin.uix.setSetting
+import org.futo.inputmethod.latin.uix.setSettingBlocking
 import org.futo.inputmethod.updates.InstallReceiver
 import org.futo.inputmethod.updates.LAST_UPDATE_CHECK_FAILED
 import org.futo.inputmethod.updates.LAST_UPDATE_CHECK_RESULT
+import org.futo.inputmethod.updates.PENDING_INSTALL_ATTEMPT
+import org.futo.inputmethod.updates.PENDING_INSTALL_SHA256
+import org.futo.inputmethod.updates.PENDING_INSTALL_VERSION
 import org.futo.inputmethod.updates.SKIPPED_UPDATE_VERSION
 import org.futo.inputmethod.updates.UpdateAttempts
 import org.futo.inputmethod.updates.UpdateResult
 import org.futo.inputmethod.updates.UpdateVerify
 import org.futo.inputmethod.updates.openURI
+
+import java.io.File
 import java.io.ByteArrayOutputStream
 import java.net.HttpURLConnection
 import java.net.URL
@@ -160,6 +170,28 @@ private fun verifiedDownload(context: Context, updateResult: UpdateResult): java
 }
 
 @DelicateCoroutinesApi
+/** Owned marker retirement: the caller's attempt holds the tracker claim, so unconditional
+ *  removal is safe; one edit keeps the three keys atomic. */
+private suspend fun Context.retirePendingInstallMarker() {
+    dataStore.edit { prefs ->
+        prefs.remove(PENDING_INSTALL_VERSION)
+        prefs.remove(PENDING_INSTALL_SHA256)
+        prefs.remove(PENDING_INSTALL_ATTEMPT)
+    }
+}
+
+/** Deferred retirement after a freed hand-over: removes the marker only while it still belongs
+ *  to [attempt]. A newer attempt's marker (written after the tracker was freed) survives. */
+private suspend fun Context.retirePendingInstallMarkerIfOwned(attempt: Long) {
+    dataStore.edit { prefs ->
+        if (prefs[PENDING_INSTALL_ATTEMPT] == attempt) {
+            prefs.remove(PENDING_INSTALL_VERSION)
+            prefs.remove(PENDING_INSTALL_SHA256)
+            prefs.remove(PENDING_INSTALL_ATTEMPT)
+        }
+    }
+}
+
 private fun downloadAndInstall(context: Context, updateResult: UpdateResult, onHandedOver: () -> Unit) {
     // WrenBoard 1.10 (review M1): the tracker, not only the progress flag, gates a new attempt, so no second
     // download starts while a download runs or a handed-over install is still inside its window.
@@ -200,6 +232,10 @@ private fun downloadAndInstall(context: Context, updateResult: UpdateResult, onH
                 // resets readyVersion. Unreachable under the current gated UI (the busy gate holds for the
                 // whole download, so the token cannot change mid-attempt); latent for future callers only.
                 if (UpdateStatus.attempts.handOver(attempt)) {
+                    // A fresh direct hand-over supersedes any staged resume marker (the person
+                    // tapped Update again with permission already granted): clear it so a later
+                    // resume cannot re-select the old file.
+                    context.retirePendingInstallMarker()
                     if (launchInstaller(context, file)) {
                         failed = false
                         UpdateStatus.attempts.post(attempt, "")
@@ -213,6 +249,20 @@ private fun downloadAndInstall(context: Context, updateResult: UpdateResult, onH
                 // person comes back from that screen.
                 failed = false
                 UpdateStatus.pendingApk = file
+                // Android kills this process when the person grants "Allow from this source"
+                // (StorageManagerService kills on the MODE_ALLOWED transition), so the in-memory
+                // pendingApk cannot honor "the install starts when the person comes back" by
+                // itself. Persist a resume marker: version + the published digest. The marker
+                // only SELECTS the staged file for the cold-start recheck; identity, skip state,
+                // digest and UpdateVerify's checks all re-run before any hand-over.
+                context.dataStore.edit { prefs ->
+                    prefs[PENDING_INSTALL_VERSION] = updateResult.nextVersion
+                    prefs[PENDING_INSTALL_SHA256] = updateResult.sha256 ?: ""
+                    // Attempt identity tags the marker so retirement can be conditional on it
+                    // (DataStore edit blocks serialize, so a later attempt's write can never be
+                    // erased by an older attempt's deferred clear).
+                    prefs[PENDING_INSTALL_ATTEMPT] = attempt
+                }
                 UpdateStatus.attempts.post(attempt, "Turn on Allow, then come back.")
                 try {
                     context.startActivity(
@@ -306,6 +356,9 @@ fun UpdateDialog(navController: NavHostController) {
                                         if (e is kotlinx.coroutines.CancellationException) throw e
                                         // Cleanup first; fail() opens the gate only after it (I2 supersession review).
                                         try { f.delete() } catch (_: Throwable) { }
+                                        // Owned cleanup: the durable marker keys this branch's
+                                        // staging wrote die with the file they select.
+                                        appContext.retirePendingInstallMarker()
                                         UpdateStatus.readyVersion = -1
                                         // Review C2: say why instead of returning to the old words; the person can retry.
                                         UpdateStatus.attempts.fail(attempt, if (e is UpdateVerify.Failure) e.msg else "The downloaded file could not be checked, so it was not installed.")
@@ -318,6 +371,11 @@ fun UpdateDialog(navController: NavHostController) {
                                         // dismissed dialog produces no side effects. (onDispose only removes the
                                         // observer; it does not cancel this job while the destination is alive.)
                                         ensureActive()
+                                        // Owned cleanup, same boundary as the persisted branch:
+                                        // this hand-over supersedes the durable marker keys the
+                                        // staging branch wrote; clear them only after the file
+                                        // verified, so an earlier death leaves recovery intact.
+                                        appContext.retirePendingInstallMarker()
                                         // Launch only when the hand-over was recorded for a still-current attempt.
                                         if (UpdateStatus.attempts.handOver(attempt)) {
                                             UpdateStatus.attempts.downloadEnded(attempt)
@@ -343,6 +401,95 @@ fun UpdateDialog(navController: NavHostController) {
                                 }
                             }
                             job.invokeOnCompletion { UpdateStatus.attempts.downloadEnded(attempt) }
+                        }
+                    } else if (f == null && appContext.packageManager.canRequestPackageInstalls()) {
+                        // Cold start after the permission-grant process kill: the in-memory
+                        // pendingApk is gone, so a persisted marker selects the staged file.
+                        // Recovery runs only when THIS destination resumes (the observer's
+                        // home), never on a global cold start. The beginRecheck claim covers
+                        // the whole select+verify; ALL durable reads and file cleanup run on
+                        // Dispatchers.IO inside the claimed coroutine, never on main.
+                        val attempt = UpdateStatus.attempts.currentToken
+                        if (UpdateStatus.attempts.beginRecheck(attempt)) {
+                            val job = lifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
+                                try {
+                                    val markerV = appContext.getSettingBlocking(PENDING_INSTALL_VERSION, -1)
+                                    if (markerV != -1) {
+                                        val current = UpdateResult.fromString(appContext.getSettingBlocking(LAST_UPDATE_CHECK_RESULT, ""))
+                                        val skipped = appContext.getSettingBlocking(SKIPPED_UPDATE_VERSION, -1)
+                                        val markerSha = appContext.getSettingBlocking(PENDING_INSTALL_SHA256, "")
+                                        val candidate = File(UpdateVerify.updateDir(appContext), "WrenBoard-update.apk")
+                                        // Honor the marker only while it still names the CURRENT
+                                        // update (version-based, account-independent identity),
+                                        // the person has not skipped that version, the recorded
+                                        // digest is the current release's digest, and the file is
+                                        // present. Anything else is stale: clean up once.
+                                        val identityOk = current != null && current.nextVersion == markerV
+                                                && markerV != skipped && markerSha.isNotEmpty()
+                                                && markerSha == current.sha256 && candidate.exists()
+                                        if (!identityOk) {
+                                            try { candidate.delete() } catch (_: Throwable) { }
+                                            appContext.retirePendingInstallMarker()
+                                        } else {
+                                            val ok = try { UpdateVerify.verify(appContext, candidate, markerSha); true } catch (e: Throwable) {
+                                                if (e is kotlinx.coroutines.CancellationException) throw e
+                                                try { candidate.delete() } catch (_: Throwable) { }
+                                                appContext.retirePendingInstallMarker()
+                                                UpdateStatus.readyVersion = -1
+                                                UpdateStatus.attempts.fail(attempt, if (e is UpdateVerify.Failure) e.msg else "The downloaded file could not be checked, so it was not installed.")
+                                                false
+                                            }
+                                            if (ok) {
+                                                // Claim boundary: the recovery selector is cleared
+                                                // only AFTER the digest + trust checks pass and
+                                                // before the hand-over. Cancellation or process
+                                                // death earlier retains marker + file so a later
+                                                // resume retries instead of stranding them; after
+                                                // this point the hand-over guard owns the
+                                                // installer-return UX, so a cancelled sheet never
+                                                // auto-retries.
+                                                appContext.retirePendingInstallMarker()
+                                                ensureActive()
+                                                if (UpdateStatus.attempts.handOver(attempt)) {
+                                                    UpdateStatus.attempts.downloadEnded(attempt)
+                                                    ensureActive()
+                                                    if (launchInstaller(appContext, candidate)) {
+                                                        withContext(Dispatchers.Main) { navController.navigateUp() }
+                                                    } else {
+                                                        UpdateStatus.attempts.fail(attempt, "Could not open the installer.")
+                                                    }
+                                                } else {
+                                                    UpdateStatus.attempts.downloadEnded(attempt)
+                                                }
+                                            }
+                                        }
+                                    }
+                                } finally {
+                                    UpdateStatus.attempts.downloadEnded(attempt)
+                                }
+                            }
+                            job.invokeOnCompletion { UpdateStatus.attempts.downloadEnded(attempt) }
+                        } else {
+                            // Claim refused; only the handedOver shape (back from a cancelled
+                            // installer sheet) retires the selector, and even then ONLY in the
+                            // serialized retire-then-free order inside one IO coroutine:
+                            // while isHandedOver(attempt) holds, beginRecheck refuses every
+                            // claim, so retiring BEFORE endHandOver means no resume can claim
+                            // the old selector in the window; after the free there is no
+                            // selector left to claim. The retire is CAS on attempt identity, so
+                            // a marker staged by a NEWER attempt survives. The running and
+                            // token-mismatch shapes leave shared state to its active owner.
+                            // If the destination is popped before this coroutine runs, the
+                            // marker stays STAGED and the in-memory hand-over blocks claims for
+                            // the process's life; a cold start later recovers via the marker,
+                            // which is the promised "come back" behavior rather than an
+                            // auto-retry against the cancelled sheet.
+                            lifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
+                                if (UpdateStatus.attempts.isHandedOver(attempt)) {
+                                    appContext.retirePendingInstallMarkerIfOwned(attempt)
+                                    UpdateStatus.attempts.endHandOver(attempt, "If the install did not finish, tap Update to try again.")
+                                }
+                            }
                         }
                     } else if (f == null) {
                         // Review M1: back at this screen while a hand-over has no answer. A completed self-install
