@@ -1,7 +1,9 @@
 package org.futo.inputmethod.latin.uix.settings
 
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -74,8 +76,12 @@ class Wren110HandOffCleanupTest {
                     onCleanupFailure = { },
                 )
             } finally {
-                // The production finally's reset, via the same cancellation-safe helper.
-                runFinalCleanupRegardless { resetRan.set(true) }
+                // Mirrors the production finally's shape: the reset includes a dispatcher
+                // transition (Dispatchers.Main there; Default here - JVM unit tests have no
+                // Main dispatcher), which is the cancellation-sensitive step the
+                // NonCancellable wrapper must cover. Without the wrapper this dispatch throws
+                // on the cancelled job and resetRan stays false (mutation-checked).
+                runFinalCleanupRegardless { withContext(Dispatchers.Default) { resetRan.set(true) } }
             }
         }
         org.junit.Assert.assertTrue(retireEntered.await(5, TimeUnit.SECONDS))
