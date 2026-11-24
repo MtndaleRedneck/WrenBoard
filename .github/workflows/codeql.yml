@@ -4,8 +4,6 @@
 name: CodeQL
 
 on:
-  push:
-    branches: [instinct1/free-review-kit]  # TEMP validation trigger, removed before merge
   pull_request:
     branches: [main]
   schedule:
