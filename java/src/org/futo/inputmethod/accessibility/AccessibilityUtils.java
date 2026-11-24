@@ -78,7 +78,7 @@ public final class AccessibilityUtils {
     }
 
     private void initInternal(final Context context) {
-        mContext = context;
+        mContext = context.getApplicationContext();
         mAccessibilityManager =
                 (AccessibilityManager) context.getSystemService(Context.ACCESSIBILITY_SERVICE);
         mAudioManager = (AudioManager) context.getSystemService(Context.AUDIO_SERVICE);
