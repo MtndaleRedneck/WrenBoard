@@ -184,6 +184,43 @@ POS_INSTALL_OK=0
 if grep -q 'Success' posinstall-out.txt && [ -n "$BASE_VC" ] && [ -n "$NEW_VC" ] && [ "$NEW_VC" -gt "$BASE_VC" ] && [ "$IME_LISTED" -ge 1 ]; then POS_INSTALL_OK=1; fi
 echo "POS_INSTALL_OK=$POS_INSTALL_OK" | tee -a probe-exit.txt
 
+# T6 (Gemini review MUST-FIX 3 verification): the run-together split chip end-to-end.
+# Type "goingblank" through REAL key dispatch (composing), OCR-locate the adjacent
+# "going"/"blank" chip in the suggestion strip, tap it, then type one more letter: a clean
+# commit gives "going blank x" in the target field's IMETARGET logcat mirror (committed text,
+# spacing, and no composing state left, all in one observable). Script-level, not JUnit: this
+# needs real key dispatch and screen taps. No logcat -c: the full log is T5 evidence.
+T6_OK=0
+adb shell ime enable "$IME" || true
+adb shell ime set "$IME" || true
+adb shell am start -W -n com.wrenboard.imetarget/.TestInput >/dev/null
+sleep 3
+adb shell input tap 400 500
+sleep 3
+for K in KEYCODE_G KEYCODE_O KEYCODE_I KEYCODE_N KEYCODE_G KEYCODE_B KEYCODE_L KEYCODE_A KEYCODE_N KEYCODE_K; do
+  adb shell input keyevent "$K"
+  sleep 1
+done
+sleep 3
+adb exec-out screencap -p > probe-t6-strip.png
+python3 tools/wren110-t6-chip.py probe-t6-strip.png | tee t6-chip.txt
+CHIPLINE=$(grep '^CHIP ' t6-chip.txt || true)
+if [ -n "$CHIPLINE" ] && [ "$CHIPLINE" != "CHIP none" ]; then
+  CX=$(echo "$CHIPLINE" | awk '{print $2}')
+  CY=$(echo "$CHIPLINE" | awk '{print $3}')
+  adb shell input tap "$CX" "$CY"
+  sleep 2
+  adb shell input keyevent KEYCODE_X
+  sleep 2
+fi
+adb exec-out screencap -p > probe-t6-after.png
+adb logcat -d -s IMETARGET:I | tail -3 | tee t6-field.txt
+FIELD=$(grep 'FIELD=' t6-field.txt | tail -1 | sed -E 's/.*FIELD=//')
+echo "T6 committed field after chip tap + x: [$FIELD]" | tee -a probe-exit.txt
+if [ "$FIELD" = "going blank x" ]; then T6_OK=1; fi
+echo "T6_OK=$T6_OK" | tee -a probe-exit.txt
+
+test "$T6_OK" = 1
 test "$RESULT_OK" = 1
 test "$T5A_OK" = 1
 test "$T5B_OK" = 1
