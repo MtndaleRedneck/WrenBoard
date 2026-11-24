@@ -34,8 +34,9 @@ jobs:
         run: |
           set -euo pipefail
           git cat-file -e e059314c429b80f1a6968f3fb1ec0017e15948a1^{commit}
+          test "$(git merge-base e059314c429b80f1a6968f3fb1ec0017e15948a1 HEAD)" = "e059314c429b80f1a6968f3fb1ec0017e15948a1"
           git diff --name-only e059314c429b80f1a6968f3fb1ec0017e15948a1 HEAD | sort > /tmp/wren-diff.txt
-          printf '%s\n' .github/workflows/wren110-rel-runtime.yml tests/src/org/futo/inputmethod/latin/Wren110BackDispositionProbeTest.java | sort > /tmp/wren-allowed.txt
+          printf '%s\n' .github/workflows/wren110-rel-runtime.yml tests/src/org/futo/inputmethod/latin/Wren110BackDispositionProbeTest.java tests/src/org/futo/inputmethod/latin/Wren110UpdaterProbeTest.java | sort > /tmp/wren-allowed.txt
           EXTRA=$(comm -23 /tmp/wren-diff.txt /tmp/wren-allowed.txt)
           test -z "$EXTRA" || { echo "frozen-source guard: unexpected changed files: $EXTRA"; exit 1; }
       - name: Build dependencies
@@ -133,7 +134,7 @@ jobs:
           echo "test apk dex count: $N; injecting as classes$NEXT.dex"
           cp /tmp/ktx/classes.dex "/tmp/ktx/classes$NEXT.dex"
           (cd /tmp/ktx && zip -q "$GITHUB_WORKSPACE/w17-rel-tests.apk" "classes$NEXT.dex")
-          "$bt/apksigner" sign --ks java/shared.keystore --ks-pass pass:android w17-rel-tests.apk
+          "$bt/apksigner" sign --ks java/shared.keystore --ks-pass pass:android --v1-signing-enabled false --v2-signing-enabled true --v3-signing-enabled false --v4-signing-enabled false w17-rel-tests.apk
           sha256sum w17-rel-tests.apk
       - name: Verify fixture signatures match (same debug keystore)
         run: |
@@ -170,7 +171,7 @@ jobs:
           disable-animations: false
           script: bash tools/wren18-runtime.sh w17-release.apk w17-rel-tests.apk
 
-      - name: Back-disposition pipeline probe (diagnostic, log-only; frozen tools/wren18-runtime.sh untouched)
+      - name: Diagnostics probes (disposition pipeline + updater lifecycle; frozen tools/wren18-runtime.sh untouched)
         uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
         with:
           api-level: 33
@@ -206,9 +207,19 @@ jobs:
             sleep 5
             TESTPKG=$(adb shell pm list instrumentation | tr -d '\r' | grep "target=$PKG" | sed -E 's/^instrumentation:([^ ]+).*/\1/' | head -1)
             test -n "$TESTPKG"
-            timeout 300 adb shell am instrument -w -r -e class org.futo.inputmethod.latin.Wren110BackDispositionProbeTest "$TESTPKG" | tee probe-out.txt || true
-            adb logcat -d -s WBPROBE:I WB18_NAV:I > probe-log.txt || true
-            adb shell dumpsys dropbox --print 2>/dev/null | grep -i -B2 -A40 'anr\|crash' | head -150 > probe-dropbox.txt || true
+            set +e
+            timeout 480 adb shell am instrument -w -r -e class org.futo.inputmethod.latin.Wren110BackDispositionProbeTest,org.futo.inputmethod.latin.Wren110UpdaterProbeTest "$TESTPKG" | tee probe-out.txt
+            PROBE_EXIT=$?
+            set -e
+            echo "PROBE_EXIT=$PROBE_EXIT" | tee probe-exit.txt
+            # Unconditional full-fidelity captures (I2 capture-adequacy correction): no tag filters,
+            # no grep caps, ANR traces if any exist, including ordinary startup ANRs.
+            adb logcat -d > probe-logcat-full.txt || true
+            adb shell dumpsys dropbox --print > probe-dropbox-full.txt || true
+            adb shell ls -la /data/anr/ > probe-anr-list.txt 2>&1 || true
+            adb pull /data/anr probe-anr || true
+            adb pull /sdcard/Android/data/$PKG/files probe-files || true
+            exit $PROBE_EXIT
 
       - name: Preserve probe evidence
         if: always()
@@ -217,8 +228,12 @@ jobs:
           name: wren110-rel-probe
           path: |
             probe-out.txt
-            probe-log.txt
-            probe-dropbox.txt
+            probe-exit.txt
+            probe-logcat-full.txt
+            probe-dropbox-full.txt
+            probe-anr-list.txt
+            probe-anr/
+            probe-files/
           retention-days: 3
           if-no-files-found: warn
 
