@@ -13,6 +13,9 @@ gradle.projectsLoaded {
                             htmlReport = true
                             abortOnError = false
                             checkReleaseBuilds = false
+                            // lint 8.10.1's Compose detector crashes on Kotlin 2.1 metadata (kotlinx-metadata max 2.0.0);
+                            // disabling only this one crashing check keeps the scan complete. Report-only, no product change.
+                            disable.add('CoroutineCreationDuringComposition')
                         }
                     }
                 }
