@@ -8,14 +8,23 @@
  * "downloaded" file is staged by the probe. UpdateVerify's package/signer/newer checks DO run
  * where the path includes them.
  *
- * Log-only except the two fail-closed asserts marked below. No network, no real install, no
- * publication. Synthetic clock values in T4 say nothing about actual 10-minute UI timing.
+ * Per-case JUnit3 methods (ServiceTestCase runs each test* method separately) so case counts
+ * stay distinguishable: a case that dies mid-run shortens the instrumentation summary instead
+ * of passing silently. Assertion grounds: UpdateScreen.kt ON_RESUME pendingApk path
+ * (pendingApk consumed, verify failure deletes file and resets readyVersion, verify success
+ * calls the production launchInstaller) and UpdateVerify.verifyInner (package, signer, newer
+ * versionCode all checked).
+ *
+ * T2/T3b notes: the dummy file in T2 proves route/grant/installer UI only, never a valid
+ * update installation. T3b uses the same-tree vc-12 APK (same source, same CI debug signer,
+ * higher versionCode) staged by tools/wren110-probe.sh; that is the valid-replacement case.
+ * T4 uses synthetic clock values and says nothing about actual 10-minute UI timing.
+ * No network, no real install completion, no publication.
  */
 package org.futo.inputmethod.latin;
 
 import android.app.Instrumentation;
 import android.content.Context;
-import android.content.Intent;
 import android.graphics.Bitmap;
 import android.net.Uri;
 import android.os.ParcelFileDescriptor;
@@ -38,6 +47,8 @@ public class Wren110UpdaterProbeTest extends InputTestsBase {
 
     private static final String TAG = "WBUPD";
     private static final String PKG = "com.wrenboard.keyboard";
+    private static final String UPDATE_APK = "WrenBoard-update.apk";
+    private static final String VALID_FIXTURE = "w17-vc12-fixture.apk";
 
     private static String shell(final String cmd) throws Exception {
         final Instrumentation instr = InstrumentationRegistry.getInstrumentation();
@@ -68,22 +79,50 @@ public class Wren110UpdaterProbeTest extends InputTestsBase {
         Log.i(TAG, "PROBE shot saved " + out.getAbsolutePath());
     }
 
-    public void testUpdaterLifecycleProbe() throws Exception {
-        final Context ctx = getService().getApplicationContext();
-
-        // T1: the 1.10 FileProvider config actually resolves for the updates cache dir (fail-closed).
-        final File dir = new File(ctx.getCacheDir(), "updates");
+    private File updatesDir() {
+        final File dir = new File(getService().getCacheDir(), "updates");
         dir.mkdirs();
-        final File dummy = new File(dir, "WrenBoard-update.apk");
+        return dir;
+    }
+
+    private File writeDummy() throws Exception {
+        final File dummy = new File(updatesDir(), UPDATE_APK);
         try (FileOutputStream fos = new FileOutputStream(dummy)) {
             fos.write("WBPROBE-DUMMY not an apk".getBytes("UTF-8"));
         }
+        return dummy;
+    }
+
+    /** Seed the update-check result and open the update settings screen (production WBDBG hooks). */
+    private void seedAndOpenUpdateScreen() throws Exception {
+        shell("am broadcast -a " + PKG + ".WBDBG -p " + PKG + " --es cmd seedupdate:99.0.0|wbprobe");
+        Thread.sleep(1000);
+        shell("am broadcast -a " + PKG + ".WBDBG -p " + PKG + " --es cmd settings:update");
+        Thread.sleep(4000);
+    }
+
+    /** Background, then resume the settings activity so the UpdateDialog ON_RESUME observer fires. */
+    private void backgroundAndResume() throws Exception {
+        shell("input keyevent KEYCODE_HOME");
+        Thread.sleep(2000);
+        shell("am start -n " + PKG + "/org.futo.inputmethod.latin.uix.settings.SettingsActivity");
+        Thread.sleep(4000);
+    }
+
+    // T1: the 1.10 FileProvider config actually resolves for the updates cache dir (fail-closed).
+    public void testT1ProviderResolves() throws Exception {
+        final Context ctx = getService().getApplicationContext();
+        final File dummy = writeDummy();
         final Uri uri = FileProvider.getUriForFile(ctx, PKG + ".updates", dummy);
         assertTrue("T1 FileProvider uri for staged update file", uri.toString().contains("updates"));
         Log.i(TAG, "PROBE T1 provider ok uri=" + uri);
+    }
 
-        // T2: the PRODUCTION launchInstaller hands the file to Android's install screen (fail-closed
-        // on the route/grant/installer UI only; a dummy file proves NOT a valid update installation).
+    // T2: the PRODUCTION launchInstaller hands the file to Android's install screen (fail-closed
+    // on the route/grant/installer UI only; a dummy file proves NOT a valid update installation).
+    public void testT2ProductionInstallerRoute() throws Exception {
+        final Context ctx = getService().getApplicationContext();
+        final File dummy = writeDummy();
         final Method m = Class.forName("org.futo.inputmethod.latin.uix.settings.UpdateScreenKt")
                 .getDeclaredMethod("launchInstaller", Context.class, java.io.File.class);
         m.setAccessible(true);
@@ -97,31 +136,70 @@ public class Wren110UpdaterProbeTest extends InputTestsBase {
         saveShot("upd-t2-installer.png");
         shell("input keyevent KEYCODE_BACK");
         Thread.sleep(1500);
+    }
 
-        // T3: the real UpdateDialog ON_RESUME pendingApk path with a TAMPERED staged file (log-only;
-        // records whether the person is told anything when the re-check fails on resume).
-        shell("am broadcast -a " + PKG + ".WBDBG -p " + PKG + " --es cmd seedupdate:99.0.0|wbprobe");
-        Thread.sleep(1000);
-        UpdateStatus.INSTANCE.setPendingApk(dummy); // staged: stands in for the verified download; bypasses fetch+checksum
-        shell("am broadcast -a " + PKG + ".WBDBG -p " + PKG + " --es cmd settings:update");
-        Thread.sleep(4000);
+    // T3: ON_RESUME with a TAMPERED staged file. Fail-closed on the production rejection path
+    // (UpdateScreen.kt: verify failure consumes pendingApk, deletes the file, resets readyVersion).
+    public void testT3TamperedPendingApkRejected() throws Exception {
+        final Context ctx = getService().getApplicationContext();
+        final File tampered = writeDummy();
+        seedAndOpenUpdateScreen();
+        UpdateStatus.INSTANCE.setPendingApk(tampered); // staged: stands in for the verified download; bypasses fetch+checksum
+        Thread.sleep(500);
         saveShot("upd-t3-dialog-before.png");
         Log.i(TAG, "PROBE T3 pre-resume canRequestPackageInstalls="
                 + ctx.getPackageManager().canRequestPackageInstalls()
-                + " pendingApk=" + UpdateStatus.INSTANCE.getPendingApk() + " readyVersion=" + UpdateStatus.INSTANCE.getReadyVersion());
-        shell("input keyevent KEYCODE_HOME");
-        Thread.sleep(2000);
-        shell("am start -n " + PKG + "/org.futo.inputmethod.latin.uix.settings.SettingsActivity");
-        Thread.sleep(4000);
+                + " pendingApk=" + UpdateStatus.INSTANCE.getPendingApk()
+                + " readyVersion=" + UpdateStatus.INSTANCE.getReadyVersion());
+        backgroundAndResume();
         saveShot("upd-t3-after-resume.png");
         Log.i(TAG, "PROBE T3 post-resume pendingApk=" + UpdateStatus.INSTANCE.getPendingApk()
                 + " readyVersion=" + UpdateStatus.INSTANCE.getReadyVersion()
-                + " fileExists=" + dummy.exists()
+                + " fileExists=" + tampered.exists()
                 + " downloadText='" + UpdateStatus.INSTANCE.getDownloadText().getValue() + "'");
-        // no assertion on the OS/app here: observed silence vs visible failure is reported as evidence.
+        assertNull("T3 tampered pendingApk consumed on resume", UpdateStatus.INSTANCE.getPendingApk());
+        assertEquals("T3 readyVersion reset after failed re-verify", -1,
+                UpdateStatus.INSTANCE.getReadyVersion());
+        assertFalse("T3 tampered file deleted after failed re-verify", tampered.exists());
+    }
 
-        // T4: hand-over guard transitions with a SYNTHETIC clock (log-only; no statement about the
-        // actual 10-minute UI timing).
+    // T3b: ON_RESUME with the VALID same-tree vc-12 fixture (same source, same CI debug signer,
+    // higher versionCode): the production re-verify must accept it and the production
+    // launchInstaller must fire. This is the valid-replacement/signer/version success case the
+    // dummy file can never prove. Fixture staged by tools/wren110-probe.sh; absent = harness bug.
+    public void testT3bValidFixtureAccepted() throws Exception {
+        final Context ctx = getService().getApplicationContext();
+        final File valid = new File(updatesDir(), VALID_FIXTURE);
+        assertTrue("T3b valid vc-12 fixture absent from updates cache (staging failed)", valid.exists());
+        seedAndOpenUpdateScreen();
+        UpdateStatus.INSTANCE.setPendingApk(valid);
+        Thread.sleep(500);
+        saveShot("upd-t3b-dialog-before.png");
+        Log.i(TAG, "PROBE T3b pre-resume canRequestPackageInstalls="
+                + ctx.getPackageManager().canRequestPackageInstalls()
+                + " pendingApk=" + UpdateStatus.INSTANCE.getPendingApk()
+                + " readyVersion=" + UpdateStatus.INSTANCE.getReadyVersion());
+        backgroundAndResume();
+        Thread.sleep(2000);
+        final String top = grepFirst(shell("dumpsys activity activities"), "topResumedActivity");
+        saveShot("upd-t3b-after-resume.png");
+        Log.i(TAG, "PROBE T3b post-resume pendingApk=" + UpdateStatus.INSTANCE.getPendingApk()
+                + " readyVersion=" + UpdateStatus.INSTANCE.getReadyVersion()
+                + " fileExists=" + valid.exists() + " top=" + top);
+        assertNull("T3b valid pendingApk consumed on resume", UpdateStatus.INSTANCE.getPendingApk());
+        assertTrue("T3b valid fixture NOT deleted by re-verify", valid.exists());
+        // The install offer surfaces either as the package installer or, when the unknown-sources
+        // grant is missing, as the system install-unknown-apps screen. Both prove the production
+        // re-verify accepted the file and the production installer route fired.
+        assertTrue("T3b install offer surfaced (installer UI or unknown-sources screen), top=" + top,
+                top.contains("packageinstaller") || top.contains("com.android.settings"));
+        shell("input keyevent KEYCODE_BACK");
+        Thread.sleep(1500);
+    }
+
+    // T4: hand-over guard transitions with a SYNTHETIC clock (log-only; no statement about the
+    // actual 10-minute UI timing).
+    public void testT4HandOverGuardSynthetic() {
         final long now = System.currentTimeMillis();
         final long tok = UpdateStatus.INSTANCE.getAttempts().getCurrentToken();
         UpdateStatus.INSTANCE.getAttempts().handOver(tok, now);
@@ -129,7 +207,7 @@ public class Wren110UpdaterProbeTest extends InputTestsBase {
         final boolean busyAfterSyntheticExpiry = UpdateStatus.INSTANCE.getAttempts().isBusy(now + 11L * 60 * 1000);
         Log.i(TAG, "PROBE T4 handOver token=" + tok + " isBusy(now)=" + busyNow
                 + " isBusy(synthetic +11min)=" + busyAfterSyntheticExpiry);
-
-        Log.i(TAG, "PROBE updater end");
+        assertTrue("T4 hand-over holds at hand-out time", busyNow);
+        assertFalse("T4 hand-over released after synthetic expiry", busyAfterSyntheticExpiry);
     }
 }

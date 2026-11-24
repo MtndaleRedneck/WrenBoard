@@ -36,7 +36,7 @@ jobs:
           git cat-file -e e059314c429b80f1a6968f3fb1ec0017e15948a1^{commit}
           test "$(git merge-base e059314c429b80f1a6968f3fb1ec0017e15948a1 HEAD)" = "e059314c429b80f1a6968f3fb1ec0017e15948a1"
           git diff --name-only e059314c429b80f1a6968f3fb1ec0017e15948a1 HEAD | sort > /tmp/wren-diff.txt
-          printf '%s\n' .github/workflows/wren110-rel-runtime.yml tests/src/org/futo/inputmethod/latin/Wren110BackDispositionProbeTest.java tests/src/org/futo/inputmethod/latin/Wren110UpdaterProbeTest.java | sort > /tmp/wren-allowed.txt
+          printf '%s\n' .github/workflows/wren110-rel-runtime.yml tests/src/org/futo/inputmethod/latin/Wren110BackDispositionProbeTest.java tests/src/org/futo/inputmethod/latin/Wren110UpdaterProbeTest.java tools/wren110-probe.sh | sort > /tmp/wren-allowed.txt
           EXTRA=$(comm -23 /tmp/wren-diff.txt /tmp/wren-allowed.txt)
           test -z "$EXTRA" || { echo "frozen-source guard: unexpected changed files: $EXTRA"; exit 1; }
       - name: Build dependencies
@@ -112,6 +112,27 @@ jobs:
           print('Resolved full app and test APKs',list(app.values()),list(tests.values()))
           PYAPK
           sha256sum w17-release.apk w17-rel-tests.apk
+      - name: Build same-tree vc-12 update fixture (valid replacement - same source, same CI debug signer, higher versionCode)
+        run: |
+          set -euo pipefail
+          VERSION_CODE=12 ./gradlew --no-daemon --max-workers=2 -Dorg.gradle.jvmargs='-Xmx5g -Dfile.encoding=UTF-8' -Pkotlin.compiler.execution.strategy=in-process assembleStableRelease -Pandroid.injected.build.abi=x86_64
+          python3 - <<'PYAPK12'
+          from pathlib import Path
+          import zipfile,hashlib,shutil
+          app={}
+          for p in Path('build').rglob('*.apk'):
+              try:
+                  with zipfile.ZipFile(p) as z:
+                      names=z.namelist()
+                      if 'classes.dex' not in names: continue
+                      if not any(n.startswith('lib/') and n.endswith('.so') for n in names): continue
+                  app[hashlib.sha256(p.read_bytes()).hexdigest()]=p
+              except zipfile.BadZipFile: pass
+          assert len(app)==1, ('expected one full app APK',list(app.values()))
+          shutil.copyfile(next(iter(app.values())), 'w17-vc12.apk')
+          print('Resolved vc-12 update fixture',list(app.values()))
+          PYAPK12
+          sha256sum w17-vc12.apk
       - name: Repair TEST-apk classpath (inject kotlin-stdlib dex; app APK and its R8 output untouched)
         run: |
           set -euo pipefail
@@ -143,6 +164,8 @@ jobs:
           "$bt/apksigner" verify --print-certs w17-release.apk | grep 'SHA-256' | sort > rel-signer.txt
           "$bt/apksigner" verify --print-certs w17-rel-tests.apk | grep 'SHA-256' | sort > test-signer.txt
           diff rel-signer.txt test-signer.txt
+          "$bt/apksigner" verify --print-certs w17-vc12.apk | grep 'SHA-256' | sort > vc12-signer.txt
+          diff rel-signer.txt vc12-signer.txt
       - name: Preserve fixture APKs and tests
         uses: actions/upload-artifact@v4
         with:
@@ -150,6 +173,7 @@ jobs:
           path: |
             w17-release.apk
             w17-rel-tests.apk
+            w17-vc12.apk
             build/test-results/
             voiceinput-shared/build/test-results/
           retention-days: 3
@@ -180,46 +204,7 @@ jobs:
           profile: Nexus 6
           ram-size: 4096M
           disable-animations: false
-          script: |
-            set -euxo pipefail
-            PKG=com.wrenboard.keyboard
-            adb root || true
-            adb wait-for-device
-            adb shell wm size 1080x2316
-            adb shell wm density 420
-            adb shell cmd overlay enable com.android.internal.systemui.navbar.threebutton || true
-            adb shell settings put secure navigation_mode 0 || true
-            adb install -r -t w17-release.apk
-            adb install -r -t w17-rel-tests.apk
-            adb install -r tools/ime-target/out/imetarget.apk
-            IME=""
-            for attempt in $(seq 1 20); do
-              IME=$(adb shell ime list -a -s | tr -d '\r' | grep "^$PKG/" | head -1 || true)
-              [ -n "$IME" ] && break
-              sleep 2
-            done
-            test -n "$IME"
-            adb shell ime enable "$IME"
-            adb shell ime set "$IME"
-            adb shell am start -W -n com.wrenboard.imetarget/.TestInput >/dev/null
-            sleep 2
-            adb shell input tap 400 500
-            sleep 5
-            TESTPKG=$(adb shell pm list instrumentation | tr -d '\r' | grep "target=$PKG" | sed -E 's/^instrumentation:([^ ]+).*/\1/' | head -1)
-            test -n "$TESTPKG"
-            set +e
-            timeout 480 adb shell am instrument -w -r -e class org.futo.inputmethod.latin.Wren110BackDispositionProbeTest,org.futo.inputmethod.latin.Wren110UpdaterProbeTest "$TESTPKG" | tee probe-out.txt
-            PROBE_EXIT=$?
-            set -e
-            echo "PROBE_EXIT=$PROBE_EXIT" | tee probe-exit.txt
-            # Unconditional full-fidelity captures (I2 capture-adequacy correction): no tag filters,
-            # no grep caps, ANR traces if any exist, including ordinary startup ANRs.
-            adb logcat -d > probe-logcat-full.txt || true
-            adb shell dumpsys dropbox --print > probe-dropbox-full.txt || true
-            adb shell ls -la /data/anr/ > probe-anr-list.txt 2>&1 || true
-            adb pull /data/anr probe-anr || true
-            adb pull /sdcard/Android/data/$PKG/files probe-files || true
-            exit $PROBE_EXIT
+          script: bash tools/wren110-probe.sh
 
       - name: Preserve probe evidence
         if: always()
