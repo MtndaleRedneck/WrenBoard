@@ -2,8 +2,11 @@ name: wren110-rel-runtime
 # Release-variant runtime evidence for the frozen 1.10 candidate (e059314): release
 # buildType (R8 minified, shrink off) signed with the committed debug keystore fallback
 # (no secrets on this run), so the debug-signed androidTest APK can instrument it.
-# CI-time proguard keeps let the Wren instrumented tests bind to the minified app;
-# the candidate source tree is untouched (guard step below).
+# CI-time patch adds proguard keeps (test binding) and debuggable=true: without it
+# BuildConfig.DEBUG is false in release and the harness hooks (WBDBG receiver, WB18_NAV
+# logs) do not exist, so the runtime suite cannot probe the app. Fixture therefore =
+# release buildType + R8 + debug harness hooks; not byte-identical to the shipped APK.
+# Candidate source tree is untouched (guard step below).
 on:
   push:
     branches: [instinct1/release-1.10.0-relruntime]
@@ -30,8 +33,8 @@ jobs:
       - name: Verify frozen app source
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD^)" = e059314c429b80f1a6968f3fb1ec0017e15948a1
-          test "$(git diff --name-only HEAD^ HEAD)" = .github/workflows/wren110-rel-runtime.yml
+          git cat-file -e e059314c429b80f1a6968f3fb1ec0017e15948a1^{commit}
+          test "$(git diff --name-only e059314c429b80f1a6968f3fb1ec0017e15948a1 HEAD)" = .github/workflows/wren110-rel-runtime.yml
       - name: Build dependencies
         run: git submodule update --init java/assets/themes java/res-large libs translations voiceinput-shared/src/main/ml
       - name: Reuse shipped swipe weights for regression fixture
@@ -60,7 +63,7 @@ jobs:
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'ndk;28.2.13676358'
           python3 -m pip install --break-system-packages pillow
           sudo apt-get install -y -q ffmpeg
-      - name: CI-only R8 keeps for Wren test hooks (candidate source untouched)
+      - name: CI-only fixture patch (keeps + debuggable; candidate source untouched)
         run: |
           cat > proguard-wren-test-keeps.pro <<'EOFKEEPS'
           -keep class org.futo.inputmethod.latin.LatinIME { *; }
@@ -73,8 +76,13 @@ jobs:
           old = "proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'"
           new = "proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro', 'proguard-wren-test-keeps.pro'"
           assert s.count(old) == 1, ('release proguardFiles line not found exactly once', s.count(old))
-          p.write_text(s.replace(old, new))
+          s = s.replace(old, new)
+          rel = "            minifyEnabled true\n            shrinkResources false"
+          patched = "            minifyEnabled true\n            debuggable true\n            shrinkResources false"
+          assert s.count(rel) == 1, ('release minify block not found exactly once', s.count(rel))
+          p.write_text(s.replace(rel, patched))
           PYPATCH
+          grep -n 'debuggable true' build.gradle
       - name: Build release fixture APK (debug keystore fallback, no secrets)
         run: |
           test ! -f keystore.properties
@@ -142,7 +150,10 @@ jobs:
 # Release-variant runtime evidence for the frozen 1.10 candidate (e059314): release
 # buildType (R8 minified, shrink off) signed with the committed debug keystore fallback
 # (no secrets on this run), so the debug-signed androidTest APK can instrument it.
-# CI-time proguard keeps let the Wren instrumented tests bind to the minified app;
-# the candidate source tree is untouched (guard step below).
+# CI-time patch adds proguard keeps (test binding) and debuggable=true: without it
+# BuildConfig.DEBUG is false in release and the harness hooks (WBDBG receiver, WB18_NAV
+# logs) do not exist, so the runtime suite cannot probe the app. Fixture therefore =
+# release buildType + R8 + debug harness hooks; not byte-identical to the shipped APK.
+# Candidate source tree is untouched (guard step below).
           path: runtime18/
           retention-days: 3
