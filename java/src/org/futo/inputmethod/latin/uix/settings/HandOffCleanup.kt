@@ -29,4 +29,4 @@ internal suspend fun recordSuccessfulHandOff(
  *  isDownloading true forever. Running the reset under NonCancellable keeps the successful
  *  hand-off / file-retention state intact and always clears the flag. */
 internal suspend fun runFinalCleanupRegardless(reset: suspend () -> Unit) =
-    withContext(NonCancellable) { reset() }
+    reset() // MUTATION UNDER TEST (never merged): wrapper removed; the (33) job-cancel test must go RED
