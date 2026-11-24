@@ -180,6 +180,45 @@ class UpdateAttemptsTest {
         assertTrue(t.isBusy(now = 0L)) // the running download still counts
     }
 
+    @Test fun recheckBlocksANewAttemptUntilResolved() {
+        // I2 review of (17): while the kept APK is re-verified in the background, no new attempt may start;
+        // the gate opens only when the re-check resolves (here: handed over, then the person comes back).
+        val t = tracker()
+        val a = t.start()
+        t.downloadEnded(a)
+        assertFalse(t.isBusy(now = 1_000L))
+        assertTrue(t.beginRecheck(a))
+        assertTrue(t.isBusy(now = 1_000L))
+        assertFalse(t.beginRecheck(a)) // a second overlapping re-check is refused
+        assertTrue(t.handOver(a, now = 1_000L))
+        t.downloadEnded(a)
+        assertTrue(t.isBusy(now = 1_000L)) // still inside the hand-over window
+        assertTrue(t.endHandOver(a, "retry"))
+        assertFalse(t.isBusy(now = 1_000L))
+    }
+
+    @Test fun failedRecheckOpensTheGateAfterCleanup() {
+        // fail() only records the outcome; the re-check coroutine's finally block (downloadEnded) is what
+        // frees the running mark. This models that exact sequence, cleanup order included.
+        val t = tracker()
+        val a = t.start()
+        t.downloadEnded(a)
+        assertTrue(t.beginRecheck(a))
+        assertTrue(t.fail(a, "The downloaded file could not be checked, so it was not installed."))
+        assertTrue(t.isBusy(now = 1_000L)) // still busy between fail() and the finally block
+        t.downloadEnded(a) // the coroutine's finally
+        assertFalse(t.isBusy(now = 1_000L))
+        assertEquals(UpdateAttempts.Outcome.Failed, t.lastOutcome)
+    }
+
+    @Test fun handOverForAnOldAttemptIsRefused() {
+        val t = tracker()
+        val a = t.start()
+        t.downloadEnded(a)
+        assertFalse(t.handOver(a + 999, now = 0L))
+        assertFalse(t.isBusy(now = 1_000L))
+    }
+
     @Test fun failureClearsTheHandOver() {
         val t = tracker()
         val a = t.start()

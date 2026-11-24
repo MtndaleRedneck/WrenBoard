@@ -62,9 +62,27 @@ class UpdateAttempts(
         running || (handedOver && now - handedOverAt < HANDOVER_MAX_MS)
     }
 
-    /** The finished download of [attempt] was committed to the installer, whose answer is still to come. */
-    fun handOver(attempt: Long, now: Long = System.currentTimeMillis()) = synchronized(lock) {
-        if (attempt == token) { handedOver = true; handedOverAt = now }
+    /**
+     * The finished download of [attempt] was committed to the installer, whose answer is still to come.
+     * Returns true when the hand-over was recorded. Callers must act (launch the installer) only on true:
+     * a false means this attempt is no longer current and its work has been superseded.
+     */
+    fun handOver(attempt: Long, now: Long = System.currentTimeMillis()): Boolean = synchronized(lock) {
+        if (attempt != token) return false
+        handedOver = true; handedOverAt = now
+        true
+    }
+
+    /**
+     * WrenBoard 1.10 (review M1, I2): the update screen is re-checking the kept APK before handing it over again.
+     * Marks the attempt running so no new attempt can start while the re-check's background work (verify, then
+     * cleanup or installer launch) is still in flight. Returns false when the attempt is already busy, so a
+     * second resume cannot start overlapping re-check work for the same file.
+     */
+    fun beginRecheck(attempt: Long): Boolean = synchronized(lock) {
+        if (attempt != token || running || handedOver) return false
+        running = true
+        true
     }
 
     /**

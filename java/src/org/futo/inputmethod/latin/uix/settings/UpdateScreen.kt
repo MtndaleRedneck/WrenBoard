@@ -192,13 +192,20 @@ private fun downloadAndInstall(context: Context, updateResult: UpdateResult, onH
             }
             UpdateStatus.readyVersion = updateResult.nextVersion
             if (context.packageManager.canRequestPackageInstalls()) {
-                if (launchInstaller(context, file)) {
-                    failed = false
-                    UpdateStatus.attempts.handOver(attempt)
-                    UpdateStatus.attempts.post(attempt, "")
-                    runOnMain { onHandedOver() }
-                } else {
-                    UpdateStatus.attempts.fail(attempt, "Could not open the installer.")
+                // Same boundary as the re-check path: the installer launches only after the hand-over was
+                // recorded for a still-current attempt. Unlike the re-check refusal (which leaves the file
+                // and state to the current attempt), a refusal here falls through to the finally, which
+                // deletes the file — possibly the shared verified APK reused via verifiedDownload — and
+                // resets readyVersion. Unreachable under the current gated UI (the busy gate holds for the
+                // whole download, so the token cannot change mid-attempt); latent for future callers only.
+                if (UpdateStatus.attempts.handOver(attempt)) {
+                    if (launchInstaller(context, file)) {
+                        failed = false
+                        UpdateStatus.attempts.post(attempt, "")
+                        runOnMain { onHandedOver() }
+                    } else {
+                        UpdateStatus.attempts.fail(attempt, "Could not open the installer.")
+                    }
                 }
             } else {
                 // Android needs "Allow from this source" once. Keep the verified file; the install starts when the
@@ -279,33 +286,66 @@ fun UpdateDialog(navController: NavHostController) {
                 if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
                     val f = UpdateStatus.pendingApk
                     if (f != null && appContext.packageManager.canRequestPackageInstalls()) {
-                        UpdateStatus.pendingApk = null
                         // WrenBoard 1.10 hardening: check the file again before handing it over (it sat in cache
                         // meanwhile). The check parses the whole APK, so it runs off the main thread (review I2-1).
+                        // I2 review of (17): the attempt is marked running BEFORE the background work starts and the
+                        // gate-opening transition happens only after cleanup/launch, so no new attempt can start
+                        // mid-re-check and superseded work can never delete the file or launch a second installer.
                         val attempt = UpdateStatus.attempts.currentToken
-                        lifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
-                            val ok = try { UpdateVerify.verify(appContext, f); true } catch (e: Throwable) {
-                                try { f.delete() } catch (_: Throwable) { }
-                                UpdateStatus.readyVersion = -1
-                                // Review C2: say why instead of returning to the old words; the person can retry.
-                                UpdateStatus.attempts.fail(attempt, if (e is UpdateVerify.Failure) e.msg else "The downloaded file could not be checked, so it was not installed.")
-                                false
-                            }
-                            if (ok) {
-                                if (launchInstaller(appContext, f)) {
-                                    UpdateStatus.attempts.handOver(attempt)
-                                    withContext(Dispatchers.Main) { navController.navigateUp() }
-                                } else {
-                                    // Review C2: the installer did not open; say so and let the person retry.
-                                    UpdateStatus.attempts.fail(attempt, "Could not open the installer.")
+                        if (UpdateStatus.attempts.beginRecheck(attempt)) {
+                            UpdateStatus.pendingApk = null
+                            lifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
+                                // finally: a scope cancelled between claim and resolution frees the running mark
+                                // with no other side effects, so updates never stick busy (lifecycle review).
+                                try {
+                                    val ok = try { UpdateVerify.verify(appContext, f); true } catch (e: Throwable) {
+                                        if (e is kotlinx.coroutines.CancellationException) throw e
+                                        // Cleanup first; fail() opens the gate only after it (I2 supersession review).
+                                        try { f.delete() } catch (_: Throwable) { }
+                                        UpdateStatus.readyVersion = -1
+                                        // Review C2: say why instead of returning to the old words; the person can retry.
+                                        UpdateStatus.attempts.fail(attempt, if (e is UpdateVerify.Failure) e.msg else "The downloaded file could not be checked, so it was not installed.")
+                                        false
+                                    }
+                                    if (ok) {
+                                        // Lifecycle boundary (I2 ordering review): the coroutine is owned by this
+                                        // nav destination's scope; the destination being popped (Back/navigateUp)
+                                        // cancels it. Abandon here, before any hand-over or installer launch, so a
+                                        // dismissed dialog produces no side effects. (onDispose only removes the
+                                        // observer; it does not cancel this job while the destination is alive.)
+                                        ensureActive()
+                                        // Launch only when the hand-over was recorded for a still-current attempt.
+                                        if (UpdateStatus.attempts.handOver(attempt)) {
+                                            UpdateStatus.attempts.downloadEnded(attempt)
+                                            // Last boundary before the only side effect left; a pop landing
+                                            // between here and startActivity is a checked-but-benign UX race
+                                            // (the file is verified; the sheet just opens, no install happens
+                                            // without the person's confirmation in the system installer).
+                                            ensureActive()
+                                            if (launchInstaller(appContext, f)) {
+                                                withContext(Dispatchers.Main) { navController.navigateUp() }
+                                            } else {
+                                                // Review C2: the installer did not open; say so and let the person retry.
+                                                UpdateStatus.attempts.fail(attempt, "Could not open the installer.")
+                                            }
+                                        } else {
+                                            // Superseded while verifying: leave the file and the state to the current
+                                            // attempt; just end our own running mark.
+                                            UpdateStatus.attempts.downloadEnded(attempt)
+                                        }
+                                    }
+                                } finally {
+                                    UpdateStatus.attempts.downloadEnded(attempt)
                                 }
                             }
                         }
                     } else if (f == null) {
-                        // Review M1: back at this screen while a hand-over has no answer. A finished install replaces
-                        // this app process, so being here means it did not install: free the busy window for a retry
-                        // now. The 10-minute hand-over timeout stays the recovery for never coming back.
-                        UpdateStatus.attempts.endHandOver(UpdateStatus.attempts.currentToken, "The install did not finish. Tap Update to try again.")
+                        // Review M1: back at this screen while a hand-over has no answer. A completed self-install
+                        // would have replaced this app process, so the install did not complete; the system install
+                        // screen may still be open elsewhere, and a retry just hands Android the same verified file
+                        // again (Android serializes it). Free the busy window for an explicit retry now; the
+                        // 10-minute hand-over timeout stays the recovery for never coming back.
+                        UpdateStatus.attempts.endHandOver(UpdateStatus.attempts.currentToken, "If the install did not finish, tap Update to try again.")
                     }
                     attemptBusy.value = UpdateStatus.attempts.isBusy()
                 }
