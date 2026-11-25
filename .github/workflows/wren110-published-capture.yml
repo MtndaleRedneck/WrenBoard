@@ -1,0 +1,56 @@
+name: wren110-published-capture
+# Evidence only. Installs the PUBLISHED v1.10.0 APK (pinned hash and signer) on a free emulator and
+# captures settings screens and the keyboard. No release pipeline, no secrets, no publishing.
+on:
+  push:
+    branches: [evidence/wren110-published-shots]
+    paths: [.github/workflows/wren110-published-capture.yml, tools/wren110-published-shot.sh]
+permissions:
+  contents: read
+concurrency:
+  group: wren110-published-capture
+  cancel-in-progress: false
+jobs:
+  capture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download and verify the published APK
+        run: |
+          set -e
+          mkdir -p apk shots
+          curl --http1.1 -fL --retry 4 --retry-all-errors --connect-timeout 30 --max-time 600 -o apk/WrenBoard-1.10.apk https://github.com/MtndaleRedneck/WrenBoard/releases/download/v1.10.0/WrenBoard-1.10.apk
+          echo "c38f1e3f79b6cc894188f532bdcf7205d74658ef62e621e78a5d58e1b948190e  apk/WrenBoard-1.10.apk" | sha256sum -c - | tee shots/verify.txt
+          bt=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
+          "$bt/apksigner" verify --print-certs apk/WrenBoard-1.10.apk | tee -a shots/verify.txt
+          grep -q "ad41ab713027aca87389019721d102d67cacaae349cc625aa14f76240801f7fc" shots/verify.txt
+          "$bt/aapt2" dump badging apk/WrenBoard-1.10.apk | grep -E "^package:" | tee -a shots/verify.txt
+          grep -q "versionName='1.10" shots/verify.txt
+      - name: Generate fixtures and build ime-target
+        run: |
+          python3 -m pip install --quiet pillow
+          python3 tools/make_fixtures.py tools/ime-target/fixtures
+          ASSETS_DIR="$PWD/tools/ime-target/fixtures" bash tools/ime-target/build.sh
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Capture settings and keyboard
+        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
+        with:
+          api-level: 34
+          target: google_apis
+          arch: x86_64
+          profile: Nexus 6
+          disable-animations: true
+          script: |
+            bash tools/ime-settings-probe.sh apk/WrenBoard-1.10.apk || true
+            bash tools/wren110-published-shot.sh apk/WrenBoard-1.10.apk tools/ime-target/out/imetarget.apk
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: wren110-published-shots
+          path: shots/
+          retention-days: 14
