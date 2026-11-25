@@ -2,6 +2,8 @@
 
 # WrenBoard
 
+**Under development.** Not ready for public use yet.
+
 A customized Android keyboard combining selected FUTO and SwiftKey features.
 
 ## Install
