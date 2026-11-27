@@ -8,7 +8,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Build throwaway prototype APK
         run: bash tools/backup-proto/build.sh
       - name: Enable KVM
@@ -25,7 +25,7 @@ jobs:
           profile: Nexus 6
           disable-animations: true
           script: bash tools/backup-proto-test.sh tools/backup-proto/out/bkproto.apk
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: backup-proto-results
